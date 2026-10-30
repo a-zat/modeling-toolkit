@@ -1,0 +1,18 @@
+<Project>
+
+  <PropertyGroup>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    <Version>0.1.0</Version>
+
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Build outputs go to artifacts/ (bin, obj, packages) instead of each project folder. -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+
+    <!-- Warnings are tolerated while experimenting locally, but fail the CI build. -->
+    <TreatWarningsAsErrors Condition="'$(CI)' == 'true'">true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

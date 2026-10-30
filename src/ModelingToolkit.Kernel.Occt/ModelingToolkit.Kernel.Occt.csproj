@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Required by the LibraryImport source generator. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ModelingToolkit.Core\ModelingToolkit.Core.csproj" />
+  </ItemGroup>
+
+  <Import Project="NativeBridge.targets" />
+
+</Project>
