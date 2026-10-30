@@ -6,7 +6,7 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/artifacts/bin/ModelingToolkit.App/debug/ModelingToolkit.App.dll",
+      "program": "${workspaceFolder}/artifacts/bin/ModelingToolkit.Gui/debug/ModelingToolkit.Gui.dll",
       "cwd": "${workspaceFolder}",
       "console": "internalConsole"
     },

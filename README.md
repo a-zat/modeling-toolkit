@@ -26,7 +26,7 @@ cd modeling-toolkit
 dotnet build                                          # builds the native bridge too
 dotnet test                                           # .NET tests
 dotnet run --project src/ModelingToolkit.Cli -- info  # prints the toolkit and kernel versions
-dotnet run --project src/ModelingToolkit.App          # desktop application
+dotnet run --project src/ModelingToolkit.Gui          # desktop application
 ```
 
 In the desktop application, the bottom right of the status bar switches layout, theme and dark or light variant;
@@ -53,7 +53,7 @@ ctest --preset macos-debug     # or windows-debug
 
 | Path | Content |
 |---|---|
-| `src/` | .NET projects: `Core` (domain model), `Kernel.Occt` (OpenCASCADE and glTF import), `IO.Native` (`.mtk` format), `Cli` (`mtk` tool), `App` (desktop application, Avalonia) |
+| `src/` | .NET projects: `Core` (domain model), `Kernel.Occt` (OpenCASCADE and glTF import), `IO.Native` (`.mtk` format), `Cli` (`mtk` tool), `Gui` (desktop application, Avalonia) |
 | `tests/` | .NET tests (xUnit) and the sample models they use (`tests/assets`) |
 | `native/` | C++ projects built with CMake: `occt-bridge`, the C API over OpenCASCADE |
 | `external/vcpkg` | vcpkg, the C++ package manager, as a submodule |

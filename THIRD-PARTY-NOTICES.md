@@ -5,7 +5,7 @@ notices in [tests/assets/README.md](tests/assets/README.md).
 
 ## Fluent UI System Icons
 
-The icons in `src/ModelingToolkit.App/Styles/Icons.axaml` are converted from the SVG files of
+The icons in `src/ModelingToolkit.Gui/Styles/Icons.axaml` are converted from the SVG files of
 [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons).
 
 ```text

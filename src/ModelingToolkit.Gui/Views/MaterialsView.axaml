@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
+             xmlns:views="using:ModelingToolkit.Gui.Views"
+             x:Class="ModelingToolkit.Gui.Views.MaterialsView"
+             x:DataType="vm:MaterialsViewModel">
+
+  <Panel>
+    <ListBox ItemsSource="{Binding Items}" Background="Transparent">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="vm:MaterialItem">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Border Width="22" Height="22" CornerRadius="4" BorderThickness="1" VerticalAlignment="Center"
+                    BorderBrush="{DynamicResource Mtk.Separator}"
+                    Background="{Binding BaseColor, Converter={x:Static views:ColorConverters.ToBrush}}" />
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="{Binding Name}" />
+              <TextBlock Text="{Binding Description}" Classes="secondary" FontSize="11" />
+            </StackPanel>
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <TextBlock Classes="placeholder" Text="The materials of the model appear here." IsVisible="{Binding IsEmpty}" />
+  </Panel>
+
+</UserControl>
