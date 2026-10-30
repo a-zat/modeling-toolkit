@@ -13,7 +13,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ModelingToolkit.Core\ModelingToolkit.Core.csproj" />
+    <ProjectReference Include="..\ModelingToolkit.IO.Native\ModelingToolkit.IO.Native.csproj" />
     <ProjectReference Include="..\ModelingToolkit.Kernel.Occt\ModelingToolkit.Kernel.Occt.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModelingToolkit.Cli.Tests" />
   </ItemGroup>
 
 </Project>
