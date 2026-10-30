@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: Also build on macOS (in private repositories macOS minutes cost 10x Linux ones)
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows always runs: it's the platform not covered by local development on the Mac.
+        os: ${{ fromJSON(inputs.macos && '["windows-latest", "macos-latest"]' || '["windows-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      # vcpkg stores every built package here; the folder is cached between runs, so OpenCASCADE is built only once.
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+      NATIVE_PRESET: ${{ startsWith(matrix.os, 'windows') && 'windows' || 'macos' }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Install Ninja
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Compute vcpkg cache key
+        id: vcpkg-key
+        shell: bash
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          echo "key=vcpkg-${{ runner.os }}-$(git rev-parse HEAD:external/vcpkg)-${{ hashFiles('native/vcpkg.json', 'native/triplets/**') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore vcpkg cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .vcpkg-cache
+          key: ${{ steps.vcpkg-key.outputs.key }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      # Saved even when a later step fails, so a successful OpenCASCADE build is never lost.
+      - name: Save vcpkg cache
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .vcpkg-cache
+          key: ${{ steps.vcpkg-key.outputs.key }}
+
+      - name: Test (.NET)
+        run: dotnet test --configuration Release --no-build
+
+      - name: Test (C++)
+        working-directory: native
+        run: ctest --preset ${{ env.NATIVE_PRESET }}-release
