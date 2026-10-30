@@ -2,12 +2,17 @@ find_package(OpenCASCADE CONFIG REQUIRED)
 
 add_library(mtk_occt_bridge SHARED
     src/bridge.cpp
+    src/scene.cpp
     src/shape.cpp)
 
 target_include_directories(mtk_occt_bridge PUBLIC include)
 target_include_directories(mtk_occt_bridge SYSTEM PRIVATE ${OpenCASCADE_INCLUDE_DIR})
 target_compile_definitions(mtk_occt_bridge PRIVATE MTK_OCCT_BRIDGE_EXPORTS)
-target_link_libraries(mtk_occt_bridge PRIVATE TKernel TKMath TKBRep TKGeomBase TKPrim TKTopAlgo)
+target_link_libraries(mtk_occt_bridge PRIVATE
+    # Geometry and topology
+    TKernel TKMath TKBRep TKGeomBase TKPrim TKTopAlgo
+    # XDE documents (assemblies, names, materials) and the glTF reader
+    TKLCAF TKCAF TKXCAF TKService TKRWMesh TKDEGLTF)
 mtk_set_compile_options(mtk_occt_bridge)
 
 if(APPLE)

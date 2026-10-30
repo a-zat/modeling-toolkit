@@ -6,6 +6,7 @@
 #include <TopoDS_Shape.hxx>
 
 #include <exception>
+#include <stdexcept>
 #include <string>
 
 // Definition of the opaque handle declared in the public header.
@@ -14,6 +15,12 @@ struct mtk_shape {
 };
 
 namespace mtk {
+
+// An operation of OpenCASCADE failed without raising an exception; reported as MTK_STATUS_KERNEL_ERROR.
+class kernel_error : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 void set_last_error(const std::string& message) noexcept;
 void clear_last_error() noexcept;
@@ -28,6 +35,9 @@ mtk_status guarded(Body&& body) noexcept {
     clear_last_error();
     try {
         return body();
+    } catch (const kernel_error& error) {
+        set_last_error(error.what());
+        return MTK_STATUS_KERNEL_ERROR;
     } catch (const Standard_Failure& failure) {
         // Caught before std::exception, which Standard_Failure derives from.
         set_last_error(std::string(failure.ExceptionType()) + ": " + failure.what());
