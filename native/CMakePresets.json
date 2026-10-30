@@ -1,0 +1,50 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/../artifacts/native/${presetName}",
+      "toolchainFile": "${sourceDir}/../external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_INSTALL_OPTIONS": "--clean-after-build"
+      }
+    },
+    {
+      "name": "macos",
+      "displayName": "macOS (arm64, Ninja)",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-osx-dynamic-release",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_SYSROOT": "macosx"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    },
+    {
+      "name": "windows",
+      "displayName": "Windows (x64, Visual Studio)",
+      "inherits": "base",
+      "architecture": { "value": "x64", "strategy": "set" },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-release"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "macos-debug", "configurePreset": "macos", "configuration": "Debug" },
+    { "name": "macos-release", "configurePreset": "macos", "configuration": "Release" },
+    { "name": "windows-debug", "configurePreset": "windows", "configuration": "Debug" },
+    { "name": "windows-release", "configurePreset": "windows", "configuration": "Release" }
+  ],
+  "testPresets": [
+    { "name": "macos-debug", "configurePreset": "macos", "configuration": "Debug", "output": { "outputOnFailure": true } },
+    { "name": "macos-release", "configurePreset": "macos", "configuration": "Release", "output": { "outputOnFailure": true } },
+    { "name": "windows-debug", "configurePreset": "windows", "configuration": "Debug", "output": { "outputOnFailure": true } },
+    { "name": "windows-release", "configurePreset": "windows", "configuration": "Release", "output": { "outputOnFailure": true } }
+  ]
+}
