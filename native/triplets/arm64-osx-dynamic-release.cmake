@@ -10,3 +10,9 @@ set(VCPKG_OSX_ARCHITECTURES arm64)
 # The macOS SDK of the selected developer directory (xcode-select), like CMAKE_OSX_SYSROOT in CMakePresets.json:
 # when both Xcode and the command line tools are installed, xcrun's default SDK may come from the other one.
 set(VCPKG_OSX_SYSROOT macosx)
+
+# Precompiled headers: OpenCASCADE's CI builds Release + Debug on a 4-vCPU Windows runner in 30 minutes with them and
+# in 88 without them.
+if(PORT STREQUAL "opencascade")
+    set(VCPKG_CMAKE_CONFIGURE_OPTIONS -DBUILD_USE_PCH=ON)
+endif()

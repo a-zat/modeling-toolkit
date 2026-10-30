@@ -34,7 +34,7 @@ mtk convert model.glb model.mtk   # the output extension chooses the format
 mtk stats model.mtk               # blocks, meshes, triangles, materials, bounds in millimetres
 ```
 
-The first build compiles OpenCASCADE through vcpkg and takes tens of minutes; later builds reuse the vcpkg cache.
+The first build compiles OpenCASCADE through vcpkg (about 7 minutes on an Apple M2); later builds reuse its cache.
 In an existing clone without the `external/vcpkg` submodule, run `git submodule update --init` first.
 
 The C++ tests of the native bridge run with CTest, from the `native` folder:
