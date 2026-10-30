@@ -4,10 +4,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelingToolkit.Cli.Commands;
 using ModelingToolkit.Core.IO;
-using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.IO.Native;
 using ModelingToolkit.Kernel.Occt;
-using ModelingToolkit.Kernel.Occt.IO;
 
 namespace ModelingToolkit.Cli;
 
@@ -23,11 +21,7 @@ internal static class CliHost
         builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
         builder.Logging.AddSimpleConsole(options => options.SingleLine = true);
 
-        builder.Services.AddSingleton<IGeometryKernel, OcctKernel>();
-        builder.Services.AddSingleton<IDocumentReader, GltfReader>();
-        builder.Services.AddSingleton<IDocumentReader, NativeDocumentReader>();
-        builder.Services.AddSingleton<IDocumentWriter, NativeDocumentWriter>();
-        builder.Services.AddSingleton<DocumentFormats>();
+        builder.Services.AddOpenCascade().AddNativeFileFormat().AddSingleton<DocumentFormats>();
 
         return builder.Build();
     }
