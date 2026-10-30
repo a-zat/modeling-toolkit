@@ -5,6 +5,7 @@
     <Project Path="src/ModelingToolkit.Kernel.Occt/ModelingToolkit.Kernel.Occt.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/ModelingToolkit.Core.Tests/ModelingToolkit.Core.Tests.csproj" />
     <Project Path="tests/ModelingToolkit.Kernel.Occt.Tests/ModelingToolkit.Kernel.Occt.Tests.csproj" />
   </Folder>
 </Solution>
