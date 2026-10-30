@@ -1,0 +1,12 @@
+# Normalize line endings to LF in the repository and in working copies, on every OS.
+* text=auto eol=lf
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 3D models and other binary files
+*.glb binary
+*.skp binary
+*.3dm binary
+*.png binary
+*.jpg binary

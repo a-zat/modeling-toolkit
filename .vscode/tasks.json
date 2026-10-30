@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "detail": "Build the solution, native bridge included",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/ModelingToolkit.slnx", "-p:GenerateFullPaths=true", "-consoleLoggerParameters:NoSummary"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test",
+      "detail": "Run the .NET tests",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test native",
+      "detail": "Run the C++ tests of the native bridge",
+      "type": "process",
+      "command": "ctest",
+      "osx": { "args": ["--preset", "macos-debug"] },
+      "windows": { "args": ["--preset", "windows-debug"] },
+      "options": { "cwd": "${workspaceFolder}/native" },
+      "dependsOn": "build",
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

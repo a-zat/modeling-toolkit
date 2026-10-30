@@ -1,0 +1,14 @@
+{
+  "dotnet.defaultSolution": "ModelingToolkit.slnx",
+  "dotnet.testWindow.useTestingPlatformProtocol": true,
+
+  "cmake.sourceDirectory": "${workspaceFolder}/native",
+  "cmake.useCMakePresets": "always",
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+
+  "files.associations": {
+    "*.props": "xml",
+    "*.targets": "xml",
+    "*.slnx": "xml"
+  }
+}

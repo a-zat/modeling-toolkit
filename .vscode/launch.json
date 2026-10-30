@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "mtk info",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/artifacts/bin/ModelingToolkit.Cli/debug/mtk.dll",
+      "args": ["info"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      // Debugs the C++ bridge: the CLI is started under LLDB and breakpoints in native/ bind when the library loads.
+      // A process can have only one debugger, so C# breakpoints are not hit in this mode.
+      "name": "mtk info (native, LLDB)",
+      "type": "lldb",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "osx": { "program": "${workspaceFolder}/artifacts/bin/ModelingToolkit.Cli/debug/mtk" },
+      "windows": { "program": "${workspaceFolder}/artifacts/bin/ModelingToolkit.Cli/debug/mtk.exe" },
+      "args": ["info"],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
