@@ -1,0 +1,95 @@
+<!-- Layout A, classic CAD: toolbar, model tree on the left, properties on the right. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.App.ViewModels"
+             xmlns:views="using:ModelingToolkit.App.Views"
+             x:Class="ModelingToolkit.App.Views.ClassicLayoutView"
+             x:DataType="vm:MainWindowViewModel">
+
+  <DockPanel>
+    <NativeMenuBar DockPanel.Dock="Top" />
+
+    <Border DockPanel.Dock="Top" Classes="topBar">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <ToggleButton Classes="tool" IsChecked="{Binding IsModelPanelVisible}" ToolTip.Tip="Model panel">
+            <PathIcon Data="{StaticResource Icon.PanelLeft}" />
+          </ToggleButton>
+          <ToggleButton Classes="tool" IsChecked="{Binding IsPropertiesPanelVisible}" ToolTip.Tip="Properties panel">
+            <PathIcon Data="{StaticResource Icon.PanelRight}" />
+          </ToggleButton>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal">
+          <Button Classes="tool" Command="{Binding OpenCommand}"
+                  ToolTip.Tip="{OnPlatform Default='Open (Ctrl+O)', macOS='Open (⌘O)'}">
+            <PathIcon Data="{StaticResource Icon.FolderOpen}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding SaveCommand}"
+                  ToolTip.Tip="{OnPlatform Default='Save (Ctrl+S)', macOS='Save (⌘S)'}">
+            <PathIcon Data="{StaticResource Icon.Save}" />
+          </Button>
+          <Border Classes="toolSeparator" />
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Undo" ToolTip.Tip="Undo">
+            <PathIcon Data="{StaticResource Icon.ArrowUndo}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Redo" ToolTip.Tip="Redo">
+            <PathIcon Data="{StaticResource Icon.ArrowRedo}" />
+          </Button>
+          <Border Classes="toolSeparator" />
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Fit all"
+                  ToolTip.Tip="Fit all">
+            <PathIcon Data="{StaticResource Icon.ZoomFit}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Standard views"
+                  ToolTip.Tip="Standard views">
+            <PathIcon Data="{StaticResource Icon.CubeRotate}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Projection"
+                  ToolTip.Tip="Perspective or orthographic">
+            <PathIcon Data="{StaticResource Icon.Camera}" />
+          </Button>
+          <Border Classes="toolSeparator" />
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Shaded" ToolTip.Tip="Shaded">
+            <PathIcon Data="{StaticResource Icon.Cube}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Shaded with edges"
+                  ToolTip.Tip="Shaded with edges">
+            <PathIcon Data="{StaticResource Icon.BorderOutside}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Wireframe"
+                  ToolTip.Tip="Wireframe">
+            <PathIcon Data="{StaticResource Icon.Grid}" />
+          </Button>
+          <Border Classes="toolSeparator" />
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Selection mode"
+                  ToolTip.Tip="Selection mode">
+            <PathIcon Data="{StaticResource Icon.Cursor}" />
+          </Button>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <views:StatusBarView DockPanel.Dock="Bottom" />
+
+    <Grid x:Name="Panels" ColumnDefinitions="260,Auto,*,Auto,280">
+      <Border Grid.Column="0" Classes="leftPanel" IsVisible="{Binding IsModelPanelVisible}">
+        <TabControl Classes="panelTabs">
+          <TabItem Header="Model">
+            <views:ModelTreeView DataContext="{Binding ModelTree}" />
+          </TabItem>
+          <TabItem Header="Materials">
+            <views:MaterialsView DataContext="{Binding Materials}" />
+          </TabItem>
+        </TabControl>
+      </Border>
+      <GridSplitter Grid.Column="1" IsVisible="{Binding IsModelPanelVisible}" />
+      <views:ViewportPlaceholder Grid.Column="2" />
+      <GridSplitter Grid.Column="3" IsVisible="{Binding IsPropertiesPanelVisible}" />
+      <Border Grid.Column="4" Classes="rightPanel" IsVisible="{Binding IsPropertiesPanelVisible}">
+        <views:PropertiesView DataContext="{Binding Properties}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+
+</UserControl>

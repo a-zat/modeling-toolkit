@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.App.ViewModels"
+             x:Class="ModelingToolkit.App.Views.ModelTreeView"
+             x:DataType="vm:ModelTreeViewModel">
+
+  <Panel>
+    <TreeView ItemsSource="{Binding Roots}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+      <TreeView.Styles>
+        <Style Selector="TreeViewItem" x:DataType="vm:ModelNodeViewModel">
+          <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+        </Style>
+      </TreeView.Styles>
+      <TreeView.ItemTemplate>
+        <TreeDataTemplate DataType="vm:ModelNodeViewModel" ItemsSource="{Binding Children}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Panel Width="16" Height="16" VerticalAlignment="Center">
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Document}" IsVisible="{Binding IsModel}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Box}" IsVisible="{Binding IsReference}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsMesh}" />
+            </Panel>
+            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Detail}" Classes="secondary" VerticalAlignment="Center" />
+          </StackPanel>
+        </TreeDataTemplate>
+      </TreeView.ItemTemplate>
+    </TreeView>
+
+    <TextBlock Classes="placeholder" Text="Open a model to see its structure." IsVisible="{Binding IsEmpty}" />
+  </Panel>
+
+</UserControl>

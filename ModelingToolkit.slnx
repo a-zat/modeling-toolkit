@@ -1,11 +1,13 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ModelingToolkit.App/ModelingToolkit.App.csproj" />
     <Project Path="src/ModelingToolkit.Cli/ModelingToolkit.Cli.csproj" />
     <Project Path="src/ModelingToolkit.Core/ModelingToolkit.Core.csproj" />
     <Project Path="src/ModelingToolkit.IO.Native/ModelingToolkit.IO.Native.csproj" />
     <Project Path="src/ModelingToolkit.Kernel.Occt/ModelingToolkit.Kernel.Occt.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/ModelingToolkit.App.Tests/ModelingToolkit.App.Tests.csproj" />
     <Project Path="tests/ModelingToolkit.Cli.Tests/ModelingToolkit.Cli.Tests.csproj" />
     <Project Path="tests/ModelingToolkit.Core.Tests/ModelingToolkit.Core.Tests.csproj" />
     <Project Path="tests/ModelingToolkit.IO.Native.Tests/ModelingToolkit.IO.Native.Tests.csproj" />

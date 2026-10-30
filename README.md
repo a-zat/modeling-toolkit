@@ -5,8 +5,9 @@ It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primi
 [OpenCASCADE](https://github.com/Open-Cascade-SAS/OCCT) as geometry kernel.
 
 > **Status:** early development. The `mtk` command line tool reads glTF models (`.gltf`, `.glb`) and writes them
-> in the native `.mtk` format, keeping shared geometry, hierarchy, materials and textures. A desktop application with
-> a 3D viewport is the next milestone.
+> in the native `.mtk` format, keeping shared geometry, hierarchy, materials and textures. The desktop application is
+> a prototype: it opens and saves models and shows their structure, materials and properties, in two layouts and
+> several themes to choose from; the 3D viewport comes next.
 
 ## Requirements
 
@@ -25,7 +26,12 @@ cd modeling-toolkit
 dotnet build                                          # builds the native bridge too
 dotnet test                                           # .NET tests
 dotnet run --project src/ModelingToolkit.Cli -- info  # prints the toolkit and kernel versions
+dotnet run --project src/ModelingToolkit.App          # desktop application
 ```
+
+In the desktop application, the bottom right of the status bar switches layout, theme and dark or light variant;
+the tests render every combination into `artifacts/screenshots`. In Debug builds, F12 opens DevScope, an inspector of
+the visual tree and of the styles.
 
 After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
 
@@ -47,7 +53,7 @@ ctest --preset macos-debug     # or windows-debug
 
 | Path | Content |
 |---|---|
-| `src/` | .NET projects: `Core` (domain model), `Kernel.Occt` (OpenCASCADE and glTF import), `IO.Native` (`.mtk` format), `Cli` (`mtk` tool) |
+| `src/` | .NET projects: `Core` (domain model), `Kernel.Occt` (OpenCASCADE and glTF import), `IO.Native` (`.mtk` format), `Cli` (`mtk` tool), `App` (desktop application, Avalonia) |
 | `tests/` | .NET tests (xUnit) and the sample models they use (`tests/assets`) |
 | `native/` | C++ projects built with CMake: `occt-bridge`, the C API over OpenCASCADE |
 | `external/vcpkg` | vcpkg, the C++ package manager, as a submodule |
@@ -58,5 +64,7 @@ ctest --preset macos-debug     # or windows-debug
 Milestones, tasks and bugs are tracked in the [GitHub project](https://github.com/users/a-zat/projects/1).
 
 The repository is set up for VS Code: open the folder and install the recommended extensions. The default build task
-(`⇧⌘B`) builds everything, and the launch configurations run the CLI under the .NET debugger or, for the C++ code,
-under LLDB.
+(`⇧⌘B`) builds everything, and the launch configurations run the desktop application or the CLI under the .NET
+debugger or, for the C++ code, the CLI under LLDB.
+
+Third-party material included in the repository is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

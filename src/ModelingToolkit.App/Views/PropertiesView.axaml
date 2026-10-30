@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.App.ViewModels"
+             x:Class="ModelingToolkit.App.Views.PropertiesView"
+             x:DataType="vm:PropertiesViewModel">
+
+  <DockPanel>
+    <TextBlock DockPanel.Dock="Top" Classes="panelHeader" Text="PROPERTIES" />
+
+    <Panel>
+      <ScrollViewer IsVisible="{Binding HasSelection}">
+        <StackPanel Margin="12,0,12,12" Spacing="10">
+          <StackPanel>
+            <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Kind}" Classes="secondary" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:PropertyRow">
+                <Grid Margin="0,3">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" Classes="secondary" Margin="0,0,12,0" />
+                  <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <TextBlock Classes="placeholder" Text="Select an element of the model to see its properties."
+                 IsVisible="{Binding !HasSelection}" />
+    </Panel>
+  </DockPanel>
+
+</UserControl>

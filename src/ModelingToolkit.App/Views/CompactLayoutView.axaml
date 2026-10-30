@@ -1,0 +1,106 @@
+<!-- Layout B, compact: activity bar with one panel at a time, properties of the selection, command palette. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.App.ViewModels"
+             xmlns:views="using:ModelingToolkit.App.Views"
+             x:Class="ModelingToolkit.App.Views.CompactLayoutView"
+             x:DataType="vm:MainWindowViewModel">
+
+  <DockPanel>
+    <NativeMenuBar DockPanel.Dock="Top" />
+
+    <Border DockPanel.Dock="Top" Classes="topBar">
+      <Grid ColumnDefinitions="*,Auto,*">
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="6,0" VerticalAlignment="Center">
+          <PathIcon Data="{StaticResource Icon.Document}" Width="16" Height="16" />
+          <TextBlock Text="{Binding DocumentName}" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button Classes="tool" Command="{Binding OpenCommand}"
+                  ToolTip.Tip="{OnPlatform Default='Open (Ctrl+O)', macOS='Open (⌘O)'}">
+            <PathIcon Data="{StaticResource Icon.FolderOpen}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding SaveCommand}"
+                  ToolTip.Tip="{OnPlatform Default='Save (Ctrl+S)', macOS='Save (⌘S)'}">
+            <PathIcon Data="{StaticResource Icon.Save}" />
+          </Button>
+          <Border Classes="toolSeparator" />
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Fit all"
+                  ToolTip.Tip="Fit all">
+            <PathIcon Data="{StaticResource Icon.ZoomFit}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Standard views"
+                  ToolTip.Tip="Standard views">
+            <PathIcon Data="{StaticResource Icon.CubeRotate}" />
+          </Button>
+          <Border Classes="toolSeparator" />
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Shaded" ToolTip.Tip="Shaded">
+            <PathIcon Data="{StaticResource Icon.Cube}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Shaded with edges"
+                  ToolTip.Tip="Shaded with edges">
+            <PathIcon Data="{StaticResource Icon.BorderOutside}" />
+          </Button>
+          <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Wireframe"
+                  ToolTip.Tip="Wireframe">
+            <PathIcon Data="{StaticResource Icon.Grid}" />
+          </Button>
+        </StackPanel>
+
+        <Button Grid.Column="2" HorizontalAlignment="Right" MinWidth="240" HorizontalContentAlignment="Stretch"
+                Command="{Binding Palette.OpenCommand}">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Classes="secondary" Margin="16,0,0,0"
+                       Text="{OnPlatform Default='Ctrl+K', macOS='⌘K'}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <PathIcon Data="{StaticResource Icon.Search}" Width="14" Height="14" />
+              <TextBlock Classes="secondary" Text="Search commands" />
+            </StackPanel>
+          </DockPanel>
+        </Button>
+      </Grid>
+    </Border>
+
+    <views:StatusBarView DockPanel.Dock="Bottom" />
+
+    <Grid x:Name="Panels" ColumnDefinitions="Auto,260,Auto,*,Auto,280">
+      <Border Grid.Column="0" Classes="leftPanel" Padding="3">
+        <StackPanel Spacing="2">
+          <ToggleButton Classes="tool" IsChecked="{Binding IsModelPanelActive, Mode=OneWay}"
+                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Model}"
+                        ToolTip.Tip="Model">
+            <PathIcon Data="{StaticResource Icon.CubeTree}" />
+          </ToggleButton>
+          <ToggleButton Classes="tool" IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
+                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}"
+                        ToolTip.Tip="Materials">
+            <PathIcon Data="{StaticResource Icon.Color}" />
+          </ToggleButton>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Column="1" Classes="leftPanel" IsVisible="{Binding IsSidePanelOpen}">
+        <Panel>
+          <DockPanel IsVisible="{Binding IsModelPanelActive}">
+            <TextBlock DockPanel.Dock="Top" Classes="panelHeader" Text="MODEL" />
+            <views:ModelTreeView DataContext="{Binding ModelTree}" />
+          </DockPanel>
+          <DockPanel IsVisible="{Binding IsMaterialsPanelActive}">
+            <TextBlock DockPanel.Dock="Top" Classes="panelHeader" Text="MATERIALS" />
+            <views:MaterialsView DataContext="{Binding Materials}" />
+          </DockPanel>
+        </Panel>
+      </Border>
+      <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
+
+      <views:ViewportPlaceholder Grid.Column="3" />
+
+      <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />
+      <Border Grid.Column="5" Classes="rightPanel" IsVisible="{Binding Properties.HasSelection}">
+        <views:PropertiesView DataContext="{Binding Properties}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+
+</UserControl>
