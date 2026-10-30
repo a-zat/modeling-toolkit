@@ -4,8 +4,9 @@ A versatile toolkit for importing, processing, modifying, and exporting 3D model
 It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primitives), with a C# core and
 [OpenCASCADE](https://github.com/Open-Cascade-SAS/OCCT) as geometry kernel.
 
-> **Status:** project skeleton. The command line tool loads the native bridge and reports the kernel version;
-> GLB import and the native file format are the next milestone.
+> **Status:** early development. The `mtk` command line tool reads glTF models (`.gltf`, `.glb`) and writes them
+> in the native `.mtk` format, keeping shared geometry, hierarchy, materials and textures. A desktop application with
+> a 3D viewport is the next milestone.
 
 ## Requirements
 
@@ -26,6 +27,13 @@ dotnet test                                           # .NET tests
 dotnet run --project src/ModelingToolkit.Cli -- info  # prints the toolkit and kernel versions
 ```
 
+After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
+
+```sh
+mtk convert model.glb model.mtk   # the output extension chooses the format
+mtk stats model.mtk               # blocks, meshes, triangles, materials, bounds in millimetres
+```
+
 The first build compiles OpenCASCADE through vcpkg and takes tens of minutes; later builds reuse the vcpkg cache.
 In an existing clone without the `external/vcpkg` submodule, run `git submodule update --init` first.
 
@@ -39,8 +47,8 @@ ctest --preset macos-debug     # or windows-debug
 
 | Path | Content |
 |---|---|
-| `src/` | .NET projects: `Core` (domain model), `Kernel.Occt` (OpenCASCADE adapter), `Cli` (`mtk` tool) |
-| `tests/` | .NET tests (xUnit) |
+| `src/` | .NET projects: `Core` (domain model), `Kernel.Occt` (OpenCASCADE and glTF import), `IO.Native` (`.mtk` format), `Cli` (`mtk` tool) |
+| `tests/` | .NET tests (xUnit) and the sample models they use (`tests/assets`) |
 | `native/` | C++ projects built with CMake: `occt-bridge`, the C API over OpenCASCADE |
 | `external/vcpkg` | vcpkg, the C++ package manager, as a submodule |
 | `artifacts/` | Build outputs (not versioned) |
