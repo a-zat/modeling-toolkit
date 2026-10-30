@@ -56,26 +56,37 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
-          echo "key=vcpkg-${{ runner.os }}-$(git rev-parse HEAD:external/vcpkg)-${{ hashFiles('native/vcpkg.json', 'native/triplets/**') }}" >> "$GITHUB_OUTPUT"
+          echo "prefix=vcpkg-${{ runner.os }}-$(git rev-parse HEAD:external/vcpkg)-${{ hashFiles('native/vcpkg.json', 'native/triplets/**') }}" >> "$GITHUB_OUTPUT"
 
+      # A cache entry can never be overwritten, so a run that adds packages stores a new entry, whose key ends with the
+      # run id, and the newest entry with the same prefix is restored. With a fixed key, an incomplete entry (saved by a
+      # cancelled run, for example) would be restored as an exact match and the complete one could never be stored.
       - name: Restore vcpkg cache
         id: vcpkg-cache
         uses: actions/cache/restore@v6
         with:
           path: .vcpkg-cache
-          key: ${{ steps.vcpkg-key.outputs.key }}
-          restore-keys: vcpkg-${{ runner.os }}-
+          key: ${{ steps.vcpkg-key.outputs.prefix }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.vcpkg-key.outputs.prefix }}-
+            vcpkg-${{ runner.os }}-
+
+      - name: Fingerprint the restored packages
+        id: vcpkg-before
+        shell: bash
+        run: echo "hash=${{ hashFiles('.vcpkg-cache/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: dotnet build --configuration Release
 
-      # Saved even when a later step fails, so a successful OpenCASCADE build is never lost.
+      # Saved even when a later step fails, so a successful OpenCASCADE build is never lost, but not when the run is
+      # cancelled (the cache would be incomplete) and only if the build added packages.
       - name: Save vcpkg cache
-        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && hashFiles('.vcpkg-cache/**') != steps.vcpkg-before.outputs.hash }}
         uses: actions/cache/save@v6
         with:
           path: .vcpkg-cache
-          key: ${{ steps.vcpkg-key.outputs.key }}
+          key: ${{ steps.vcpkg-key.outputs.prefix }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Test (.NET)
         run: dotnet test --configuration Release --no-build
