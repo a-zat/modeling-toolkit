@@ -5,9 +5,8 @@ It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primi
 [OpenCASCADE](https://github.com/Open-Cascade-SAS/OCCT) as geometry kernel.
 
 > **Status:** early development. The `mtk` command line tool reads glTF models (`.gltf`, `.glb`) and writes them
-> in the native `.mtk` format, keeping shared geometry, hierarchy, materials and textures. The desktop application is
-> a prototype: it opens and saves models and shows their structure, materials and properties, in two layouts and
-> several themes to choose from; the 3D viewport comes next.
+> in the native `.mtk` format, keeping shared geometry, hierarchy, materials and textures. The desktop application
+> opens and saves models and shows their structure, materials and properties; the 3D viewport comes next.
 
 ## Requirements
 
@@ -29,9 +28,9 @@ dotnet run --project src/ModelingToolkit.Cli -- info  # prints the toolkit and k
 dotnet run --project src/ModelingToolkit.Gui          # desktop application
 ```
 
-In the desktop application, the bottom right of the status bar switches layout, theme and dark or light variant;
-the tests render every combination into `artifacts/screenshots`. In Debug builds, F12 opens DevScope, an inspector of
-the visual tree and of the styles.
+The desktop application has a dark and a light theme, switched at the bottom right of the status bar; the tests render
+both into `artifacts/screenshots`. In Debug builds, F12 opens DevScope, an inspector of the visual tree and of the
+styles.
 
 After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
 

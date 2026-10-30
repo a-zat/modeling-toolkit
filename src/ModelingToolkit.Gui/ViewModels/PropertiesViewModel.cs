@@ -89,6 +89,5 @@ public sealed partial class PropertiesViewModel : ObservableObject
         new("Size", Formatting.Size(mesh.GetBoundingBox())),
     ];
 
-    // Qualified: the Material.Avalonia theme of the prototype (#10) brings a Material namespace.
-    private static string MaterialName(Core.Model.Material? material) => material?.Name ?? "By block";
+    private static string MaterialName(Material? material) => material?.Name ?? "By block";
 }

@@ -6,7 +6,7 @@ using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.ViewModels;
 
-/// <summary>State and commands of the main window, shared by both layouts.</summary>
+/// <summary>State and commands of the main window.</summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {
     private const string ApplicationName = "Modeling Toolkit";
@@ -26,13 +26,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DocumentName = "No document";
         Summary = "Open a model with File › Open";
         StatusMessage = string.Empty;
-        IsModelPanelVisible = true;
-        IsPropertiesPanelVisible = true;
         ActivePanel = SidePanel.Model;
-        Layout = LayoutKind.Classic;
-        Theme = ThemeKind.Fluent;
         IsDark = true;
-        IsCompactDensity = true;
 
         ModelTree.PropertyChanged += (_, e) =>
         {
@@ -51,8 +46,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Shaded", NotAvailableCommand, "Shaded"),
             new("Shaded with Edges", NotAvailableCommand, "Shaded with edges"),
             new("Wireframe", NotAvailableCommand, "Wireframe"),
-            new("Layout A: Classic", SetLayoutCommand, LayoutKind.Classic),
-            new("Layout B: Compact", SetLayoutCommand, LayoutKind.Compact),
             new("Toggle Dark Theme", ToggleDarkCommand),
         ];
         _initialized = true;
@@ -85,15 +78,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial string StatusMessage { get; private set; }
 
-    // Layout A: both side panels can be hidden.
-
-    [ObservableProperty]
-    public partial bool IsModelPanelVisible { get; set; }
-
-    [ObservableProperty]
-    public partial bool IsPropertiesPanelVisible { get; set; }
-
-    // Layout B: one side panel at a time.
+    // One side panel at a time, chosen in the activity bar.
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSidePanelOpen), nameof(IsModelPanelActive), nameof(IsMaterialsPanelActive))]
@@ -105,35 +90,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool IsMaterialsPanelActive => ActivePanel == SidePanel.Materials;
 
-    // Prototype (#10): layout and theme to compare.
-
-    public IReadOnlyList<LayoutKind> Layouts { get; } = Enum.GetValues<LayoutKind>();
-
-    public IReadOnlyList<ThemeKind> Themes { get; } = Enum.GetValues<ThemeKind>();
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsClassicLayout), nameof(IsCompactLayout))]
-    public partial LayoutKind Layout { get; set; }
-
-    public bool IsClassicLayout => Layout == LayoutKind.Classic;
-
-    public bool IsCompactLayout => Layout == LayoutKind.Compact;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDensity))]
-    public partial ThemeKind Theme { get; set; }
-
-    /// <summary>Only the Fluent theme has a compact density.</summary>
-    public bool HasDensity => Theme == ThemeKind.Fluent;
-
     [ObservableProperty]
     public partial bool IsDark { get; set; }
 
-    [ObservableProperty]
-    public partial bool IsCompactDensity { get; set; }
-
-    /// <summary>Applies the theme, the variant and the density chosen here.</summary>
-    public void ApplyAppearance() => _appearance.Apply(Theme, IsDark, IsCompactDensity);
+    /// <summary>Applies the variant of the theme chosen here.</summary>
+    public void ApplyAppearance() => _appearance.Apply(IsDark);
 
     /// <summary>Reads a model and shows it; failures are reported in the status bar.</summary>
     public async Task LoadAsync(string path)
@@ -153,14 +114,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    partial void OnThemeChanged(ThemeKind value) => ApplyAppearanceOnceInitialized();
-
-    partial void OnIsDarkChanged(bool value) => ApplyAppearanceOnceInitialized();
-
-    partial void OnIsCompactDensityChanged(bool value) => ApplyAppearanceOnceInitialized();
-
-    // The initial values are applied by the application, once Avalonia is ready.
-    private void ApplyAppearanceOnceInitialized()
+    // The initial value is applied by the application, once Avalonia is ready.
+    partial void OnIsDarkChanged(bool value)
     {
         if (_initialized)
         {
@@ -225,19 +180,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         StatusMessage = $"{feature}: available once the 3D viewport is in place (#13).";
 
     [RelayCommand]
-    private void SetLayout(LayoutKind layout) => Layout = layout;
-
-    [RelayCommand]
-    private void SetTheme(ThemeKind theme) => Theme = theme;
-
-    [RelayCommand]
     private void ToggleDark() => IsDark = !IsDark;
-
-    [RelayCommand]
-    private void ToggleModelPanel() => IsModelPanelVisible = !IsModelPanelVisible;
-
-    [RelayCommand]
-    private void TogglePropertiesPanel() => IsPropertiesPanelVisible = !IsPropertiesPanelVisible;
 
     // Selecting the active panel again closes it, as in VS Code.
     [RelayCommand]

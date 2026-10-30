@@ -15,7 +15,7 @@
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+K, macOS=Cmd+K}" Command="{Binding Palette.OpenCommand}" />
   </Window.KeyBindings>
 
-  <!-- The menu goes to the menu bar of macOS; on the other platforms the layouts show it with a NativeMenuBar. -->
+  <!-- The menu goes to the menu bar of macOS; on the other platforms the layout shows it with a NativeMenuBar. -->
   <NativeMenu.Menu>
     <NativeMenu>
       <NativeMenuItem Header="File">
@@ -34,43 +34,23 @@
                           Gesture="{OnPlatform Default=Ctrl+K, macOS=Cmd+K}" />
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Model Panel" ToggleType="CheckBox"
-                          IsChecked="{Binding IsModelPanelVisible, Mode=OneWay}"
-                          Command="{Binding ToggleModelPanelCommand}" />
-          <NativeMenuItem Header="Properties Panel" ToggleType="CheckBox"
-                          IsChecked="{Binding IsPropertiesPanelVisible, Mode=OneWay}"
-                          Command="{Binding TogglePropertiesPanelCommand}" />
+                          IsChecked="{Binding IsModelPanelActive, Mode=OneWay}"
+                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Model}" />
+          <NativeMenuItem Header="Materials Panel" ToggleType="CheckBox"
+                          IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
+                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}" />
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Dark Theme" ToggleType="CheckBox" IsChecked="{Binding IsDark, Mode=OneWay}"
                           Command="{Binding ToggleDarkCommand}" />
-        </NativeMenu>
-      </NativeMenuItem>
-      <NativeMenuItem Header="Prototype">
-        <NativeMenu>
-          <NativeMenuItem Header="Layout A: Classic" ToggleType="Radio" IsChecked="{Binding IsClassicLayout, Mode=OneWay}"
-                          Command="{Binding SetLayoutCommand}" CommandParameter="{x:Static vm:LayoutKind.Classic}" />
-          <NativeMenuItem Header="Layout B: Compact" ToggleType="Radio" IsChecked="{Binding IsCompactLayout, Mode=OneWay}"
-                          Command="{Binding SetLayoutCommand}" CommandParameter="{x:Static vm:LayoutKind.Compact}" />
-          <NativeMenuItemSeparator />
-          <NativeMenuItem Header="Theme: Fluent" Command="{Binding SetThemeCommand}"
-                          CommandParameter="{x:Static vm:ThemeKind.Fluent}" />
-          <NativeMenuItem Header="Theme: Simple" Command="{Binding SetThemeCommand}"
-                          CommandParameter="{x:Static vm:ThemeKind.Simple}" />
-          <NativeMenuItem Header="Theme: Semi" Command="{Binding SetThemeCommand}"
-                          CommandParameter="{x:Static vm:ThemeKind.Semi}" />
-          <NativeMenuItem Header="Theme: Material" Command="{Binding SetThemeCommand}"
-                          CommandParameter="{x:Static vm:ThemeKind.Material}" />
-          <NativeMenuItem Header="Theme: FluentAvalonia" Command="{Binding SetThemeCommand}"
-                          CommandParameter="{x:Static vm:ThemeKind.FluentAvalonia}" />
         </NativeMenu>
       </NativeMenuItem>
     </NativeMenu>
   </NativeMenu.Menu>
 
   <Panel>
-    <views:ClassicLayoutView IsVisible="{Binding IsClassicLayout}" />
-    <views:CompactLayoutView IsVisible="{Binding IsCompactLayout}" />
+    <views:CompactLayoutView />
 
-    <!-- The command palette, shared by both layouts, opens near the top of the window. -->
+    <!-- The command palette opens near the top of the window. -->
     <Popup IsOpen="{Binding Palette.IsOpen, Mode=TwoWay}" IsLightDismissEnabled="True"
            Placement="AnchorAndGravity" PlacementAnchor="Top" PlacementGravity="Bottom" VerticalOffset="72">
       <views:CommandPaletteView DataContext="{Binding Palette}" />

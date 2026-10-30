@@ -13,8 +13,9 @@
     </ResourceDictionary>
   </Application.Resources>
 
-  <!-- The theme (Fluent by default) is inserted before these styles by Appearance, which can replace it. -->
+  <!-- Fluent, in its compact density: lower controls, more rows in trees and lists. Our styles go on top of it. -->
   <Application.Styles>
+    <FluentTheme DensityStyle="Compact" />
     <StyleInclude Source="/Styles/Controls.axaml" />
   </Application.Styles>
 

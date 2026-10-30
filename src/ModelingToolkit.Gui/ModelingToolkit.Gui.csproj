@@ -12,16 +12,8 @@
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
-    <PackageReference Include="Avalonia.Themes.Simple" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
-  </ItemGroup>
-
-  <!-- Prototype (#10): the themes to compare; the ones that are not chosen are removed afterwards. -->
-  <ItemGroup>
-    <PackageReference Include="FluentAvaloniaUI" />
-    <PackageReference Include="Material.Avalonia" />
-    <PackageReference Include="Semi.Avalonia" />
   </ItemGroup>
 
   <!-- F12 inspector of the visual tree and of the styles, in Debug builds only. -->

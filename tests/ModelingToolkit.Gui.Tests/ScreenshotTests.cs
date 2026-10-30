@@ -7,14 +7,14 @@ using ModelingToolkit.Gui.Views;
 namespace ModelingToolkit.Gui.Tests;
 
 /// <summary>
-/// Renders both layouts in every theme, dark and light, with a model open, into artifacts/screenshots: the images of
-/// the prototype (#10), to compare at a glance. The test fails if a combination cannot be rendered.
+/// Renders the main window, dark and light, with a model open, into artifacts/screenshots: the look of the application
+/// at a glance. The test fails if a variant cannot be rendered.
 /// </summary>
 [Collection(HeadlessCollection.Name)]
 public sealed class ScreenshotTests(HeadlessSession headless)
 {
     [Fact]
-    public async Task EveryLayoutAndThemeIsRendered()
+    public async Task BothVariantsAreRendered()
     {
         string folder = Directory.CreateDirectory(Path.Combine(Paths.RepositoryRoot, "artifacts", "screenshots")).FullName;
 
@@ -25,34 +25,23 @@ public sealed class ScreenshotTests(HeadlessSession headless)
             viewModel.ModelTree.SelectedNode = viewModel.ModelTree.Roots[0].Children[0];
 
             int count = 0;
-            foreach (LayoutKind layout in viewModel.Layouts)
+            foreach (bool dark in new[] { true, false })
             {
-                foreach (ThemeKind theme in viewModel.Themes)
-                {
-                    foreach (bool dark in new[] { true, false })
-                    {
-                        viewModel.Layout = layout;
-                        viewModel.Theme = theme;
-                        viewModel.IsDark = dark;
+                viewModel.IsDark = dark;
 
-                        var window = new MainWindow { DataContext = viewModel, Width = 1280, Height = 800 };
-                        window.Show();
-                        WriteableBitmap? frame = window.CaptureRenderedFrame();
-                        window.Close();
+                var window = new MainWindow { DataContext = viewModel, Width = 1280, Height = 800 };
+                window.Show();
+                WriteableBitmap? frame = window.CaptureRenderedFrame();
+                window.Close();
 
-                        Assert.NotNull(frame);
-                        frame.Save(Path.Combine(folder, FileName(layout, theme, dark)), PngBitmapEncoderOptions.Default);
-                        count++;
-                    }
-                }
+                Assert.NotNull(frame);
+                frame.Save(Path.Combine(folder, $"main-{(dark ? "dark" : "light")}.png"), PngBitmapEncoderOptions.Default);
+                count++;
             }
 
             return count;
         }, TestContext.Current.CancellationToken);
 
-        Assert.Equal(2 * 5 * 2, rendered);
+        Assert.Equal(2, rendered);
     }
-
-    private static string FileName(LayoutKind layout, ThemeKind theme, bool dark) =>
-        $"{(layout == LayoutKind.Classic ? "a" : "b")}-{theme.ToString().ToLowerInvariant()}-{(dark ? "dark" : "light")}.png";
 }

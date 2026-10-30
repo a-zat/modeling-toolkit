@@ -15,8 +15,7 @@ internal static class AppHost
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
         builder.Services.AddOpenCascade().AddNativeFileFormat().AddSingleton<DocumentFormats>();
-        builder.Services.AddSingleton<Appearance>();
-        builder.Services.AddSingleton<IAppearance>(services => services.GetRequiredService<Appearance>());
+        builder.Services.AddSingleton<IAppearance, Appearance>();
         builder.Services.AddTransient<MainWindowViewModel>();
 
         return builder.Build();

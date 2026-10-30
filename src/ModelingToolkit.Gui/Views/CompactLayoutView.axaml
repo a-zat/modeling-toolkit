@@ -1,4 +1,4 @@
-<!-- Layout B, compact: activity bar with one panel at a time, properties of the selection, command palette. -->
+<!-- Compact layout: activity bar with one panel at a time, properties of the selection, command palette. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"

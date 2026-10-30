@@ -52,15 +52,15 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void ChoosingAThemeAppliesIt()
+    public void SwitchingToTheLightVariantAppliesIt()
     {
         var appearance = new RecordingAppearance();
         var viewModel = new MainWindowViewModel(new DocumentFormats([], []), appearance);
 
-        viewModel.Theme = ThemeKind.Semi;
-        viewModel.IsDark = false;
+        viewModel.ToggleDarkCommand.Execute(null);
 
-        Assert.Equal([(ThemeKind.Semi, true, true), (ThemeKind.Semi, false, true)], appearance.Applied);
+        Assert.False(viewModel.IsDark);
+        Assert.Equal([false], appearance.Applied);
     }
 
     [Fact]
@@ -69,10 +69,10 @@ public sealed class MainWindowViewModelTests
         CommandPaletteViewModel palette = Create().Palette;
 
         palette.OpenCommand.Execute(null);
-        palette.Query = "layout";
+        palette.Query = "shaded";
 
         Assert.True(palette.IsOpen);
-        Assert.Equal(["Layout A: Classic", "Layout B: Compact"], palette.Results.Select(command => command.Name));
+        Assert.Equal(["Shaded", "Shaded with Edges"], palette.Results.Select(command => command.Name));
     }
 
     private static MainWindowViewModel Create() => new(
@@ -86,8 +86,8 @@ public sealed class MainWindowViewModelTests
 
     private sealed class RecordingAppearance : IAppearance
     {
-        public List<(ThemeKind Theme, bool Dark, bool Compact)> Applied { get; } = [];
+        public List<bool> Applied { get; } = [];
 
-        public void Apply(ThemeKind theme, bool dark, bool compact) => Applied.Add((theme, dark, compact));
+        public void Apply(bool dark) => Applied.Add(dark);
     }
 }

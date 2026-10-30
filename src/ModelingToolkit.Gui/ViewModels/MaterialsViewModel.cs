@@ -21,8 +21,7 @@ public sealed partial class MaterialsViewModel : ObservableObject
 
     public void Show(Document? document) => Items = document is null ? [] : [.. document.Materials.Select(ToItem)];
 
-    // Qualified: the Material.Avalonia theme of the prototype (#10) brings a Material namespace.
-    private static MaterialItem ToItem(Core.Model.Material material)
+    private static MaterialItem ToItem(Material material)
     {
         string texture = material.BaseColorTexture is null ? string.Empty : " · texture";
         return new(
