@@ -4,12 +4,23 @@ on:
   push:
     branches: [main]
   pull_request:
+  # GitHub deletes caches that are not read for 7 days. Running twice a week keeps the vcpkg cache alive after a
+  # pause in the commits, so OpenCASCADE (about two hours to build on Windows) is not compiled again.
+  schedule:
+    - cron: '0 6 * * 1,4'
   workflow_dispatch:
     inputs:
       macos:
         description: Also build on macOS (in private repositories macOS minutes cost 10x Linux ones)
         type: boolean
         default: false
+
+# Runs of the same branch queue instead of overlapping or cancelling each other. A run with a cold cache is compiling
+# OpenCASCADE: cancelling it would throw that work away, because vcpkg stores a package only when it's complete, and
+# running another in parallel would compile it twice. The queued run finds the cache saved by the first one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
