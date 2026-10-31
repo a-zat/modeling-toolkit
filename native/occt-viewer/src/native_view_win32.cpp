@@ -55,16 +55,18 @@ void let_mouse_through(HWND holder) {
 
 class Win32View final : public mtk::NativeView {
 public:
-    Win32View(mtk::Viewer& viewer, HWND parent) : viewer_(&viewer) {
+    Win32View(mtk::Viewer& viewer, HWND parent) {
         register_window_class();
-        // Without a size until the application places it: OpenCASCADE attaches once the view has one. The window
-        // procedure sets window_, as messages arrive before CreateWindowExW returns.
+        // Without a size until the application places it: OpenCASCADE attaches once the view has one. Messages, like
+        // WM_SIZE, arrive before CreateWindowExW returns: the window procedure sets window_, and the viewer, which is
+        // still being constructed, is connected afterwards.
         if (CreateWindowExW(0, window_class, L"", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 0, 0, parent,
                             nullptr, this_module(), this)
             == nullptr) {
             throw std::runtime_error("Cannot create the window of the viewer (error " + std::to_string(GetLastError())
                                      + ").");
         }
+        viewer_ = &viewer;
     }
 
     ~Win32View() override {
@@ -103,7 +105,6 @@ private:
             description.style = CS_OWNDC; // OpenGL keeps the device context of the window
             description.lpfnWndProc = &Win32View::procedure;
             description.hInstance = this_module();
-            description.hCursor = LoadCursorW(nullptr, IDC_ARROW);
             description.lpszClassName = window_class;
             if (RegisterClassExW(&description) == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
                 throw std::runtime_error("Cannot register the window class of the viewer (error "
@@ -155,7 +156,7 @@ private:
         }
     }
 
-    mtk::Viewer* viewer_;
+    mtk::Viewer* viewer_ = nullptr;
     HWND window_ = nullptr;
 };
 

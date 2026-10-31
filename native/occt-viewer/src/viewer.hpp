@@ -19,7 +19,8 @@ namespace mtk {
 class Viewer;
 
 // The native view the viewer draws into, implemented for each platform: an NSView on macOS (native_view_cocoa.mm), a
-// child window on Windows (native_view_win32.cpp). It tells the viewer when it changes and when it must be drawn.
+// child window on Windows (native_view_win32.cpp). It tells the viewer when it changes and when it must be drawn, but
+// not before create() returns: the viewer is still being constructed.
 class NativeView {
 public:
     static std::unique_ptr<NativeView> create(Viewer& viewer, void* parent);
