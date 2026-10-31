@@ -32,6 +32,26 @@ function(mtk_set_compile_options target)
     endif()
 endfunction()
 
+# Makes a shared library self-contained in the output folder, so the copy in the .NET output folder is too.
+# On Windows vcpkg copies the dependent DLLs automatically (VCPKG_APPLOCAL_DEPS); on macOS the library looks for its
+# dependencies next to itself, and they are copied there.
+function(mtk_copy_runtime_dependencies target)
+    if(APPLE)
+        set_target_properties(${target} PROPERTIES
+            BUILD_RPATH "@loader_path"
+            INSTALL_RPATH "@loader_path")
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                -D "LIBRARY=$<TARGET_FILE:${target}>"
+                -D "DESTINATION=$<TARGET_FILE_DIR:${target}>"
+                -P "${PROJECT_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
+            VERBATIM)
+    endif()
+endfunction()
+
+find_package(OpenCASCADE CONFIG REQUIRED)
+
+add_subdirectory(common)
 add_subdirectory(occt-bridge)
 
 # Tells the .NET build (NativeBridge.targets) that the first configure completed: CMakeCache.txt alone is not enough,

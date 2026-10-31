@@ -11,6 +11,8 @@
 #ifndef MTK_OCCT_BRIDGE_H
 #define MTK_OCCT_BRIDGE_H
 
+#include "mtk/status.h"
+
 #include <stdint.h>
 
 #if defined(_WIN32)
@@ -29,13 +31,6 @@ extern "C" {
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
 #define MTK_OCCT_BRIDGE_ABI_VERSION 2
-
-typedef enum mtk_status {
-    MTK_STATUS_OK = 0,
-    MTK_STATUS_INVALID_ARGUMENT = 1, /* the caller passed an invalid value */
-    MTK_STATUS_KERNEL_ERROR = 2,     /* OpenCASCADE raised an exception */
-    MTK_STATUS_INTERNAL_ERROR = 3    /* any other unexpected failure */
-} mtk_status;
 
 /* Opaque handle to an OpenCASCADE shape. */
 typedef struct mtk_shape mtk_shape;
