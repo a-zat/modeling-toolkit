@@ -6,7 +6,8 @@ It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primi
 
 > **Status:** early development. The `mtk` command line tool reads glTF models (`.gltf`, `.glb`) and writes them
 > in the native `.mtk` format, keeping shared geometry, hierarchy, materials and textures. The desktop application
-> opens and saves models and shows their structure, materials and properties; the 3D viewport comes next.
+> opens and saves models and shows their structure, materials and properties; its 3D view, drawn by OpenCASCADE,
+> does not show the models yet.
 
 ## Requirements
 
@@ -22,15 +23,18 @@ It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primi
 git clone --recursive https://github.com/a-zat/modeling-toolkit.git
 cd modeling-toolkit
 
-dotnet build                                          # builds the native bridge too
+dotnet build                                          # builds the native libraries too
 dotnet test                                           # .NET tests
 dotnet run --project src/ModelingToolkit.Cli -- info  # prints the toolkit and kernel versions
 dotnet run --project src/ModelingToolkit.Gui          # desktop application
 ```
 
 The desktop application has a dark and a light theme, switched at the bottom right of the status bar; the tests render
-both into `artifacts/screenshots`. In Debug builds, F12 opens DevScope, an inspector of the visual tree and of the
-styles.
+both into `artifacts/screenshots`, without the 3D view, which is a native view. In Debug builds, F12 opens DevScope, an
+inspector of the visual tree and of the styles.
+
+In the 3D view, the left button rotates, the middle button or Shift with the left button pans, and the wheel, a pinch
+or the right button zooms. Clicking a face of the cube in the upper right corner turns the view to it.
 
 After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
 
@@ -42,7 +46,7 @@ mtk stats model.mtk               # blocks, meshes, triangles, materials, bounds
 The first build compiles OpenCASCADE through vcpkg (about 7 minutes on an Apple M2); later builds reuse its cache.
 In an existing clone without the `external/vcpkg` submodule, run `git submodule update --init` first.
 
-The C++ tests of the native bridge run with CTest, from the `native` folder:
+The C++ tests of the native libraries run with CTest, from the `native` folder:
 
 ```sh
 ctest --preset macos-debug     # or windows-debug
@@ -54,7 +58,7 @@ ctest --preset macos-debug     # or windows-debug
 |---|---|
 | `src/` | .NET projects: `Core` (domain model), `Kernel.Occt` (OpenCASCADE and glTF import), `IO.Native` (`.mtk` format), `Cli` (`mtk` tool), `Gui` (desktop application, Avalonia) |
 | `tests/` | .NET tests (xUnit) and the sample models they use (`tests/assets`) |
-| `native/` | C++ projects built with CMake: `occt-bridge`, the C API over OpenCASCADE |
+| `native/` | C++ projects built with CMake: `occt-bridge`, the C API over OpenCASCADE; `occt-viewer`, the OpenCASCADE view of the desktop application; `common`, what they share |
 | `external/vcpkg` | vcpkg, the C++ package manager, as a submodule |
 | `artifacts/` | Build outputs (not versioned) |
 

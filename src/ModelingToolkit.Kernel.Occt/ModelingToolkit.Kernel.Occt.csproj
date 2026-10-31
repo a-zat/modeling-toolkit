@@ -3,6 +3,9 @@
   <PropertyGroup>
     <!-- Required by the LibraryImport source generator. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- See native/Native.targets: this project builds the native code and ships the bridge. -->
+    <BuildNative>true</BuildNative>
+    <NativeLibrary>bridge</NativeLibrary>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +22,6 @@
     <InternalsVisibleTo Include="ModelingToolkit.Kernel.Occt.Tests" />
   </ItemGroup>
 
-  <Import Project="NativeBridge.targets" />
+  <Import Project="$(RepoRoot)native/Native.targets" />
 
 </Project>

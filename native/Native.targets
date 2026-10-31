@@ -1,0 +1,53 @@
+<Project>
+
+  <!--
+    The native libraries of native/, built with CMake as part of the .NET build. A project imports this file and sets
+    NativeLibrary to the library it uses, which is then copied, together with the OpenCASCADE libraries it depends on,
+    to its output folder and to the output folder of every project that references it:
+     - bridge: the geometry kernel (native/occt-bridge);
+     - viewer: the 3D view (native/occt-viewer), with only the files the bridge does not need, so that the projects
+       using the bridge never get OpenGL. A project using the viewer must reference the bridge project too.
+    The project that sets BuildNative to true builds the native code; the others reference it, so it is built first.
+    Set SkipNativeBuild=true to use the native files already built.
+  -->
+
+  <PropertyGroup>
+    <NativeSourceDir>$(RepoRoot)native</NativeSourceDir>
+    <NativePreset Condition="$([MSBuild]::IsOSPlatform('OSX'))">macos</NativePreset>
+    <NativePreset Condition="$([MSBuild]::IsOSPlatform('Windows'))">windows</NativePreset>
+    <NativeConfiguration Condition="'$(Configuration)' == 'Release'">Release</NativeConfiguration>
+    <NativeConfiguration Condition="'$(Configuration)' != 'Release'">Debug</NativeConfiguration>
+    <!-- Must match binaryDir and the output folders in native/CMakePresets.json and native/CMakeLists.txt. -->
+    <NativeBuildDir>$(RepoRoot)artifacts/native/$(NativePreset)</NativeBuildDir>
+    <NativeBinDir>$(NativeBuildDir)/bin/$(NativeConfiguration)</NativeBinDir>
+  </PropertyGroup>
+
+  <Target Name="BuildNative" BeforeTargets="BeforeBuild"
+          Condition="'$(BuildNative)' == 'true' And '$(SkipNativeBuild)' != 'true'">
+    <Error Condition="'$(NativePreset)' == ''" Text="The native libraries can only be built on macOS and Windows." />
+    <Exec Command="cmake --preset $(NativePreset)"
+          WorkingDirectory="$(NativeSourceDir)"
+          Condition="!Exists('$(NativeBuildDir)/configure.stamp')" />
+    <Exec Command="cmake --build --preset $(NativePreset)-$(NativeConfiguration.ToLowerInvariant())"
+          WorkingDirectory="$(NativeSourceDir)" />
+  </Target>
+
+  <!-- Items are added when the target runs, not when the project is loaded: on a clean build the files don't exist yet. -->
+  <Target Name="IncludeNativeFiles" BeforeTargets="AssignTargetPaths" Condition="'$(NativeLibrary)' != ''">
+    <Error Condition="'$(NativeLibrary)' != 'bridge' And '$(NativeLibrary)' != 'viewer'"
+           Text="NativeLibrary must be bridge or viewer, not '$(NativeLibrary)'." />
+    <ItemGroup>
+      <_NativeViewerFile Include="$(NativeBinDir)/libmtk_occt_viewer.dylib;$(NativeBinDir)/libTKOpenGl.*.dylib"
+                         Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+      <_NativeViewerFile Include="$(NativeBinDir)/mtk_occt_viewer.dll;$(NativeBinDir)/TKOpenGl.dll"
+                         Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+      <_NativeBridgeFile Include="$(NativeBinDir)/*.dylib;$(NativeBinDir)/*.dll"
+                         Exclude="$(NativeBinDir)/gtest*;$(NativeBinDir)/gmock*;@(_NativeViewerFile)" />
+      <None Include="@(_NativeBridgeFile)" Condition="'$(NativeLibrary)' == 'bridge'"
+            CopyToOutputDirectory="PreserveNewest" Visible="false" />
+      <None Include="@(_NativeViewerFile)" Condition="'$(NativeLibrary)' == 'viewer'"
+            CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    </ItemGroup>
+  </Target>
+
+</Project>

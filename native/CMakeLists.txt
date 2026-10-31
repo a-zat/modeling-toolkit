@@ -5,6 +5,11 @@ project(ModelingToolkitNative
     DESCRIPTION "Native components of Modeling Toolkit"
     LANGUAGES C CXX)
 
+# The native view of the viewer on macOS is written in Objective-C++.
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -12,6 +17,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Only symbols explicitly marked for export are visible outside our shared libraries.
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_OBJCXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 
 # Dependencies are built in release only (see the vcpkg triplets): use the matching C runtime in every configuration.
@@ -53,7 +59,8 @@ find_package(OpenCASCADE CONFIG REQUIRED)
 
 add_subdirectory(common)
 add_subdirectory(occt-bridge)
+add_subdirectory(occt-viewer)
 
-# Tells the .NET build (NativeBridge.targets) that the first configure completed: CMakeCache.txt alone is not enough,
+# Tells the .NET build (Native.targets) that the first configure completed: CMakeCache.txt alone is not enough,
 # because CMake writes it even when configuring fails.
 file(TOUCH "${PROJECT_BINARY_DIR}/configure.stamp")

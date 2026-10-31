@@ -5,6 +5,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Bindings are compiled and checked at build time: every view declares its view model with x:DataType. -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Required by the LibraryImport source generator and by the fixed buffers of the viewer interop. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- See native/Native.targets: the native viewer of the 3D view. -->
+    <NativeLibrary>viewer</NativeLibrary>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,5 +34,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="ModelingToolkit.Gui.Tests" />
   </ItemGroup>
+
+  <Import Project="$(RepoRoot)native/Native.targets" />
 
 </Project>

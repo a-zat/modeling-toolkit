@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
              xmlns:views="using:ModelingToolkit.Gui.Views"
+             xmlns:viewport="using:ModelingToolkit.Gui.Viewport"
              x:Class="ModelingToolkit.Gui.Views.CompactLayoutView"
              x:DataType="vm:MainWindowViewModel">
 
@@ -94,7 +95,7 @@
       </Border>
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
 
-      <views:ViewportPlaceholder Grid.Column="3" />
+      <viewport:ViewportView Grid.Column="3" />
 
       <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />
       <Border Grid.Column="5" Classes="rightPanel" IsVisible="{Binding Properties.HasSelection}">
