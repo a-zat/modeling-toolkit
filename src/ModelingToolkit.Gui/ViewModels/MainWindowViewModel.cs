@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
+using ModelingToolkit.Gui.Viewport;
 
 namespace ModelingToolkit.Gui.ViewModels;
 
@@ -93,6 +94,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsDark { get; set; }
 
+    // Prototype (#12): the style of the ViewCube, until one is chosen.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsGraphiteViewCube), nameof(IsLightViewCube), nameof(IsGlassViewCube))]
+    public partial ViewCubeStyle ViewCubeStyle { get; set; }
+
+    public bool IsGraphiteViewCube => ViewCubeStyle == ViewCubeStyle.Graphite;
+
+    public bool IsLightViewCube => ViewCubeStyle == ViewCubeStyle.Light;
+
+    public bool IsGlassViewCube => ViewCubeStyle == ViewCubeStyle.Glass;
+
     /// <summary>Applies the variant of the theme chosen here.</summary>
     public void ApplyAppearance() => _appearance.Apply(IsDark);
 
@@ -177,10 +190,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // The commands of the 3D viewport only report that they are not available yet.
     [RelayCommand]
     private void NotAvailable(string feature) =>
-        StatusMessage = $"{feature}: available once the 3D viewport is in place (#13).";
+        StatusMessage = $"{feature}: available with the view tools (#16).";
 
     [RelayCommand]
     private void ToggleDark() => IsDark = !IsDark;
+
+    [RelayCommand]
+    private void SetViewCubeStyle(ViewCubeStyle style) => ViewCubeStyle = style;
 
     // Selecting the active panel again closes it, as in VS Code.
     [RelayCommand]

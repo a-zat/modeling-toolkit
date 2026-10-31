@@ -95,7 +95,7 @@
       </Border>
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
 
-      <viewport:ViewportView Grid.Column="3" />
+      <viewport:ViewportView Grid.Column="3" CubeStyle="{Binding ViewCubeStyle}" />
 
       <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />
       <Border Grid.Column="5" Classes="rightPanel" IsVisible="{Binding Properties.HasSelection}">

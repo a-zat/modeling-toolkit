@@ -7,7 +7,6 @@
 #include <AIS_ViewCube.hxx>
 #include <Aspect_NeutralWindow.hxx>
 #include <NCollection_Vec2.hxx>
-#include <Quantity_Color.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 
@@ -82,7 +81,6 @@ private:
     void attach();
     void update_size();
     void apply_scale(double scale);
-    void show_axes();
     NCollection_Vec2<int> to_pixels(double x, double y) const;
 
     template <typename Body>
@@ -93,7 +91,6 @@ private:
     occ::handle<AIS_InteractiveContext> context_;
     occ::handle<AIS_ViewCube> view_cube_;
     occ::handle<Aspect_NeutralWindow> window_;
-    Quantity_Color foreground_{Quantity_NOC_WHITE};
     double scale_ = 0.0;
     std::string failure_;
     std::string diagnostics_;

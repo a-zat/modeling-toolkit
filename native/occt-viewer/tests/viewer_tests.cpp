@@ -47,10 +47,12 @@ ViewerPtr create_viewer(const Parent& parent) {
 
 mtk_viewer_colors colors(float value) {
     mtk_viewer_colors result{};
-    for (int i = 0; i < 3; ++i) {
-        result.background_top[i] = value;
-        result.background_bottom[i] = value;
-        result.foreground[i] = value;
+    for (float(*color)[3] : {&result.background_top, &result.background_bottom, &result.axis_x, &result.axis_y,
+                             &result.axis_z, &result.cube_face, &result.cube_edge, &result.cube_text,
+                             &result.highlight}) {
+        for (float& component : *color) {
+            component = value;
+        }
     }
     return result;
 }
@@ -101,9 +103,22 @@ TEST(Viewer, AcceptsColoursBetweenZeroAndOne) {
     }
     for (float invalid : {-0.1f, 1.1f, std::numeric_limits<float>::quiet_NaN()}) {
         mtk_viewer_colors value = colors(0.5f);
-        value.foreground[1] = invalid;
+        value.cube_text[1] = invalid;
         EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &value), MTK_STATUS_INVALID_ARGUMENT) << invalid;
         EXPECT_STRNE(mtk_viewer_last_error_message(), "");
+    }
+}
+
+TEST(Viewer, TheViewCubeCannotBeInvisible) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    mtk_viewer_colors value = colors(0.5f);
+
+    value.cube_transparency = 0.8f;
+    EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &value), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    for (float invalid : {-0.1f, 1.0f, std::numeric_limits<float>::quiet_NaN()}) {
+        value.cube_transparency = invalid;
+        EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &value), MTK_STATUS_INVALID_ARGUMENT) << invalid;
     }
 }
 

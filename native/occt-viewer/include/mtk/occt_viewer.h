@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 1
+#define MTK_OCCT_VIEWER_ABI_VERSION 2
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -59,11 +59,18 @@ typedef enum mtk_modifier_key {
     MTK_MODIFIER_KEY_META = 8 /* Command on macOS, Windows key on Windows */
 } mtk_modifier_key;
 
-/* Colours of the view, as sRGB components from 0 to 1. */
+/* Colours of the view and of its navigation aids, as sRGB components from 0 to 1. */
 typedef struct mtk_viewer_colors {
     float background_top[3];
     float background_bottom[3];
-    float foreground[3]; /* labels of the axes */
+    float axis_x[3]; /* the axes in the lower left corner, with their labels */
+    float axis_y[3];
+    float axis_z[3];
+    float cube_face[3]; /* the ViewCube in the upper right corner */
+    float cube_edge[3]; /* its bevelled edges and corners */
+    float cube_text[3];
+    float cube_transparency; /* from 0, opaque, to 1 excluded */
+    float highlight[3];      /* the part of the ViewCube under the pointer */
 } mtk_viewer_colors;
 
 /*

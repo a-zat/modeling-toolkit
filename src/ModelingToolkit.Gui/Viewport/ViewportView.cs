@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Logging;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using ModelingToolkit.Gui.Viewport.Interop;
 
@@ -18,6 +19,9 @@ namespace ModelingToolkit.Gui.Viewport;
 /// </summary>
 public sealed class ViewportView : Border
 {
+    public static readonly StyledProperty<ViewCubeStyle> CubeStyleProperty =
+        AvaloniaProperty.Register<ViewportView, ViewCubeStyle>(nameof(CubeStyle));
+
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
 
@@ -53,7 +57,45 @@ public sealed class ViewportView : Border
         ActualThemeVariantChanged += (_, _) => ApplyColors();
     }
 
+    /// <summary>Prototype (#12): the style of the ViewCube, while one is chosen.</summary>
+    public ViewCubeStyle CubeStyle
+    {
+        get => GetValue(CubeStyleProperty);
+        set => SetValue(CubeStyleProperty, value);
+    }
+
     private OcctViewer? Viewer => _host.Viewer;
+
+    /// <summary>The colours of the 3D view in a variant of the theme, or null if a resource is missing.</summary>
+    internal ViewportColors? ReadColors(ThemeVariant theme)
+    {
+        string cube = $"Mtk.ViewCube.{CubeStyle}.";
+        return this.TryFindResource("Mtk.ViewportBackground", theme, out object? background) &&
+               background is LinearGradientBrush { GradientStops.Count: >= 2 } gradient &&
+               Find("Mtk.Viewport.AxisX", out Color axisX) && Find("Mtk.Viewport.AxisY", out Color axisY) &&
+               Find("Mtk.Viewport.AxisZ", out Color axisZ) && Find(cube + "Face", out Color cubeFace) &&
+               Find(cube + "Edge", out Color cubeEdge) && Find(cube + "Text", out Color cubeText) &&
+               Find("SystemAccentColor", out Color highlight)
+            ? new ViewportColors(gradient.GradientStops[0].Color, gradient.GradientStops[^1].Color, axisX, axisY,
+                axisZ, cubeFace, cubeEdge, cubeText, highlight)
+            : null;
+
+        bool Find(string key, out Color color)
+        {
+            bool found = this.TryFindResource(key, theme, out object? value) && value is Color;
+            color = found ? (Color)value! : default;
+            return found;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == CubeStyleProperty)
+        {
+            ApplyColors();
+        }
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -140,27 +182,14 @@ public sealed class ViewportView : Border
     // The native view takes its colours from the same resources as the rest of the interface, in the current theme.
     private void ApplyColors()
     {
-        if (this.TryFindResource("Mtk.ViewportBackground", ActualThemeVariant, out object? background) &&
-            background is LinearGradientBrush { GradientStops.Count: >= 2 } gradient &&
-            this.TryFindResource("Mtk.ViewportForeground", ActualThemeVariant, out object? foreground) &&
-            foreground is ISolidColorBrush text)
+        if (ReadColors(ActualThemeVariant) is { } colors)
         {
-            Color bottom = gradient.GradientStops[^1].Color;
             Send(viewer =>
             {
-                // The labels of the axes are opaque: the translucent foreground is blended with the background below.
-                viewer.SetColors(gradient.GradientStops[0].Color, bottom, Blend(text.Color, bottom));
+                viewer.SetColors(colors);
                 return true;
             });
         }
-    }
-
-    private static Color Blend(Color over, Color under)
-    {
-        double alpha = over.A / 255.0;
-        return Color.FromRgb(Mix(over.R, under.R), Mix(over.G, under.G), Mix(over.B, under.B));
-
-        byte Mix(byte a, byte b) => (byte)Math.Round(a * alpha + b * (1 - alpha));
     }
 
     private void ShowFailure(string message)

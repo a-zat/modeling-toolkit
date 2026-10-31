@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
         xmlns:views="using:ModelingToolkit.Gui.Views"
+        xmlns:viewport="using:ModelingToolkit.Gui.Viewport"
         x:Class="ModelingToolkit.Gui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
@@ -42,6 +43,20 @@
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Dark Theme" ToggleType="CheckBox" IsChecked="{Binding IsDark, Mode=OneWay}"
                           Command="{Binding ToggleDarkCommand}" />
+          <!-- Prototype (#12): the styles of the ViewCube to choose from. -->
+          <NativeMenuItem Header="ViewCube Style">
+            <NativeMenu>
+              <NativeMenuItem Header="Graphite" ToggleType="Radio" IsChecked="{Binding IsGraphiteViewCube, Mode=OneWay}"
+                              Command="{Binding SetViewCubeStyleCommand}"
+                              CommandParameter="{x:Static viewport:ViewCubeStyle.Graphite}" />
+              <NativeMenuItem Header="Light" ToggleType="Radio" IsChecked="{Binding IsLightViewCube, Mode=OneWay}"
+                              Command="{Binding SetViewCubeStyleCommand}"
+                              CommandParameter="{x:Static viewport:ViewCubeStyle.Light}" />
+              <NativeMenuItem Header="Glass" ToggleType="Radio" IsChecked="{Binding IsGlassViewCube, Mode=OneWay}"
+                              Command="{Binding SetViewCubeStyleCommand}"
+                              CommandParameter="{x:Static viewport:ViewCubeStyle.Glass}" />
+            </NativeMenu>
+          </NativeMenuItem>
         </NativeMenu>
       </NativeMenuItem>
     </NativeMenu>

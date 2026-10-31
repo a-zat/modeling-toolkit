@@ -23,11 +23,18 @@ internal enum NativeModifierKeys : uint
     Meta = 8,
 }
 
-/// <summary>Colours of the view, as sRGB components from 0 to 1.</summary>
+/// <summary>Colours of the view and of its navigation aids, as sRGB components from 0 to 1.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct ViewerColors
 {
     public fixed float BackgroundTop[3];
     public fixed float BackgroundBottom[3];
-    public fixed float Foreground[3];
+    public fixed float AxisX[3];
+    public fixed float AxisY[3];
+    public fixed float AxisZ[3];
+    public fixed float CubeFace[3];
+    public fixed float CubeEdge[3];
+    public fixed float CubeText[3];
+    public float CubeTransparency;
+    public fixed float Highlight[3];
 }

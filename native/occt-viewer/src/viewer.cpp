@@ -9,6 +9,8 @@
 #include <Graphic3d_TransformPers.hxx>
 #include <NCollection_IndexedDataMap.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Prs3d_Drawer.hxx>
+#include <Prs3d_ShadingAspect.hxx>
 #include <Prs3d_TextAspect.hxx>
 #include <TCollection_AsciiString.hxx>
 #include <V3d_Trihedron.hxx>
@@ -22,15 +24,24 @@ struct mtk_viewer : mtk::Viewer {
 };
 
 // The managed side declares the same layout: this size must match the one it checks in its tests.
-static_assert(sizeof(mtk_viewer_colors) == 36);
+static_assert(sizeof(mtk_viewer_colors) == 112);
 
 namespace {
 
 // Sizes in device-independent units, like the rest of the interface; the viewer multiplies them by the scale.
-constexpr double view_cube_size = 40.0;
+constexpr double view_cube_size = 42.0;
 constexpr double view_cube_offset = 70.0; // from the upper right corner to the centre of the cube
-constexpr double axes_size = 0.08;        // unit of V3d_View::TriedronDisplay: 500 pixels
+constexpr double view_cube_bevel = 0.08;  // width of the edges and corners, relative to the size
+constexpr double view_cube_text = 0.13;   // height of the labels, relative to the size
+constexpr double axes_size = 0.07;        // unit of V3d_Trihedron: 500 pixels
 constexpr double axes_label_height = 12.0;
+
+// The sans-serif font of the system: OpenCASCADE would draw the labels of the axes in Courier.
+#if defined(__APPLE__)
+constexpr const char* label_font = "Helvetica Neue";
+#else
+constexpr const char* label_font = "Segoe UI";
+#endif
 
 Aspect_VKeyMouse to_occt_buttons(uint32_t buttons) {
     Aspect_VKeyMouse result = Aspect_VKeyMouse_NONE;
@@ -110,9 +121,17 @@ mtk::Viewer::Viewer(void* parent) {
     view_->SetProj(V3d_TypeOfOrientation_Zup_AxoRight);
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
 
+    const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
+    axes->SetPosition(Aspect_TOTP_LEFT_LOWER);
+    for (V3d_TypeOfAxe axis : {V3d_X, V3d_Y, V3d_Z}) {
+        axes->LabelAspect(axis)->SetFont(label_font);
+        axes->LabelAspect(axis)->SetHeight(axes_label_height);
+    }
+
     // Clicking a face of the cube animates the camera to that view, frame after frame (see redraw()).
     view_cube_ = new AIS_ViewCube();
     view_cube_->SetDrawAxes(false); // the axes are in the lower left corner
+    view_cube_->SetFont(label_font);
     view_cube_->SetViewAnimation(myViewAnimation);
     view_cube_->SetFixedAnimationLoop(false);
     view_cube_->SetAutoStartAnimation(true);
@@ -163,8 +182,24 @@ void mtk::Viewer::view_exposed() noexcept {
 void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     view_->SetBgGradientColors(to_color(colors.background_top), to_color(colors.background_bottom),
                                Aspect_GradientFillMethod_Vertical);
-    foreground_ = to_color(colors.foreground);
-    show_axes();
+
+    const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
+    const Quantity_Color x = to_color(colors.axis_x), y = to_color(colors.axis_y), z = to_color(colors.axis_z);
+    axes->SetArrowsColor(x, y, z);
+    axes->SetLabelsColor(x, y, z);
+
+    const Quantity_Color face = to_color(colors.cube_face);
+    view_cube_->SetBoxColor(face);
+    view_cube_->SetInnerColor(face);
+    view_cube_->BoxEdgeStyle()->SetColor(to_color(colors.cube_edge));
+    view_cube_->BoxCornerStyle()->SetColor(to_color(colors.cube_edge));
+    view_cube_->SetTextColor(to_color(colors.cube_text));
+    view_cube_->SetBoxTransparency(colors.cube_transparency);
+    const Quantity_Color highlight = to_color(colors.highlight);
+    view_cube_->DynamicHilightAttributes()->SetColor(highlight);
+    view_cube_->DynamicHilightAttributes()->ShadingAspect()->SetColor(highlight);
+    context_->Redisplay(view_cube_, false);
+
     view_->Invalidate();
 }
 
@@ -259,23 +294,21 @@ void mtk::Viewer::update_size() {
 void mtk::Viewer::apply_scale(double scale) {
     scale_ = scale;
     view_->ChangeRenderingParams().Resolution = static_cast<unsigned int>(std::lround(72.0 * scale));
-    show_axes();
 
-    view_cube_->SetSize(view_cube_size * scale);
+    view_->Trihedron()->SetScale(axes_size * scale);
+    view_->Trihedron()->Display(*view_);
+
+    // SetSize adapts the bevels and the labels to the size: they are set afterwards.
+    const double size = view_cube_size * scale;
+    view_cube_->SetSize(size);
+    view_cube_->SetBoxFacetExtension(size * view_cube_bevel);
+    view_cube_->SetFontHeight(size * view_cube_text);
     const int offset = static_cast<int>(std::lround(view_cube_offset * scale));
     view_cube_->SetTransformPersistence(new Graphic3d_TransformPers(
         Graphic3d_TMF_TriedronPers, Aspect_TOTP_RIGHT_UPPER, NCollection_Vec2<int>(offset, offset)));
     if (context_->IsDisplayed(view_cube_)) {
         context_->Redisplay(view_cube_, false);
     }
-}
-
-void mtk::Viewer::show_axes() {
-    const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
-    for (V3d_TypeOfAxe axis : {V3d_X, V3d_Y, V3d_Z}) {
-        axes->LabelAspect(axis)->SetHeight(axes_label_height);
-    }
-    view_->TriedronDisplay(Aspect_TOTP_LEFT_LOWER, foreground_, axes_size * scale_, V3d_ZBUFFER);
 }
 
 NCollection_Vec2<int> mtk::Viewer::to_pixels(double x, double y) const {
@@ -345,9 +378,15 @@ mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* co
         if (viewer == nullptr || colors == nullptr) {
             return mtk::invalid_argument("viewer and colors must not be null.");
         }
-        if (!is_color(colors->background_top) || !is_color(colors->background_bottom)
-            || !is_color(colors->foreground)) {
-            return mtk::invalid_argument("Colour components must be between 0 and 1.");
+        for (const float(*color)[3] : {&colors->background_top, &colors->background_bottom, &colors->axis_x,
+                                       &colors->axis_y, &colors->axis_z, &colors->cube_face, &colors->cube_edge,
+                                       &colors->cube_text, &colors->highlight}) {
+            if (!is_color(*color)) {
+                return mtk::invalid_argument("Colour components must be between 0 and 1.");
+            }
+        }
+        if (!(colors->cube_transparency >= 0.0f && colors->cube_transparency < 1.0f)) {
+            return mtk::invalid_argument("The transparency of the ViewCube must be at least 0 and below 1.");
         }
         viewer->set_colors(*colors);
         return MTK_STATUS_OK;

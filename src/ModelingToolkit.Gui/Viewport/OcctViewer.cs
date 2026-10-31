@@ -64,13 +64,20 @@ internal sealed class OcctViewer : IDisposable
         (modifiers.HasFlag(KeyModifiers.Alt) ? NativeModifierKeys.Alt : NativeModifierKeys.None) |
         (modifiers.HasFlag(KeyModifiers.Meta) ? NativeModifierKeys.Meta : NativeModifierKeys.None);
 
-    public unsafe void SetColors(Color backgroundTop, Color backgroundBottom, Color foreground)
+    public unsafe void SetColors(ViewportColors colors)
     {
-        var colors = new ViewerColors();
-        Copy(backgroundTop, colors.BackgroundTop);
-        Copy(backgroundBottom, colors.BackgroundBottom);
-        Copy(foreground, colors.Foreground);
-        NativeMethods.SetColors(_handle, in colors).ThrowIfFailed();
+        var native = new ViewerColors();
+        Copy(colors.BackgroundTop, native.BackgroundTop);
+        Copy(colors.BackgroundBottom, native.BackgroundBottom);
+        Copy(colors.AxisX, native.AxisX);
+        Copy(colors.AxisY, native.AxisY);
+        Copy(colors.AxisZ, native.AxisZ);
+        Copy(colors.CubeFace, native.CubeFace);
+        Copy(colors.CubeEdge, native.CubeEdge);
+        Copy(colors.CubeText, native.CubeText);
+        native.CubeTransparency = 1f - colors.CubeFace.A / 255f;
+        Copy(colors.Highlight, native.Highlight);
+        NativeMethods.SetColors(_handle, in native).ThrowIfFailed();
 
         static void Copy(Color color, float* rgb)
         {

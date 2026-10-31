@@ -15,7 +15,7 @@ public sealed class ViewerInteropTests
 
     // Same size as the static_assert in native/occt-viewer/src/viewer.cpp: a mismatch would corrupt memory.
     [Fact]
-    public void ColoursHaveTheNativeSize() => Assert.Equal(36, Unsafe.SizeOf<ViewerColors>());
+    public void ColoursHaveTheNativeSize() => Assert.Equal(112, Unsafe.SizeOf<ViewerColors>());
 
     [Fact]
     public void PressedButtonsBecomeFlagsOfTheViewer()
