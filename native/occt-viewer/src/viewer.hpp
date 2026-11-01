@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mtk/occt_viewer.h"
+#include "scene.hpp"
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ViewController.hxx>
@@ -10,8 +11,11 @@
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 
+#include <map>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace mtk {
 
@@ -65,6 +69,17 @@ public:
 
     void set_colors(const mtk_viewer_colors& colors);
 
+    // The scene, from checked arguments: each function that adds returns the index of what it added.
+    int add_mesh(const mtk_viewer_mesh& mesh);
+    int add_texture(const uint8_t* pixels, int width, int height);
+    int add_material(const mtk_viewer_material& material);
+    void add_instance(int mesh, int material, const double* transform);
+    void clear();
+    void fit_all();
+    int mesh_count() const { return static_cast<int>(meshes_.size()); }
+    int texture_count() const { return static_cast<int>(textures_.size()); }
+    int material_count() const { return static_cast<int>(materials_.size()); }
+
     // Input; each returns true when the view must be drawn again.
     bool mouse_buttons(double x, double y, uint32_t buttons, uint32_t modifiers);
     bool mouse_move(double x, double y, uint32_t buttons, uint32_t modifiers);
@@ -91,6 +106,11 @@ private:
     occ::handle<AIS_InteractiveContext> context_;
     occ::handle<AIS_ViewCube> view_cube_;
     occ::handle<Aspect_NeutralWindow> window_;
+    std::vector<occ::handle<Graphic3d_ArrayOfTriangles>> meshes_;
+    std::vector<occ::handle<Graphic3d_Texture2D>> textures_;
+    std::vector<occ::handle<Graphic3d_AspectFillArea3d>> materials_;
+    std::map<std::pair<int, int>, occ::handle<MeshObject>> shared_meshes_; // by mesh and material
+    std::vector<occ::handle<AIS_InteractiveObject>> instances_;
     double scale_ = 0.0;
     std::string failure_;
     std::string diagnostics_;

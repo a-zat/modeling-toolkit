@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 4
+#define MTK_OCCT_VIEWER_ABI_VERSION 5
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -88,6 +88,52 @@ MTK_VIEWER_API void mtk_viewer_release(mtk_viewer* viewer);
 MTK_VIEWER_API mtk_status mtk_viewer_get_native_view(const mtk_viewer* viewer, void** out_view);
 
 MTK_VIEWER_API mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* colors);
+
+/*
+ * The scene: meshes, each uploaded once, placed by instances with a material. The functions below return indices,
+ * from 0, that identify meshes, textures and materials until mtk_viewer_clear. After changing the scene, the view must
+ * be drawn again with mtk_viewer_redraw. Arrays are read during the call only.
+ */
+
+/* A triangle mesh. */
+typedef struct mtk_viewer_mesh {
+    const double* positions; /* 3 per vertex, in millimetres */
+    const float* normals;    /* 3 per vertex, of unit length; null for flat shading */
+    const float* uvs;        /* 2 per vertex, (0, 0) at the bottom left corner of the textures; or null */
+    int32_t vertex_count;
+    const int32_t* triangles; /* 3 indices of vertices per triangle, counter-clockwise seen from its front */
+    int32_t triangle_count;
+} mtk_viewer_mesh;
+
+/* A material of the metallic-roughness model of glTF. */
+typedef struct mtk_viewer_material {
+    float base_color[4];        /* linear RGB, then the opacity */
+    float metallic;             /* from 0, dielectric, to 1, metal */
+    float roughness;            /* from 0, smooth, to 1, rough */
+    int32_t base_color_texture; /* multiplied by base_color; -1 for none */
+} mtk_viewer_material;
+
+MTK_VIEWER_API mtk_status mtk_viewer_add_mesh(mtk_viewer* viewer, const mtk_viewer_mesh* mesh, int32_t* out_mesh);
+
+/* An image of width x height pixels of 4 bytes, RGBA in sRGB, row after row from the top one. */
+MTK_VIEWER_API mtk_status mtk_viewer_add_texture(mtk_viewer* viewer, const uint8_t* pixels, int32_t width,
+                                                 int32_t height, int32_t* out_texture);
+
+MTK_VIEWER_API mtk_status mtk_viewer_add_material(mtk_viewer* viewer, const mtk_viewer_material* material,
+                                                  int32_t* out_material);
+
+/*
+ * Places a mesh with a material. transform holds 12 values: the first three rows of a 4x4 matrix applied to column
+ * vectors, row after row, from the coordinates of the mesh to those of the scene.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material,
+                                                  const double* transform);
+
+/* Removes the meshes, textures, materials and instances. */
+MTK_VIEWER_API mtk_status mtk_viewer_clear(mtk_viewer* viewer);
+
+/* Turns the camera to show all the instances; with none, the view does not change. */
+MTK_VIEWER_API mtk_status mtk_viewer_fit_all(mtk_viewer* viewer);
 
 /*
  * Mouse input, with the buttons pressed after the event and the modifier keys held. Each function sets out_redraw

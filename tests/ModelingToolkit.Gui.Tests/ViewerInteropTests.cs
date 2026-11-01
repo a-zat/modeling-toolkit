@@ -1,6 +1,8 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Gui.Viewport;
 using ModelingToolkit.Gui.Viewport.Interop;
 
@@ -13,9 +15,26 @@ public sealed class ViewerInteropTests
     public void TheNativeViewerHasTheExpectedAbiVersion() =>
         Assert.Equal(NativeMethods.AbiVersion, NativeMethods.ViewerAbiVersion());
 
-    // Same size as the static_assert in native/occt-viewer/src/viewer.cpp: a mismatch would corrupt memory.
+    // Same sizes as the static_asserts in native/occt-viewer/src/viewer.cpp: a mismatch would corrupt memory.
     [Fact]
     public void ColoursHaveTheNativeSize() => Assert.Equal(120, Unsafe.SizeOf<ViewerColors>());
+
+    [Fact]
+    public void MeshesAndMaterialsHaveTheNativeSizes()
+    {
+        Assert.Equal(IntPtr.Size == 8 ? 48 : 24, Unsafe.SizeOf<NativeMesh>());
+        Assert.Equal(28, Unsafe.SizeOf<NativeMaterial>());
+    }
+
+    // The arrays of a mesh are passed to the viewer as arrays of doubles, floats and ints.
+    [Fact]
+    public void TheElementsOfMeshesAreMadeOfTheirCoordinates()
+    {
+        Assert.Equal(3 * sizeof(double), Unsafe.SizeOf<Point3d>());
+        Assert.Equal(3 * sizeof(int), Unsafe.SizeOf<Triangle>());
+        Assert.Equal(3 * sizeof(float), Unsafe.SizeOf<Vector3>());
+        Assert.Equal(2 * sizeof(float), Unsafe.SizeOf<Vector2>());
+    }
 
     [Fact]
     public void PressedButtonsBecomeFlagsOfTheViewer()

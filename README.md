@@ -6,8 +6,8 @@ It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primi
 
 > **Status:** early development. The `mtk` command line tool reads glTF models (`.gltf`, `.glb`) and writes them
 > in the native `.mtk` format, keeping shared geometry, hierarchy, materials and textures. The desktop application
-> opens and saves models and shows their structure, materials and properties; its 3D view, drawn by OpenCASCADE,
-> does not show the models yet.
+> opens and saves models, shows them in its 3D view, drawn by OpenCASCADE, and shows their structure, materials and
+> properties.
 
 ## Requirements
 

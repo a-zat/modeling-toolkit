@@ -3,6 +3,7 @@
 #include "mtk/errors.hpp"
 
 #include <AIS_AnimationCamera.hxx>
+#include <AIS_ConnectedInteractive.hxx>
 #include <AIS_Line.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_GridParams.hxx>
@@ -20,6 +21,7 @@
 #include <V3d_Trihedron.hxx>
 
 #include <cmath>
+#include <limits>
 #include <sstream>
 
 // Definition of the opaque handle declared in the public header.
@@ -27,8 +29,10 @@ struct mtk_viewer : mtk::Viewer {
     using mtk::Viewer::Viewer;
 };
 
-// The managed side declares the same layout: this size must match the one it checks in its tests.
+// The managed side declares the same layouts: these sizes must match the ones it checks in its tests.
 static_assert(sizeof(mtk_viewer_colors) == 120);
+static_assert(sizeof(mtk_viewer_material) == 28);
+static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 48);
 
 namespace {
 
@@ -44,6 +48,12 @@ constexpr double axes_label_height = 12.0;
 constexpr double field_of_view = 35.0;         // vertical, in degrees
 constexpr double initial_view_size = 12000.0; // the ground shown before a model is opened
 constexpr double grid_step = 1000.0;
+constexpr double fit_margin = 0.1; // around the scene, relative to its size on screen
+
+// Textures larger than graphics cards accept, and meshes larger than the arrays of OpenCASCADE can index with three
+// indices or vertices per triangle, are refused.
+constexpr int32_t max_texture_size = 16384;
+constexpr int32_t max_mesh_size = std::numeric_limits<int32_t>::max() / 3;
 
 // The sans-serif font of the system: OpenCASCADE would draw the labels of the axes in Courier.
 #if defined(__APPLE__)
@@ -238,6 +248,60 @@ void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     view_->Invalidate();
 }
 
+int mtk::Viewer::add_mesh(const mtk_viewer_mesh& mesh) {
+    meshes_.push_back(make_triangles(mesh));
+    return mesh_count() - 1;
+}
+
+int mtk::Viewer::add_texture(const uint8_t* pixels, int width, int height) {
+    textures_.push_back(make_texture(pixels, width, height));
+    return texture_count() - 1;
+}
+
+int mtk::Viewer::add_material(const mtk_viewer_material& material) {
+    const occ::handle<Graphic3d_Texture2D> texture =
+        material.base_color_texture >= 0 ? textures_[material.base_color_texture] : nullptr;
+    materials_.push_back(make_aspect(material, texture));
+    return material_count() - 1;
+}
+
+void mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
+    occ::handle<AIS_InteractiveObject> instance;
+    if (const std::optional<gp_Trsf> placement = to_placement(transform)) {
+        occ::handle<MeshObject>& shared = shared_meshes_[{mesh, material}];
+        if (shared.IsNull()) {
+            shared = new MeshObject(meshes_[mesh], materials_[material]);
+        }
+        occ::handle<AIS_ConnectedInteractive> connected = new AIS_ConnectedInteractive();
+        connected->Connect(shared, *placement);
+        instance = connected;
+    } else {
+        // Stretched or sheared: a copy of the triangles of its own.
+        instance = new MeshObject(transform_triangles(meshes_[mesh], transform), materials_[material]);
+    }
+    context_->Display(instance, 0, -1, false); // shown, not selectable yet (#15)
+    instances_.push_back(instance);
+}
+
+void mtk::Viewer::clear() {
+    for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
+        context_->Remove(instance, false);
+    }
+    instances_.clear();
+    shared_meshes_.clear();
+    materials_.clear();
+    textures_.clear();
+    meshes_.clear();
+    view_->Invalidate();
+}
+
+void mtk::Viewer::fit_all() {
+    // Without a window the view has no size: attach() fits it then.
+    if (is_attached() && !instances_.empty()) {
+        view_->FitAll(fit_margin, false);
+    }
+}
+
 bool mtk::Viewer::mouse_buttons(double x, double y, uint32_t buttons, uint32_t modifiers) {
     return is_attached()
         && UpdateMouseButtons(to_pixels(x, y), to_occt_buttons(buttons), to_occt_modifiers(modifiers), false);
@@ -307,8 +371,9 @@ void mtk::Viewer::attach() {
     window->SetSize(size.x(), size.y());
     view_->SetWindow(window);
     window_ = window;
-    // Across the longer side of the window, which the view knows now.
+    // Across the longer side of the window, which the view knows now, or around the scene.
     view_->SetSize(initial_view_size);
+    fit_all();
 
     apply_scale(native_view_->scale());
     view_->Redraw();
@@ -372,6 +437,60 @@ mtk_status check_position(double x, double y) {
     return MTK_STATUS_OK;
 }
 
+mtk_status check_mesh(const mtk_viewer_mesh& mesh) {
+    if (mesh.vertex_count <= 0 || mesh.triangle_count <= 0 || mesh.vertex_count > max_mesh_size ||
+        mesh.triangle_count > max_mesh_size) {
+        return mtk::invalid_argument("A mesh needs from 1 to 715827882 vertices and triangles.");
+    }
+    if (mesh.positions == nullptr || mesh.triangles == nullptr) {
+        return mtk::invalid_argument("The positions and the triangles of a mesh must not be null.");
+    }
+    for (int32_t i = 0; i < 3 * mesh.vertex_count; ++i) {
+        if (!std::isfinite(mesh.positions[i])) {
+            return mtk::invalid_argument("The positions of a mesh must be finite.");
+        }
+    }
+    for (int32_t i = 0; i < 3 * mesh.triangle_count; ++i) {
+        if (mesh.triangles[i] < 0 || mesh.triangles[i] >= mesh.vertex_count) {
+            return mtk::invalid_argument("A triangle refers to a vertex that the mesh does not have.");
+        }
+    }
+    return MTK_STATUS_OK;
+}
+
+bool is_unit(float value) {
+    return value >= 0.0f && value <= 1.0f; // false for NaN
+}
+
+mtk_status check_material(const mtk_viewer_material& material, int texture_count) {
+    if (!is_unit(material.base_color[0]) || !is_unit(material.base_color[1]) || !is_unit(material.base_color[2]) ||
+        !is_unit(material.base_color[3]) || !is_unit(material.metallic) || !is_unit(material.roughness)) {
+        return mtk::invalid_argument("The colour, metallic and roughness of a material must be between 0 and 1.");
+    }
+    if (material.base_color_texture < -1 || material.base_color_texture >= texture_count) {
+        return mtk::invalid_argument("The texture of a material must be one added to the viewer, or -1.");
+    }
+    return MTK_STATUS_OK;
+}
+
+mtk_status check_transform(const double* transform) {
+    if (transform == nullptr) {
+        return mtk::invalid_argument("transform must not be null.");
+    }
+    for (int i = 0; i < 12; ++i) {
+        if (!std::isfinite(transform[i])) {
+            return mtk::invalid_argument("The values of a transform must be finite.");
+        }
+    }
+    const double determinant = transform[0] * (transform[5] * transform[10] - transform[6] * transform[9]) -
+                               transform[1] * (transform[4] * transform[10] - transform[6] * transform[8]) +
+                               transform[2] * (transform[4] * transform[9] - transform[5] * transform[8]);
+    if (!(std::abs(determinant) > std::numeric_limits<double>::min())) {
+        return mtk::invalid_argument("A transform must not flatten the mesh.");
+    }
+    return MTK_STATUS_OK;
+}
+
 } // namespace
 
 int32_t mtk_viewer_abi_version(void) {
@@ -425,6 +544,85 @@ mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* co
             }
         }
         viewer->set_colors(*colors);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_add_mesh(mtk_viewer* viewer, const mtk_viewer_mesh* mesh, int32_t* out_mesh) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || mesh == nullptr || out_mesh == nullptr) {
+            return mtk::invalid_argument("viewer, mesh and out_mesh must not be null.");
+        }
+        *out_mesh = 0;
+        const mtk_status status = check_mesh(*mesh);
+        if (status == MTK_STATUS_OK) {
+            *out_mesh = viewer->add_mesh(*mesh);
+        }
+        return status;
+    });
+}
+
+mtk_status mtk_viewer_add_texture(mtk_viewer* viewer, const uint8_t* pixels, int32_t width, int32_t height,
+                                  int32_t* out_texture) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || pixels == nullptr || out_texture == nullptr) {
+            return mtk::invalid_argument("viewer, pixels and out_texture must not be null.");
+        }
+        *out_texture = 0;
+        if (width <= 0 || height <= 0 || width > max_texture_size || height > max_texture_size) {
+            return mtk::invalid_argument("A texture must have from 1 to 16384 pixels on each side.");
+        }
+        *out_texture = viewer->add_texture(pixels, width, height);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_add_material(mtk_viewer* viewer, const mtk_viewer_material* material, int32_t* out_material) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || material == nullptr || out_material == nullptr) {
+            return mtk::invalid_argument("viewer, material and out_material must not be null.");
+        }
+        *out_material = 0;
+        const mtk_status status = check_material(*material, viewer->texture_count());
+        if (status == MTK_STATUS_OK) {
+            *out_material = viewer->add_material(*material);
+        }
+        return status;
+    });
+}
+
+mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material, const double* transform) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (mesh < 0 || mesh >= viewer->mesh_count() || material < 0 || material >= viewer->material_count()) {
+            return mtk::invalid_argument("An instance needs a mesh and a material added to the viewer.");
+        }
+        const mtk_status status = check_transform(transform);
+        if (status == MTK_STATUS_OK) {
+            viewer->add_instance(mesh, material, transform);
+        }
+        return status;
+    });
+}
+
+mtk_status mtk_viewer_clear(mtk_viewer* viewer) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        viewer->clear();
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_fit_all(mtk_viewer* viewer) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        viewer->fit_all();
         return MTK_STATUS_OK;
     });
 }

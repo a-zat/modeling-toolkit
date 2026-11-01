@@ -2,9 +2,11 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <limits>
 #include <memory>
 #include <string>
+#include <vector>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -55,6 +57,36 @@ mtk_viewer_colors colors(float value) {
         }
     }
     return result;
+}
+
+// A square of two triangles on the ground, one metre wide, with normals and texture coordinates.
+struct Square {
+    std::array<double, 12> positions{0, 0, 0, 1000, 0, 0, 1000, 1000, 0, 0, 1000, 0};
+    std::array<float, 12> normals{0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1};
+    std::array<float, 8> uvs{0, 0, 1, 0, 1, 1, 0, 1};
+    std::array<int32_t, 6> triangles{0, 1, 2, 0, 2, 3};
+
+    mtk_viewer_mesh mesh() const {
+        return {positions.data(), normals.data(), uvs.data(), 4, triangles.data(), 2};
+    }
+};
+
+constexpr double identity[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+
+mtk_viewer_material grey(int32_t texture = -1) {
+    return {{0.5f, 0.5f, 0.5f, 1.0f}, 0.0f, 0.8f, texture};
+}
+
+int32_t add_mesh(mtk_viewer* viewer, const mtk_viewer_mesh& mesh) {
+    int32_t index = -1;
+    EXPECT_EQ(mtk_viewer_add_mesh(viewer, &mesh, &index), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    return index;
+}
+
+int32_t add_material(mtk_viewer* viewer, const mtk_viewer_material& material) {
+    int32_t index = -1;
+    EXPECT_EQ(mtk_viewer_add_material(viewer, &material, &index), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    return index;
 }
 
 TEST(Viewer, ReportsItsAbiVersion) {
@@ -109,6 +141,114 @@ TEST(Viewer, AcceptsColoursBetweenZeroAndOne) {
     }
 }
 
+TEST(Viewer, NumbersWhatItAddsToTheSceneFromZero) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const Square square;
+    const std::vector<uint8_t> pixels(2 * 2 * 4, 255);
+    int32_t texture = -1;
+
+    EXPECT_EQ(add_mesh(viewer.get(), square.mesh()), 0);
+    EXPECT_EQ(add_mesh(viewer.get(), square.mesh()), 1);
+    ASSERT_EQ(mtk_viewer_add_texture(viewer.get(), pixels.data(), 2, 2, &texture), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+    EXPECT_EQ(texture, 0);
+    EXPECT_EQ(add_material(viewer.get(), grey()), 0);
+    EXPECT_EQ(add_material(viewer.get(), grey(texture)), 1);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 1, 1, identity), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_fit_all(viewer.get()), MTK_STATUS_OK);
+
+    ASSERT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
+    EXPECT_EQ(add_mesh(viewer.get(), square.mesh()), 0);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 0, 0, identity), MTK_STATUS_INVALID_ARGUMENT)
+        << "the materials were cleared";
+}
+
+TEST(Viewer, ShadesMeshesWithoutNormalsFlat) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    Square square;
+    mtk_viewer_mesh mesh = square.mesh();
+    mesh.normals = nullptr;
+    mesh.uvs = nullptr;
+
+    const int32_t index = add_mesh(viewer.get(), mesh);
+    const int32_t material = add_material(viewer.get(), grey());
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), index, material, identity), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+}
+
+TEST(Viewer, PlacesInstancesWithAnyInvertibleTransform) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t mesh = add_mesh(viewer.get(), Square().mesh());
+    const int32_t material = add_material(viewer.get(), grey());
+    // Rotated a quarter turn, scaled and moved; mirrored; stretched along X, which needs a copy of the triangles.
+    const double rotated[12] = {0, -2, 0, 100, 2, 0, 0, 200, 0, 0, 2, 300};
+    const double mirrored[12] = {-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+
+    for (const double* transform : {rotated, mirrored, stretched}) {
+        EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, transform), MTK_STATUS_OK)
+            << mtk_viewer_last_error_message();
+    }
+}
+
+TEST(Viewer, RejectsMeshesItCannotShow) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    Square square;
+    int32_t index = -1;
+
+    mtk_viewer_mesh empty = square.mesh();
+    empty.triangle_count = 0;
+    mtk_viewer_mesh without_positions = square.mesh();
+    without_positions.positions = nullptr;
+    Square outside;
+    outside.triangles[5] = 4;
+    Square infinite;
+    infinite.positions[4] = std::numeric_limits<double>::infinity();
+
+    for (const mtk_viewer_mesh& mesh : {empty, without_positions, outside.mesh(), infinite.mesh()}) {
+        EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), &mesh, &index), MTK_STATUS_INVALID_ARGUMENT);
+        EXPECT_STRNE(mtk_viewer_last_error_message(), "");
+    }
+}
+
+TEST(Viewer, RejectsMaterialsAndTexturesItCannotShow) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const uint8_t pixel[4] = {255, 0, 0, 255};
+    int32_t index = -1;
+
+    mtk_viewer_material bright = grey();
+    bright.base_color[0] = 1.5f;
+    mtk_viewer_material undefined = grey();
+    undefined.roughness = std::numeric_limits<float>::quiet_NaN();
+    const mtk_viewer_material untextured = grey(0); // no texture was added
+    for (const mtk_viewer_material& material : {bright, undefined, untextured}) {
+        EXPECT_EQ(mtk_viewer_add_material(viewer.get(), &material, &index), MTK_STATUS_INVALID_ARGUMENT);
+    }
+    EXPECT_EQ(mtk_viewer_add_texture(viewer.get(), pixel, 0, 1, &index), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_texture(viewer.get(), pixel, 1, 20000, &index), MTK_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(Viewer, RejectsInstancesItCannotPlace) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t mesh = add_mesh(viewer.get(), Square().mesh());
+    const int32_t material = add_material(viewer.get(), grey());
+    const double flat[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0};
+    double undefined[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    undefined[3] = std::numeric_limits<double>::quiet_NaN();
+
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh + 1, material, identity), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material + 1, identity), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, flat), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, undefined), MTK_STATUS_INVALID_ARGUMENT);
+}
+
 TEST(Viewer, RejectsPositionsAndDeltasThatAreNotFinite) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);
@@ -160,6 +300,18 @@ TEST(Viewer, NullArgumentsAreRejected) {
     EXPECT_EQ(mtk_viewer_redraw(nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_redraw(viewer.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_get_diagnostics(nullptr, &text), MTK_STATUS_INVALID_ARGUMENT);
+    const mtk_viewer_mesh mesh = Square().mesh();
+    const mtk_viewer_material material = grey();
+    const uint8_t pixel[4] = {};
+    EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), &mesh, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_texture(viewer.get(), nullptr, 1, 1, &flag), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_texture(viewer.get(), pixel, 1, 1, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_material(viewer.get(), nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_material(viewer.get(), &material, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(nullptr, 0, 0, identity), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_clear(nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_fit_all(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     mtk_viewer_release(nullptr);
 }
 

@@ -14,7 +14,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly DocumentFormats _formats;
     private readonly IAppearance _appearance;
     private readonly bool _initialized;
-    private Document? _document;
     private string? _path;
 
     public MainWindowViewModel(DocumentFormats formats, IAppearance appearance)
@@ -62,7 +61,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>The open and save dialogs, provided by the window.</summary>
     public IFileDialogs? FileDialogs { get; set; }
 
-    public bool HasDocument => _document is not null;
+    /// <summary>The open document, shown in the 3D view.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDocument))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(SaveAsCommand))]
+    public partial Document? Document { get; private set; }
+
+    public bool HasDocument => Document is not null;
 
     [ObservableProperty]
     public partial string Title { get; private set; }
@@ -188,7 +193,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void Show(Document document, string path)
     {
-        _document = document;
+        Document = document;
         _path = path;
         DocumentName = Path.GetFileName(path);
         Title = $"{DocumentName} — {ApplicationName}";
@@ -200,9 +205,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         ModelTree.Show(document);
         Materials.Show(document);
-        OnPropertyChanged(nameof(HasDocument));
-        SaveCommand.NotifyCanExecuteChanged();
-        SaveAsCommand.NotifyCanExecuteChanged();
     }
 
     private void Write(string path)
@@ -211,7 +213,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         try
         {
             IDocumentWriter writer = _formats.WriterFor(path);
-            writer.Write(_document!, path);
+            writer.Write(Document!, path);
             _path = path;
             DocumentName = name;
             Title = $"{name} — {ApplicationName}";

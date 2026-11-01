@@ -1,7 +1,10 @@
+using System.Numerics;
 using Avalonia;
 using Avalonia.Input;
-using Avalonia.Media;
+using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport.Interop;
+using Color = Avalonia.Media.Color;
 
 namespace ModelingToolkit.Gui.Viewport;
 
@@ -86,6 +89,79 @@ internal sealed class OcctViewer : IDisposable
             rgb[2] = color.B / 255f;
         }
     }
+
+    // The scene: each method that adds returns the index of what it added, from 0 until Clear. After changing the scene,
+    // Redraw should be called on the next frame.
+
+    /// <exception cref="ArgumentException">The mesh has no triangles, or positions that are not finite.</exception>
+    public unsafe int AddMesh(MeshEntity mesh)
+    {
+        // The arrays of the mesh are passed as they are: their elements are made of doubles, floats and ints.
+        fixed (Point3d* positions = mesh.Vertices)
+        fixed (Vector3* normals = mesh.Normals)
+        fixed (Vector2* uvs = mesh.TextureCoordinates)
+        fixed (Triangle* triangles = mesh.Triangles)
+        {
+            var native = new NativeMesh
+            {
+                Positions = (double*)positions,
+                Normals = (float*)normals,
+                Uvs = (float*)uvs,
+                VertexCount = mesh.Vertices.Length,
+                Triangles = (int*)triangles,
+                TriangleCount = mesh.Triangles.Length,
+            };
+            NativeMethods.AddMesh(_handle, in native, out int index).ThrowIfFailed();
+            return index;
+        }
+    }
+
+    public unsafe int AddTexture(TextureImage image)
+    {
+        fixed (byte* pixels = image.Pixels)
+        {
+            NativeMethods.AddTexture(_handle, pixels, image.Width, image.Height, out int index).ThrowIfFailed();
+            return index;
+        }
+    }
+
+    /// <param name="texture">The base colour texture, as returned by <see cref="AddTexture"/>, or -1.</param>
+    public unsafe int AddMaterial(Material material, int texture)
+    {
+        // Values out of range, which a file may hold, are brought into it rather than refused.
+        var native = new NativeMaterial
+        {
+            Metallic = ToUnit(material.Metallic),
+            Roughness = ToUnit(material.Roughness),
+            BaseColorTexture = texture,
+        };
+        native.BaseColor[0] = ToUnit(material.BaseColor.R);
+        native.BaseColor[1] = ToUnit(material.BaseColor.G);
+        native.BaseColor[2] = ToUnit(material.BaseColor.B);
+        native.BaseColor[3] = ToUnit(material.BaseColor.A);
+        NativeMethods.AddMaterial(_handle, in native, out int index).ThrowIfFailed();
+        return index;
+
+        static float ToUnit(float value) => float.IsNaN(value) ? 0f : Math.Clamp(value, 0f, 1f);
+    }
+
+    /// <exception cref="ArgumentException">The placement is not invertible.</exception>
+    public unsafe void AddInstance(int mesh, int material, Transform placement)
+    {
+        double* values = stackalloc double[]
+        {
+            placement.M00, placement.M01, placement.M02, placement.M03,
+            placement.M10, placement.M11, placement.M12, placement.M13,
+            placement.M20, placement.M21, placement.M22, placement.M23,
+        };
+        NativeMethods.AddInstance(_handle, mesh, material, values).ThrowIfFailed();
+    }
+
+    /// <summary>Removes the meshes, textures, materials and instances.</summary>
+    public void Clear() => NativeMethods.Clear(_handle).ThrowIfFailed();
+
+    /// <summary>Turns the camera to show all the instances; with none, the view does not change.</summary>
+    public void FitAll() => NativeMethods.FitAll(_handle).ThrowIfFailed();
 
     // Each input method returns whether the view changed: Redraw should then be called on the next frame.
 

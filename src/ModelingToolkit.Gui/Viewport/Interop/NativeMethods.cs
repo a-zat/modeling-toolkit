@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 4;
+    public const int AbiVersion = 5;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -24,6 +24,25 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_colors")]
     public static partial NativeStatus SetColors(ViewerHandle viewer, in ViewerColors colors);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_add_mesh")]
+    public static partial NativeStatus AddMesh(ViewerHandle viewer, in NativeMesh mesh, out int index);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_add_texture")]
+    public static unsafe partial NativeStatus AddTexture(
+        ViewerHandle viewer, byte* pixels, int width, int height, out int index);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_add_material")]
+    public static partial NativeStatus AddMaterial(ViewerHandle viewer, in NativeMaterial material, out int index);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_add_instance")]
+    public static unsafe partial NativeStatus AddInstance(ViewerHandle viewer, int mesh, int material, double* transform);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_clear")]
+    public static partial NativeStatus Clear(ViewerHandle viewer);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_fit_all")]
+    public static partial NativeStatus FitAll(ViewerHandle viewer);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_mouse_buttons")]
     public static partial NativeStatus MouseButtons(

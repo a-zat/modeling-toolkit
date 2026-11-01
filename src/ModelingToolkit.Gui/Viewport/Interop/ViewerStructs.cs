@@ -38,3 +38,25 @@ internal unsafe struct ViewerColors
     public fixed float CubeText[3];
     public fixed float Highlight[3];
 }
+
+/// <summary>A triangle mesh; the arrays are read during the call only.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeMesh
+{
+    public double* Positions;
+    public float* Normals;
+    public float* Uvs;
+    public int VertexCount;
+    public int* Triangles;
+    public int TriangleCount;
+}
+
+/// <summary>A material of the metallic-roughness model of glTF.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeMaterial
+{
+    public fixed float BaseColor[4];
+    public float Metallic;
+    public float Roughness;
+    public int BaseColorTexture;
+}

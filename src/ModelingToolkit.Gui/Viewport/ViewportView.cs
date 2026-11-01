@@ -8,6 +8,7 @@ using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ModelingToolkit.Gui.Viewport.Interop;
+using Document = ModelingToolkit.Core.Model.Document;
 
 namespace ModelingToolkit.Gui.Viewport;
 
@@ -19,12 +20,16 @@ namespace ModelingToolkit.Gui.Viewport;
 /// </summary>
 public sealed class ViewportView : Border
 {
+    public static readonly StyledProperty<Document?> DocumentProperty =
+        AvaloniaProperty.Register<ViewportView, Document?>(nameof(Document));
+
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
 
     private readonly NativeViewHost _host;
     private readonly TextBlock _failure;
     private bool _frameRequested;
+    private int _shownDocuments;
 
     public ViewportView()
     {
@@ -54,6 +59,13 @@ public sealed class ViewportView : Border
         ActualThemeVariantChanged += (_, _) => ApplyColors();
     }
 
+    /// <summary>The document shown, which replaces the previous one; the camera turns to it.</summary>
+    public Document? Document
+    {
+        get => GetValue(DocumentProperty);
+        set => SetValue(DocumentProperty, value);
+    }
+
     private OcctViewer? Viewer => _host.Viewer;
 
     /// <summary>The colours of the 3D view in a variant of the theme, or null if a resource is missing.</summary>
@@ -75,6 +87,15 @@ public sealed class ViewportView : Border
             bool found = this.TryFindResource(key, theme, out object? value) && value is Color;
             color = found ? (Color)value! : default;
             return found;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == DocumentProperty)
+        {
+            _ = ShowDocumentAsync();
         }
     }
 
@@ -158,6 +179,45 @@ public sealed class ViewportView : Border
         ApplyColors();
         // The first frame also tells whether the view could be shown in the window.
         RequestFrame();
+        _ = ShowDocumentAsync();
+    }
+
+    // The scene is prepared away from the user interface, the textures decoded, and handed to the viewer on its thread,
+    // unless another document came in the meantime.
+    private async Task ShowDocumentAsync()
+    {
+        if (Viewer is null)
+        {
+            return; // shown once the viewer exists
+        }
+
+        int shown = ++_shownDocuments;
+        Document? document = Document;
+        (ViewportScene Scene, TextureImage?[] Images)? prepared = document is null
+            ? null
+            : await Task.Run(() =>
+            {
+                var scene = ViewportScene.Of(document);
+                return (scene, scene.Textures.Select(TextureImage.Decode).ToArray());
+            });
+        if (shown != _shownDocuments)
+        {
+            return;
+        }
+
+        Send(viewer =>
+        {
+            if (prepared is { } ready)
+            {
+                ready.Scene.ShowIn(viewer, ready.Images);
+            }
+            else
+            {
+                viewer.Clear();
+            }
+
+            return true;
+        });
     }
 
     // The native view takes its colours from the same resources as the rest of the interface, in the current theme.
