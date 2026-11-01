@@ -100,12 +100,13 @@ Graphic3d_TransModeFlags navigation_aid_persistence() {
     return Graphic3d_TMF_TriedronPers | Graphic3d_TMF_OrthoPers;
 }
 
-// The grid on the ground, drawn by a shader over the whole plane. Its lines are hidden by the objects in front of them.
+// The grid on the ground, drawn by a shader over the whole plane, with its X and Y axes in red and green: they cross at
+// the origin. Its lines are hidden by the objects in front of them.
 Aspect_GridParams ground_grid(const Quantity_Color& color) {
     Aspect_GridParams grid;
     grid.SetColor(color);
     grid.SetScale(1.0 / grid_step); // squares per millimetre
-    grid.SetIsDrawAxis(false);
+    grid.SetIsDrawAxis(true);
     return grid;
 }
 
@@ -146,10 +147,10 @@ mtk::Viewer::Viewer(void* parent) {
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
     view_->GridDisplay(ground_grid(Quantity_NOC_GRAY70));
 
+    // In the lower left corner, at a distance set by apply_scale().
     const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
-    axes->SetPosition(Aspect_TOTP_LEFT_LOWER);
-    const occ::handle<Graphic3d_TransformPers>& placement = axes->TransformPersistence();
-    placement->SetPersistence(navigation_aid_persistence(), placement->Corner2d(), placement->Offset2d());
+    axes->TransformPersistence()->SetPersistence(navigation_aid_persistence(), Aspect_TOTP_LEFT_LOWER,
+                                                 NCollection_Vec2<int>(0, 0));
     for (V3d_TypeOfAxe axis : {V3d_X, V3d_Y, V3d_Z}) {
         axes->LabelAspect(axis)->SetFont(label_font);
         axes->LabelAspect(axis)->SetHeight(axes_label_height);
@@ -325,7 +326,9 @@ void mtk::Viewer::apply_scale(double scale) {
     scale_ = scale;
     view_->ChangeRenderingParams().Resolution = static_cast<unsigned int>(std::lround(72.0 * scale));
 
+    // The distance of the axes from their corner follows their scale, but only when the corner is set again.
     view_->Trihedron()->SetScale(axes_size * scale);
+    view_->Trihedron()->SetPosition(Aspect_TOTP_LEFT_LOWER);
     view_->Trihedron()->Display(*view_);
 
     // SetSize adapts the bevels and the labels to the size: they are set afterwards.

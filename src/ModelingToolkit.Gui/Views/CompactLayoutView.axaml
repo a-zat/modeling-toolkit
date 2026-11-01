@@ -16,9 +16,7 @@
           <Border Classes="appMark">
             <PathIcon Data="{StaticResource Icon.Cube}" />
           </Border>
-          <TextBlock Text="Modeling Toolkit" FontWeight="SemiBold" VerticalAlignment="Center" />
-          <Border Classes="separator" />
-          <TextBlock Text="{Binding DocumentName}" Classes="secondary" VerticalAlignment="Center"
+          <TextBlock Text="{Binding DocumentName}" FontWeight="SemiBold" VerticalAlignment="Center"
                      TextTrimming="CharacterEllipsis" />
         </StackPanel>
 

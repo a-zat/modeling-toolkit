@@ -33,9 +33,9 @@ The desktop application has a light and a dark theme, switched at the bottom rig
 both into `artifacts/screenshots`, without the 3D view, which is a native view. In Debug builds, F12 opens DevScope, an
 inspector of the visual tree and of the styles.
 
-The 3D view shows the ground in perspective, with a grid of squares of one metre. The left button rotates, the middle
-button or Shift with the left button pans, and the wheel, a pinch or the right button zooms; the status bar recalls
-it. Clicking a face of the cube in the upper right corner turns the view to it.
+The 3D view shows the ground in perspective, with a grid of squares of one metre whose X and Y axes, red and green,
+cross at the origin. The left button rotates, the middle button or Shift with the left button pans, and the wheel, a
+pinch or the right button zooms; the status bar recalls it. Clicking a face of the cube in the upper right corner turns the view to it.
 
 After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
 

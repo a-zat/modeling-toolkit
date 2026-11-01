@@ -77,8 +77,8 @@ typedef struct mtk_viewer_colors {
 /*
  * Creates a viewer and its native view: an NSView on macOS, a child window of parent (an HWND) on Windows. On macOS
  * parent is ignored, as the application adds the view to its window. The view is drawn once it is in a window and
- * has a size. It shows the ground, the XY plane, in perspective, with a grid of squares of one metre: the unit of the
- * scene is the millimetre, as in the documents.
+ * has a size. It shows the ground, the XY plane, in perspective, with a grid of squares of one metre whose X and Y axes
+ * cross at the origin: the unit of the scene is the millimetre, as in the documents.
  */
 MTK_VIEWER_API mtk_status mtk_viewer_create(void* parent, mtk_viewer** out_viewer);
 
