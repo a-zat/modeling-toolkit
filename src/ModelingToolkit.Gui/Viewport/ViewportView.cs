@@ -9,6 +9,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ModelingToolkit.Gui.Viewport.Interop;
 using Document = ModelingToolkit.Core.Model.Document;
+using Entity = ModelingToolkit.Core.Model.Entity;
 
 namespace ModelingToolkit.Gui.Viewport;
 
@@ -23,6 +24,9 @@ public sealed class ViewportView : Border
     public static readonly StyledProperty<Document?> DocumentProperty =
         AvaloniaProperty.Register<ViewportView, Document?>(nameof(Document));
 
+    public static readonly StyledProperty<IReadOnlyList<Entity>?> SelectionProperty =
+        AvaloniaProperty.Register<ViewportView, IReadOnlyList<Entity>?>(nameof(Selection));
+
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
 
@@ -30,6 +34,7 @@ public sealed class ViewportView : Border
     private readonly TextBlock _failure;
     private bool _frameRequested;
     private int _shownDocuments;
+    private ViewportScene? _shownScene;
 
     public ViewportView()
     {
@@ -66,6 +71,16 @@ public sealed class ViewportView : Border
         set => SetValue(DocumentProperty, value);
     }
 
+    /// <summary>
+    /// The selected node of the model tree, as its path: the entities from the model to the node, empty for the whole
+    /// model. The rest of the document is faded around it. Null for none.
+    /// </summary>
+    public IReadOnlyList<Entity>? Selection
+    {
+        get => GetValue(SelectionProperty);
+        set => SetValue(SelectionProperty, value);
+    }
+
     private OcctViewer? Viewer => _host.Viewer;
 
     /// <summary>The colours of the 3D view in a variant of the theme, or null if a resource is missing.</summary>
@@ -96,6 +111,14 @@ public sealed class ViewportView : Border
         if (change.Property == DocumentProperty)
         {
             _ = ShowDocumentAsync();
+        }
+        else if (change.Property == SelectionProperty && _shownScene is { } scene)
+        {
+            Send(viewer =>
+            {
+                scene.ShowSelectionIn(viewer, Selection);
+                return true;
+            });
         }
     }
 
@@ -205,11 +228,13 @@ public sealed class ViewportView : Border
             return;
         }
 
+        _shownScene = prepared?.Scene;
         Send(viewer =>
         {
             if (prepared is { } ready)
             {
                 ready.Scene.ShowIn(viewer, ready.Images);
+                ready.Scene.ShowSelectionIn(viewer, Selection);
             }
             else
             {

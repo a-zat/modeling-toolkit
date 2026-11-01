@@ -73,12 +73,14 @@ public:
     int add_mesh(const mtk_viewer_mesh& mesh);
     int add_texture(const uint8_t* pixels, int width, int height);
     int add_material(const mtk_viewer_material& material);
-    void add_instance(int mesh, int material, const double* transform);
+    int add_instance(int mesh, int material, const double* transform);
+    void set_selection(const int32_t* instances, int count);
     void clear();
     void fit_all();
     int mesh_count() const { return static_cast<int>(meshes_.size()); }
     int texture_count() const { return static_cast<int>(textures_.size()); }
     int material_count() const { return static_cast<int>(materials_.size()); }
+    int instance_count() const { return static_cast<int>(instances_.size()); }
 
     // Input; each returns true when the view must be drawn again.
     bool mouse_buttons(double x, double y, uint32_t buttons, uint32_t modifiers);
@@ -108,9 +110,10 @@ private:
     occ::handle<Aspect_NeutralWindow> window_;
     std::vector<occ::handle<Graphic3d_ArrayOfTriangles>> meshes_;
     std::vector<occ::handle<Graphic3d_Texture2D>> textures_;
-    std::vector<occ::handle<Graphic3d_AspectFillArea3d>> materials_;
+    std::vector<MaterialAspects> materials_;
     std::map<std::pair<int, int>, occ::handle<MeshObject>> shared_meshes_; // by mesh and material
     std::vector<occ::handle<AIS_InteractiveObject>> instances_;
+    Graphic3d_ZLayerId faded_layer_ = Graphic3d_ZLayerId_UNKNOWN;
     double scale_ = 0.0;
     std::string failure_;
     std::string diagnostics_;

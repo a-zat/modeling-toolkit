@@ -89,6 +89,13 @@ int32_t add_material(mtk_viewer* viewer, const mtk_viewer_material& material) {
     return index;
 }
 
+int32_t add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material, const double* transform) {
+    int32_t index = -1;
+    EXPECT_EQ(mtk_viewer_add_instance(viewer, mesh, material, transform, &index), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+    return index;
+}
+
 TEST(Viewer, ReportsItsAbiVersion) {
     EXPECT_EQ(mtk_viewer_abi_version(), MTK_OCCT_VIEWER_ABI_VERSION);
 }
@@ -155,13 +162,18 @@ TEST(Viewer, NumbersWhatItAddsToTheSceneFromZero) {
     EXPECT_EQ(texture, 0);
     EXPECT_EQ(add_material(viewer.get(), grey()), 0);
     EXPECT_EQ(add_material(viewer.get(), grey(texture)), 1);
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 1, 1, identity), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    EXPECT_EQ(add_instance(viewer.get(), 1, 1, identity), 0);
+    EXPECT_EQ(add_instance(viewer.get(), 0, 1, identity), 1);
     EXPECT_EQ(mtk_viewer_fit_all(viewer.get()), MTK_STATUS_OK);
 
     ASSERT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
     EXPECT_EQ(add_mesh(viewer.get(), square.mesh()), 0);
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 0, 0, identity), MTK_STATUS_INVALID_ARGUMENT)
+    int32_t instance = -1;
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 0, 0, identity, &instance), MTK_STATUS_INVALID_ARGUMENT)
         << "the materials were cleared";
+    EXPECT_EQ(instance, 0);
+    EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), &instance, 1), MTK_STATUS_INVALID_ARGUMENT)
+        << "the instances were cleared";
 }
 
 TEST(Viewer, ShadesMeshesWithoutNormalsFlat) {
@@ -174,8 +186,7 @@ TEST(Viewer, ShadesMeshesWithoutNormalsFlat) {
 
     const int32_t index = add_mesh(viewer.get(), mesh);
     const int32_t material = add_material(viewer.get(), grey());
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), index, material, identity), MTK_STATUS_OK)
-        << mtk_viewer_last_error_message();
+    EXPECT_EQ(add_instance(viewer.get(), index, material, identity), 0);
 }
 
 TEST(Viewer, PlacesInstancesWithAnyInvertibleTransform) {
@@ -189,9 +200,29 @@ TEST(Viewer, PlacesInstancesWithAnyInvertibleTransform) {
     const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
 
     for (const double* transform : {rotated, mirrored, stretched}) {
-        EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, transform), MTK_STATUS_OK)
+        add_instance(viewer.get(), mesh, material, transform);
+    }
+}
+
+TEST(Viewer, SelectsAnyOfItsInstances) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t mesh = add_mesh(viewer.get(), Square().mesh());
+    const int32_t material = add_material(viewer.get(), grey());
+    // A connected instance and one with triangles of its own, both faded and shaded again.
+    const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    const int32_t first = add_instance(viewer.get(), mesh, material, identity);
+    const int32_t second = add_instance(viewer.get(), mesh, material, stretched);
+    const int32_t third = add_instance(viewer.get(), mesh, material, identity);
+
+    const std::vector<std::vector<int32_t>> selections = {
+        {first}, {second, third}, {third, third}, {first, second, third}, {}, {second}};
+    for (const std::vector<int32_t>& selection : selections) {
+        EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), selection.data(), static_cast<int32_t>(selection.size())),
+                  MTK_STATUS_OK)
             << mtk_viewer_last_error_message();
     }
+    EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), nullptr, 0), MTK_STATUS_OK);
 }
 
 TEST(Viewer, RejectsMeshesItCannotShow) {
@@ -242,11 +273,26 @@ TEST(Viewer, RejectsInstancesItCannotPlace) {
     double undefined[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
     undefined[3] = std::numeric_limits<double>::quiet_NaN();
 
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh + 1, material, identity), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material + 1, identity), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, nullptr), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, flat), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, undefined), MTK_STATUS_INVALID_ARGUMENT);
+    int32_t index = -1;
+
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh + 1, material, identity, &index), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material + 1, identity, &index), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, nullptr, &index), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, flat, &index), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), mesh, material, undefined, &index), MTK_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(Viewer, RejectsSelectionsOfInstancesItDoesNotHave) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t mesh = add_mesh(viewer.get(), Square().mesh());
+    const int32_t instance = add_instance(viewer.get(), mesh, add_material(viewer.get(), grey()), identity);
+
+    for (int32_t missing : {instance + 1, -1}) {
+        EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), &missing, 1), MTK_STATUS_INVALID_ARGUMENT) << missing;
+        EXPECT_STRNE(mtk_viewer_last_error_message(), "");
+    }
+    EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), &instance, -1), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(Viewer, RejectsPositionsAndDeltasThatAreNotFinite) {
@@ -309,7 +355,10 @@ TEST(Viewer, NullArgumentsAreRejected) {
     EXPECT_EQ(mtk_viewer_add_texture(viewer.get(), pixel, 1, 1, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_add_material(viewer.get(), nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_add_material(viewer.get(), &material, nullptr), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_add_instance(nullptr, 0, 0, identity), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(nullptr, 0, 0, identity, &flag), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 0, 0, identity, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_selection(nullptr, nullptr, 0), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_clear(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_fit_all(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     mtk_viewer_release(nullptr);

@@ -39,6 +39,26 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task EachPlacementOfABlockHasANodeWithItsOwnPath()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        ModelNodeViewModel model = viewModel.ModelTree.Roots[0];
+
+        ModelNodeViewModel[] wheels =
+        [
+            .. Flatten(model).Where(node =>
+                node.Entity is MeshEntity && node.Path[^2] is BlockReference { Block.Name: "Wheels" }),
+        ];
+
+        Assert.Empty(model.Path);
+        Assert.Equal(2, wheels.Length);
+        Assert.Same(wheels[0].Entity, wheels[1].Entity);
+        Assert.NotEqual(wheels[0].Path[^3], wheels[1].Path[^3]);
+        Assert.Same(viewModel.Document!.Root.Entities[0], wheels[0].Path[0]);
+    }
+
+    [Fact]
     public async Task AFileThatCannotBeReadIsReportedInTheStatusBar()
     {
         MainWindowViewModel viewModel = Create();

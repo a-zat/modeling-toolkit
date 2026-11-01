@@ -9,19 +9,26 @@ internal readonly record struct ViewportInstance(int Mesh, int Material, Transfo
 /// <summary>
 /// What the 3D view shows of a document: each mesh, material and texture once, and an instance for each placement of a
 /// mesh, through the block references that reach it from the model space. A mesh without a material takes the one of
-/// the closest reference that has one, "by block", or <see cref="DefaultMaterial"/>.
+/// the closest reference that has one, "by block", or <see cref="DefaultMaterial"/>. The instances follow the order of
+/// the model tree, so that those of a node are consecutive.
 /// </summary>
 internal sealed class ViewportScene
 {
-    private ViewportScene(
-        List<MeshEntity> meshes, List<Material> materials, List<int> materialTextures, List<Texture> textures,
-        List<ViewportInstance> instances)
+    private readonly Block _root;
+    private readonly Dictionary<Block, int> _instanceCounts;
+
+    // The index of each instance in the viewer that shows the scene, or -1 for those it could not show.
+    private int[] _shownInstances = [];
+
+    private ViewportScene(Block root, Builder builder)
     {
-        Meshes = meshes;
-        Materials = materials;
-        MaterialTextures = materialTextures;
-        Textures = textures;
-        Instances = instances;
+        _root = root;
+        _instanceCounts = builder.InstanceCounts;
+        Meshes = builder.Meshes;
+        Materials = builder.Materials;
+        MaterialTextures = builder.MaterialTextures;
+        Textures = builder.Textures;
+        Instances = builder.Instances;
     }
 
     /// <summary>A light grey, rather rough plastic.</summary>
@@ -47,8 +54,32 @@ internal sealed class ViewportScene
     {
         var builder = new Builder();
         builder.Visit(document.Root, Transform.Identity, inherited: null);
-        return new ViewportScene(builder.Meshes, builder.Materials, builder.MaterialTextures, builder.Textures,
-            builder.Instances);
+        return new ViewportScene(document.Root, builder);
+    }
+
+    /// <summary>
+    /// The instances that a node of the model tree places, given its path: the entities from the model to the node.
+    /// All of them for the empty path, the model; none for a path that is not in the document.
+    /// </summary>
+    public Range InstancesOf(IReadOnlyList<Entity> path)
+    {
+        int first = 0;
+        int count = InstanceCount(_root);
+        Block? block = _root;
+        foreach (Entity entity in path)
+        {
+            int index = block?.Entities.IndexOf(entity) ?? -1;
+            if (index < 0)
+            {
+                return default;
+            }
+
+            first += block!.Entities.Take(index).Sum(InstanceCount);
+            count = InstanceCount(entity);
+            block = (entity as BlockReference)?.Block;
+        }
+
+        return first..(first + count);
     }
 
     /// <summary>Shows the scene in a viewer, in place of what it showed, and turns the camera to it.</summary>
@@ -77,19 +108,43 @@ internal sealed class ViewportScene
                 return -1;
             }
         }).ToArray();
-        foreach (ViewportInstance instance in Instances.Where(instance => meshes[instance.Mesh] >= 0))
+        _shownInstances = Instances.Select(instance =>
         {
             try
             {
-                viewer.AddInstance(meshes[instance.Mesh], materials[instance.Material], instance.Placement);
+                return meshes[instance.Mesh] < 0
+                    ? -1
+                    : viewer.AddInstance(meshes[instance.Mesh], materials[instance.Material], instance.Placement);
             }
             catch (ArgumentException)
             {
+                return -1;
             }
-        }
+        }).ToArray();
 
         viewer.FitAll();
     }
+
+    /// <summary>
+    /// Shows as selected the instances of a node of the model tree, given its path, in the viewer that shows the scene;
+    /// none for null.
+    /// </summary>
+    public void ShowSelectionIn(OcctViewer viewer, IReadOnlyList<Entity>? path)
+    {
+        int[] selected = path is null
+            ? []
+            : _shownInstances.Take(InstancesOf(path)).Where(instance => instance >= 0).ToArray();
+        viewer.SetSelection(selected);
+    }
+
+    private int InstanceCount(Block block) => _instanceCounts.GetValueOrDefault(block);
+
+    private int InstanceCount(Entity entity) => entity switch
+    {
+        MeshEntity mesh => mesh.Triangles.Length > 0 ? 1 : 0,
+        BlockReference reference => InstanceCount(reference.Block),
+        _ => 0,
+    };
 
     private sealed class Builder
     {
@@ -107,10 +162,14 @@ internal sealed class ViewportScene
 
         public List<ViewportInstance> Instances { get; } = [];
 
+        /// <summary>The number of instances that a reference to each block places.</summary>
+        public Dictionary<Block, int> InstanceCounts { get; } = new(ReferenceEqualityComparer.Instance);
+
         /// <param name="placement">From the coordinates of the block to those of the model space.</param>
         /// <param name="inherited">The material "by block": the one of the closest reference that has one.</param>
         public void Visit(Block block, Transform placement, Material? inherited)
         {
+            int first = Instances.Count;
             foreach (Entity entity in block.Entities)
             {
                 switch (entity)
@@ -124,6 +183,8 @@ internal sealed class ViewportScene
                         break;
                 }
             }
+
+            InstanceCounts[block] = Instances.Count - first;
         }
 
         private int IndexOf(MeshEntity mesh)

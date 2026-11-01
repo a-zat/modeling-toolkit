@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 5
+#define MTK_OCCT_VIEWER_ABI_VERSION 6
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -91,8 +91,8 @@ MTK_VIEWER_API mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_vi
 
 /*
  * The scene: meshes, each uploaded once, placed by instances with a material. The functions below return indices,
- * from 0, that identify meshes, textures and materials until mtk_viewer_clear. After changing the scene, the view must
- * be drawn again with mtk_viewer_redraw. Arrays are read during the call only.
+ * from 0, that identify meshes, textures, materials and instances until mtk_viewer_clear. After changing the scene,
+ * the view must be drawn again with mtk_viewer_redraw. Arrays are read during the call only.
  */
 
 /* A triangle mesh. */
@@ -127,7 +127,13 @@ MTK_VIEWER_API mtk_status mtk_viewer_add_material(mtk_viewer* viewer, const mtk_
  * vectors, row after row, from the coordinates of the mesh to those of the scene.
  */
 MTK_VIEWER_API mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material,
-                                                  const double* transform);
+                                                  const double* transform, int32_t* out_instance);
+
+/*
+ * Shows count instances as selected, in place of the previous selection: the others are faded and drawn behind them,
+ * so that the selection stands out. With none selected, or all, none is faded. instances may be null when count is 0.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_set_selection(mtk_viewer* viewer, const int32_t* instances, int32_t count);
 
 /* Removes the meshes, textures, materials and instances. */
 MTK_VIEWER_API mtk_status mtk_viewer_clear(mtk_viewer* viewer);

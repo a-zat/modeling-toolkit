@@ -88,6 +88,48 @@ public sealed class ViewportSceneTests
     }
 
     [Fact]
+    public void TheInstancesOfANodeOfTheTreeAreThoseItPlaces()
+    {
+        var wheel = new Block("Wheel") { Entities = { Square() } };
+        var left = new BlockReference(wheel, Transform.Translation(-500, 0, 0));
+        var right = new BlockReference(wheel, Transform.Translation(500, 0, 0));
+        var axle = new Block("Axle") { Entities = { new MeshEntity([new Point3d(0, 0, 0)], []), left, right } };
+        var front = new BlockReference(axle, Transform.Translation(0, 2000, 0));
+        var rear = new BlockReference(axle, Transform.Identity);
+        MeshEntity body = Square();
+        var document = new Document();
+        document.Root.Entities.Add(front);
+        document.Root.Entities.Add(rear);
+        document.Root.Entities.Add(body);
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Equal(0..5, scene.InstancesOf([]));
+        Assert.Equal(0..2, scene.InstancesOf([front]));
+        Assert.Equal(3..4, scene.InstancesOf([rear, right]));
+        Assert.Equal(3..4, scene.InstancesOf([rear, right, wheel.Entities[0]]));
+        Assert.Equal(Transform.Translation(500, 0, 0), scene.Instances[3].Placement);
+        Assert.Equal(4..5, scene.InstancesOf([body]));
+        Assert.Equal(0, scene.InstancesOf([rear, axle.Entities[0]]).GetOffsetAndLength(5).Length);
+    }
+
+    [Fact]
+    public void PathsThatAreNotInTheDocumentPlaceNothing()
+    {
+        MeshEntity square = Square();
+        var block = new Block("Block") { Entities = { square } };
+        var reference = new BlockReference(block, Transform.Identity);
+        var document = new Document();
+        document.Root.Entities.Add(reference);
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Equal(default, scene.InstancesOf([square]));
+        Assert.Equal(default, scene.InstancesOf([reference, square, square]));
+        Assert.Equal(default, scene.InstancesOf([new BlockReference(block, Transform.Identity)]));
+    }
+
+    [Fact]
     public void MeshesWithoutTrianglesAreLeftOut()
     {
         var document = new Document();

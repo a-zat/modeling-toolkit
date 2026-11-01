@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 5;
+    public const int AbiVersion = 6;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -36,7 +36,11 @@ internal static partial class NativeMethods
     public static partial NativeStatus AddMaterial(ViewerHandle viewer, in NativeMaterial material, out int index);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_add_instance")]
-    public static unsafe partial NativeStatus AddInstance(ViewerHandle viewer, int mesh, int material, double* transform);
+    public static unsafe partial NativeStatus AddInstance(
+        ViewerHandle viewer, int mesh, int material, double* transform, out int index);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_selection")]
+    public static unsafe partial NativeStatus SetSelection(ViewerHandle viewer, int* instances, int count);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_clear")]
     public static partial NativeStatus Clear(ViewerHandle viewer);

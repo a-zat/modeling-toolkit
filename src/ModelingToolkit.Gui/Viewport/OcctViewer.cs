@@ -146,7 +146,7 @@ internal sealed class OcctViewer : IDisposable
     }
 
     /// <exception cref="ArgumentException">The placement is not invertible.</exception>
-    public unsafe void AddInstance(int mesh, int material, Transform placement)
+    public unsafe int AddInstance(int mesh, int material, Transform placement)
     {
         double* values = stackalloc double[]
         {
@@ -154,7 +154,20 @@ internal sealed class OcctViewer : IDisposable
             placement.M10, placement.M11, placement.M12, placement.M13,
             placement.M20, placement.M21, placement.M22, placement.M23,
         };
-        NativeMethods.AddInstance(_handle, mesh, material, values).ThrowIfFailed();
+        NativeMethods.AddInstance(_handle, mesh, material, values, out int index).ThrowIfFailed();
+        return index;
+    }
+
+    /// <summary>
+    /// Shows instances as selected, in place of the previous selection: the others are faded and drawn behind them.
+    /// With none selected, or all, none is faded.
+    /// </summary>
+    public unsafe void SetSelection(ReadOnlySpan<int> instances)
+    {
+        fixed (int* values = instances)
+        {
+            NativeMethods.SetSelection(_handle, values, instances.Length).ThrowIfFailed();
+        }
     }
 
     /// <summary>Removes the meshes, textures, materials and instances.</summary>

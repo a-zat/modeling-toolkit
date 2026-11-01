@@ -20,6 +20,7 @@
 #include <TCollection_AsciiString.hxx>
 #include <V3d_Trihedron.hxx>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <sstream>
@@ -148,6 +149,17 @@ mtk::Viewer::Viewer(void* parent) {
     viewer_->SetDefaultLights();
     viewer_->SetLightOn();
 
+    // Around a selection, the other instances are faded and drawn first, in a layer of their own; the default layer
+    // then clears the depth, so that the selection is drawn whole over them. The grid, drawn after both, is hidden only
+    // by what is not faded.
+    Graphic3d_ZLayerSettings faded_layer;
+    faded_layer.SetName("Faded");
+    faded_layer.SetClearDepth(false);
+    viewer_->InsertLayerBefore(faded_layer_, faded_layer, Graphic3d_ZLayerId_Default);
+    Graphic3d_ZLayerSettings default_layer = viewer_->ZLayerSettings(Graphic3d_ZLayerId_Default);
+    default_layer.SetClearDepth(true);
+    viewer_->SetZLayerSettings(Graphic3d_ZLayerId_Default, default_layer);
+
     context_ = new AIS_InteractiveContext(viewer_);
 
     // The vertical axis through the origin, which the grid on the ground does not draw, in a blue that goes with its red
@@ -261,11 +273,11 @@ int mtk::Viewer::add_texture(const uint8_t* pixels, int width, int height) {
 int mtk::Viewer::add_material(const mtk_viewer_material& material) {
     const occ::handle<Graphic3d_Texture2D> texture =
         material.base_color_texture >= 0 ? textures_[material.base_color_texture] : nullptr;
-    materials_.push_back(make_aspect(material, texture));
+    materials_.push_back(make_aspects(material, texture));
     return material_count() - 1;
 }
 
-void mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
+int mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
     occ::handle<AIS_InteractiveObject> instance;
     if (const std::optional<gp_Trsf> placement = to_placement(transform)) {
         occ::handle<MeshObject>& shared = shared_meshes_[{mesh, material}];
@@ -279,8 +291,28 @@ void mtk::Viewer::add_instance(int mesh, int material, const double* transform) 
         // Stretched or sheared: a copy of the triangles of its own.
         instance = new MeshObject(transform_triangles(meshes_[mesh], transform), materials_[material]);
     }
-    context_->Display(instance, 0, -1, false); // shown, not selectable yet (#15)
+    context_->Display(instance, MeshObject::shaded_mode, -1, false); // shown, not pickable yet (#15)
     instances_.push_back(instance);
+    return instance_count() - 1;
+}
+
+void mtk::Viewer::set_selection(const int32_t* instances, int count) {
+    std::vector<bool> selected(instances_.size(), false);
+    for (int i = 0; i < count; ++i) {
+        selected[instances[i]] = true;
+    }
+    const auto selected_count = std::count(selected.begin(), selected.end(), true);
+    const bool fading = selected_count > 0 && selected_count < static_cast<std::ptrdiff_t>(selected.size());
+
+    for (size_t index = 0; index < instances_.size(); ++index) {
+        const occ::handle<AIS_InteractiveObject>& instance = instances_[index];
+        const bool faded = fading && !selected[index];
+        if (faded != (instance->ZLayer() == faded_layer_)) {
+            context_->SetZLayer(instance, faded ? faded_layer_ : Graphic3d_ZLayerId_Default);
+            context_->SetDisplayMode(instance, faded ? MeshObject::faded_mode : MeshObject::shaded_mode, false);
+        }
+    }
+    view_->Invalidate();
 }
 
 void mtk::Viewer::clear() {
@@ -591,19 +623,39 @@ mtk_status mtk_viewer_add_material(mtk_viewer* viewer, const mtk_viewer_material
     });
 }
 
-mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material, const double* transform) {
+mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material, const double* transform,
+                                   int32_t* out_instance) {
     return mtk::guarded([&] {
-        if (viewer == nullptr) {
-            return mtk::invalid_argument("viewer must not be null.");
+        if (viewer == nullptr || out_instance == nullptr) {
+            return mtk::invalid_argument("viewer and out_instance must not be null.");
         }
+        *out_instance = 0;
         if (mesh < 0 || mesh >= viewer->mesh_count() || material < 0 || material >= viewer->material_count()) {
             return mtk::invalid_argument("An instance needs a mesh and a material added to the viewer.");
         }
         const mtk_status status = check_transform(transform);
         if (status == MTK_STATUS_OK) {
-            viewer->add_instance(mesh, material, transform);
+            *out_instance = viewer->add_instance(mesh, material, transform);
         }
         return status;
+    });
+}
+
+mtk_status mtk_viewer_set_selection(mtk_viewer* viewer, const int32_t* instances, int32_t count) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || (instances == nullptr && count != 0)) {
+            return mtk::invalid_argument("viewer must not be null, nor instances unless count is 0.");
+        }
+        if (count < 0) {
+            return mtk::invalid_argument("count must not be negative.");
+        }
+        for (int32_t i = 0; i < count; ++i) {
+            if (instances[i] < 0 || instances[i] >= viewer->instance_count()) {
+                return mtk::invalid_argument("The selection refers to an instance that the viewer does not have.");
+            }
+        }
+        viewer->set_selection(instances, count);
+        return MTK_STATUS_OK;
     });
 }
 

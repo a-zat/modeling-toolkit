@@ -31,19 +31,57 @@ gp_Mat linear_part(const double* matrix) {
     return gp_Mat(matrix[0], matrix[1], matrix[2], matrix[4], matrix[5], matrix[6], matrix[8], matrix[9], matrix[10]);
 }
 
+// Around a selection, the other meshes keep the colours and textures of their materials, with this part of their
+// opacity.
+constexpr float faded_opacity = 0.25f;
+
+occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& material,
+                                                    const occ::handle<Graphic3d_Texture2D>& texture) {
+    const Quantity_Color color(material.base_color[0], material.base_color[1], material.base_color[2],
+                               Quantity_TOC_RGB);
+    const float opacity = material.base_color[3];
+
+    // The view shades as OpenCASCADE does the metallic-roughness materials of glTF without physically based rendering
+    // (XCAFDoc_VisMaterial): the metallic factor becomes the specular colour, the roughness the inverse of the
+    // shininess. The material keeps them too, for a physically based shading.
+    Graphic3d_MaterialAspect aspect_material(Graphic3d_NameOfMaterial_UserDefined);
+    aspect_material.SetColor(color);
+    aspect_material.SetSpecularColor(
+        Quantity_Color(material.metallic, material.metallic, material.metallic, Quantity_TOC_RGB));
+    aspect_material.SetShininess(1.0f - material.roughness);
+    aspect_material.SetTransparency(1.0f - opacity);
+    Graphic3d_PBRMaterial physical;
+    physical.SetColor(Quantity_ColorRGBA(color, opacity));
+    physical.SetMetallic(material.metallic);
+    physical.SetRoughness(material.roughness);
+    aspect_material.SetPBRMaterial(physical);
+
+    occ::handle<Graphic3d_AspectFillArea3d> aspect = new Graphic3d_AspectFillArea3d();
+    aspect->SetInteriorStyle(Aspect_IS_SOLID);
+    aspect->SetFrontMaterial(aspect_material);
+    aspect->SetBackMaterial(aspect_material);
+    if (opacity < 1.0f) {
+        aspect->SetAlphaMode(Graphic3d_AlphaMode_Blend);
+    }
+    if (!texture.IsNull()) {
+        aspect->SetTextureSet(new Graphic3d_TextureSet(texture));
+        aspect->SetTextureMapOn(true);
+    }
+    return aspect;
+}
+
 } // namespace
 
-mtk::MeshObject::MeshObject(const occ::handle<Graphic3d_ArrayOfTriangles>& triangles,
-                            const occ::handle<Graphic3d_AspectFillArea3d>& aspect)
-    : triangles_(triangles), aspect_(aspect) {}
+mtk::MeshObject::MeshObject(const occ::handle<Graphic3d_ArrayOfTriangles>& triangles, const MaterialAspects& aspects)
+    : triangles_(triangles), aspects_(aspects) {}
 
 void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
                               const occ::handle<Prs3d_Presentation>& presentation, const int mode) {
-    if (mode != 0) {
+    if (!AcceptDisplayMode(mode)) {
         return;
     }
     const occ::handle<Graphic3d_Group> group = presentation->NewGroup();
-    group->SetGroupPrimitivesAspect(aspect_);
+    group->SetGroupPrimitivesAspect(mode == faded_mode ? aspects_.faded : aspects_.shaded);
     group->AddPrimitiveArray(triangles_);
 }
 
@@ -165,39 +203,14 @@ occ::handle<Graphic3d_Texture2D> mtk::make_texture(const uint8_t* pixels, int wi
     return texture;
 }
 
-occ::handle<Graphic3d_AspectFillArea3d> mtk::make_aspect(const mtk_viewer_material& material,
-                                                         const occ::handle<Graphic3d_Texture2D>& texture) {
-    const Quantity_Color color(material.base_color[0], material.base_color[1], material.base_color[2],
-                               Quantity_TOC_RGB);
-    const float opacity = material.base_color[3];
-
-    // The view shades as OpenCASCADE does the metallic-roughness materials of glTF without physically based rendering
-    // (XCAFDoc_VisMaterial): the metallic factor becomes the specular colour, the roughness the inverse of the
-    // shininess. The material keeps them too, for a physically based shading.
-    Graphic3d_MaterialAspect aspect_material(Graphic3d_NameOfMaterial_UserDefined);
-    aspect_material.SetColor(color);
-    aspect_material.SetSpecularColor(
-        Quantity_Color(material.metallic, material.metallic, material.metallic, Quantity_TOC_RGB));
-    aspect_material.SetShininess(1.0f - material.roughness);
-    aspect_material.SetTransparency(1.0f - opacity);
-    Graphic3d_PBRMaterial physical;
-    physical.SetColor(Quantity_ColorRGBA(color, opacity));
-    physical.SetMetallic(material.metallic);
-    physical.SetRoughness(material.roughness);
-    aspect_material.SetPBRMaterial(physical);
-
-    occ::handle<Graphic3d_AspectFillArea3d> aspect = new Graphic3d_AspectFillArea3d();
-    aspect->SetInteriorStyle(Aspect_IS_SOLID);
-    aspect->SetFrontMaterial(aspect_material);
-    aspect->SetBackMaterial(aspect_material);
-    if (opacity < 1.0f) {
-        aspect->SetAlphaMode(Graphic3d_AlphaMode_Blend);
-    }
-    if (!texture.IsNull()) {
-        aspect->SetTextureSet(new Graphic3d_TextureSet(texture));
-        aspect->SetTextureMapOn(true);
-    }
-    return aspect;
+mtk::MaterialAspects mtk::make_aspects(const mtk_viewer_material& material,
+                                       const occ::handle<Graphic3d_Texture2D>& texture) {
+    // Faded, only the fronts of the triangles are drawn, so that what is behind shows through fewer layers.
+    mtk_viewer_material faded = material;
+    faded.base_color[3] *= faded_opacity;
+    MaterialAspects aspects{make_aspect(material, texture), make_aspect(faded, texture)};
+    aspects.faded->SetFaceCulling(Graphic3d_TypeOfBackfacingModel_BackCulled);
+    return aspects;
 }
 
 std::optional<gp_Trsf> mtk::to_placement(const double* matrix) {
