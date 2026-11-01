@@ -36,6 +36,5 @@ internal unsafe struct ViewerColors
     public fixed float CubeFace[3];
     public fixed float CubeEdge[3];
     public fixed float CubeText[3];
-    public float CubeTransparency;
     public fixed float Highlight[3];
 }

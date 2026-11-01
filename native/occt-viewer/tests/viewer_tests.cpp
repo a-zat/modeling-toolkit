@@ -109,19 +109,6 @@ TEST(Viewer, AcceptsColoursBetweenZeroAndOne) {
     }
 }
 
-TEST(Viewer, TheViewCubeCannotBeInvisible) {
-    Parent parent;
-    ViewerPtr viewer = create_viewer(parent);
-    mtk_viewer_colors value = colors(0.5f);
-
-    value.cube_transparency = 0.8f;
-    EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &value), MTK_STATUS_OK) << mtk_viewer_last_error_message();
-    for (float invalid : {-0.1f, 1.0f, std::numeric_limits<float>::quiet_NaN()}) {
-        value.cube_transparency = invalid;
-        EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &value), MTK_STATUS_INVALID_ARGUMENT) << invalid;
-    }
-}
-
 TEST(Viewer, RejectsPositionsAndDeltasThatAreNotFinite) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);

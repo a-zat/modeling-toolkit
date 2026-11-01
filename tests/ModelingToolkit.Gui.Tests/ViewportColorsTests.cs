@@ -9,7 +9,7 @@ namespace ModelingToolkit.Gui.Tests;
 public sealed class ViewportColorsTests(HeadlessSession headless)
 {
     [Fact]
-    public async Task EveryStyleOfTheViewCubeHasItsColoursInBothVariants()
+    public async Task BothVariantsHaveTheColoursOfTheView()
     {
         int found = await headless.Session.Dispatch(() =>
         {
@@ -18,22 +18,16 @@ public sealed class ViewportColorsTests(HeadlessSession headless)
             var window = new Window { Content = view };
             window.Show();
             int count = 0;
-            foreach (ViewCubeStyle style in Enum.GetValues<ViewCubeStyle>())
+            foreach (ThemeVariant theme in new[] { ThemeVariant.Dark, ThemeVariant.Light })
             {
-                view.CubeStyle = style;
-                foreach (ThemeVariant theme in new[] { ThemeVariant.Dark, ThemeVariant.Light })
-                {
-                    ViewportColors? colors = view.ReadColors(theme);
-                    Assert.NotNull(colors);
-                    Assert.True(colors.CubeFace.A > 0, $"The ViewCube {style} is invisible in the {theme} variant.");
-                    count++;
-                }
+                Assert.NotNull(view.ReadColors(theme));
+                count++;
             }
 
             window.Close();
             return count;
         }, TestContext.Current.CancellationToken);
 
-        Assert.Equal(6, found);
+        Assert.Equal(2, found);
     }
 }

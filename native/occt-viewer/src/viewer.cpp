@@ -3,12 +3,14 @@
 #include "mtk/errors.hpp"
 
 #include <AIS_AnimationCamera.hxx>
+#include <AIS_Line.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_GridParams.hxx>
 #include <Aspect_ScrollDelta.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <Graphic3d_DiagnosticInfo.hxx>
 #include <Graphic3d_TransformPers.hxx>
+#include <Geom_Line.hxx>
 #include <NCollection_IndexedDataMap.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_Drawer.hxx>
@@ -26,7 +28,7 @@ struct mtk_viewer : mtk::Viewer {
 };
 
 // The managed side declares the same layout: this size must match the one it checks in its tests.
-static_assert(sizeof(mtk_viewer_colors) == 124);
+static_assert(sizeof(mtk_viewer_colors) == 120);
 
 namespace {
 
@@ -138,6 +140,13 @@ mtk::Viewer::Viewer(void* parent) {
 
     context_ = new AIS_InteractiveContext(viewer_);
 
+    // The vertical axis through the origin, which the grid on the ground does not draw, in a blue that goes with its red
+    // and green axes. Shown, never selected.
+    occ::handle<AIS_Line> vertical_axis = new AIS_Line(new Geom_Line(gp::OZ()));
+    vertical_axis->SetColor(Quantity_Color(0.15, 0.35, 1.0, Quantity_TOC_sRGB));
+    vertical_axis->SetWidth(1.0);
+    context_->Display(vertical_axis, 0, -1, false);
+
     view_ = viewer_->CreateView();
     // Drawn only by redraw() and by the native view, never as a side effect of a change.
     view_->SetImmediateUpdate(false);
@@ -217,13 +226,10 @@ void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     axes->SetArrowsColor(x, y, z);
     axes->SetLabelsColor(x, y, z);
 
-    const Quantity_Color face = to_color(colors.cube_face);
-    view_cube_->SetBoxColor(face);
-    view_cube_->SetInnerColor(face);
+    view_cube_->SetBoxColor(to_color(colors.cube_face));
     view_cube_->BoxEdgeStyle()->SetColor(to_color(colors.cube_edge));
     view_cube_->BoxCornerStyle()->SetColor(to_color(colors.cube_edge));
     view_cube_->SetTextColor(to_color(colors.cube_text));
-    view_cube_->SetBoxTransparency(colors.cube_transparency);
     const Quantity_Color highlight = to_color(colors.highlight);
     view_cube_->DynamicHilightAttributes()->SetColor(highlight);
     view_cube_->DynamicHilightAttributes()->ShadingAspect()->SetColor(highlight);
@@ -417,9 +423,6 @@ mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* co
             if (!is_color(*color)) {
                 return mtk::invalid_argument("Colour components must be between 0 and 1.");
             }
-        }
-        if (!(colors->cube_transparency >= 0.0f && colors->cube_transparency < 1.0f)) {
-            return mtk::invalid_argument("The transparency of the ViewCube must be at least 0 and below 1.");
         }
         viewer->set_colors(*colors);
         return MTK_STATUS_OK;

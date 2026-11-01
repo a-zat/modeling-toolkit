@@ -30,15 +30,9 @@
         <GradientStop Offset="1" Color="#FFE9ECF0" />
       </LinearGradientBrush>
       <Color x:Key="Mtk.Viewport.Grid">#FFCDD3DB</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Face">#FFFFFFFF</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Edge">#FFC9D0D9</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Text">#FF4B5563</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Face">#FFEEF1F4</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Edge">#FFCDD4DC</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Text">#FF39404A</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Face">#4D26303D</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Edge">#FF26303D</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Text">#FF26303D</Color>
+      <Color x:Key="Mtk.ViewCube.Face">#FFFFFFFF</Color>
+      <Color x:Key="Mtk.ViewCube.Edge">#FFC9D0D9</Color>
+      <Color x:Key="Mtk.ViewCube.Text">#FF4B5563</Color>
 
       <!-- Selected rows of trees and lists, toggle buttons turned on: the tint of the accent, as above. -->
       <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="#0F1F2937" />
@@ -79,15 +73,9 @@
         <GradientStop Offset="1" Color="#FF22252A" />
       </LinearGradientBrush>
       <Color x:Key="Mtk.Viewport.Grid">#FF363B42</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Face">#FF3E434B</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Edge">#FF545B66</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Text">#FFE3E6EA</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Face">#FFEEF1F4</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Edge">#FFCDD4DC</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Text">#FF39404A</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Face">#2EFFFFFF</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Edge">#FFFFFFFF</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Text">#FFFFFFFF</Color>
+      <Color x:Key="Mtk.ViewCube.Face">#FF3E434B</Color>
+      <Color x:Key="Mtk.ViewCube.Edge">#FF545B66</Color>
+      <Color x:Key="Mtk.ViewCube.Text">#FFE3E6EA</Color>
 
       <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="#14FFFFFF" />
       <SolidColorBrush x:Key="TreeViewItemBackgroundPressed" Color="#1FFFFFFF" />
@@ -105,8 +93,7 @@
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
-  <!-- The axes of the 3D view, the same in both variants. The ViewCube has three styles to choose from (#12), above:
-       the alpha of the colour of its faces is its opacity. -->
+  <!-- The axes in the corner of the 3D view, the same in both variants. -->
   <Color x:Key="Mtk.Viewport.AxisX">#FFE5534B</Color>
   <Color x:Key="Mtk.Viewport.AxisY">#FF57AB5A</Color>
   <Color x:Key="Mtk.Viewport.AxisZ">#FF539BF5</Color>

@@ -15,8 +15,8 @@ target_compile_definitions(mtk_occt_viewer PRIVATE MTK_OCCT_VIEWER_EXPORTS)
 target_link_libraries(mtk_occt_viewer PUBLIC mtk_status)
 target_link_libraries(mtk_occt_viewer PRIVATE
     mtk_errors
-    # Viewer and interactive objects, drawn with OpenGL
-    TKernel TKMath TKService TKV3d TKOpenGl)
+    # Viewer and interactive objects, drawn with OpenGL, and the curves of the axes
+    TKernel TKMath TKG3d TKService TKV3d TKOpenGl)
 mtk_set_compile_options(mtk_occt_viewer)
 mtk_copy_runtime_dependencies(mtk_occt_viewer)
 

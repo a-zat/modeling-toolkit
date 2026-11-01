@@ -19,9 +19,6 @@ namespace ModelingToolkit.Gui.Viewport;
 /// </summary>
 public sealed class ViewportView : Border
 {
-    public static readonly StyledProperty<ViewCubeStyle> CubeStyleProperty =
-        AvaloniaProperty.Register<ViewportView, ViewCubeStyle>(nameof(CubeStyle));
-
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
 
@@ -57,25 +54,17 @@ public sealed class ViewportView : Border
         ActualThemeVariantChanged += (_, _) => ApplyColors();
     }
 
-    /// <summary>Prototype (#12): the style of the ViewCube, while one is chosen.</summary>
-    public ViewCubeStyle CubeStyle
-    {
-        get => GetValue(CubeStyleProperty);
-        set => SetValue(CubeStyleProperty, value);
-    }
-
     private OcctViewer? Viewer => _host.Viewer;
 
     /// <summary>The colours of the 3D view in a variant of the theme, or null if a resource is missing.</summary>
     internal ViewportColors? ReadColors(ThemeVariant theme)
     {
-        string cube = $"Mtk.ViewCube.{CubeStyle}.";
         return this.TryFindResource("Mtk.ViewportBackground", theme, out object? background) &&
                background is LinearGradientBrush { GradientStops.Count: >= 2 } gradient &&
                Find("Mtk.Viewport.Grid", out Color grid) &&
                Find("Mtk.Viewport.AxisX", out Color axisX) && Find("Mtk.Viewport.AxisY", out Color axisY) &&
-               Find("Mtk.Viewport.AxisZ", out Color axisZ) && Find(cube + "Face", out Color cubeFace) &&
-               Find(cube + "Edge", out Color cubeEdge) && Find(cube + "Text", out Color cubeText) &&
+               Find("Mtk.Viewport.AxisZ", out Color axisZ) && Find("Mtk.ViewCube.Face", out Color cubeFace) &&
+               Find("Mtk.ViewCube.Edge", out Color cubeEdge) && Find("Mtk.ViewCube.Text", out Color cubeText) &&
                Find("SystemAccentColor", out Color highlight)
             ? new ViewportColors(gradient.GradientStops[0].Color, gradient.GradientStops[^1].Color, grid, axisX,
                 axisY, axisZ, cubeFace, cubeEdge, cubeText, highlight)
@@ -86,15 +75,6 @@ public sealed class ViewportView : Border
             bool found = this.TryFindResource(key, theme, out object? value) && value is Color;
             color = found ? (Color)value! : default;
             return found;
-        }
-    }
-
-    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-    {
-        base.OnPropertyChanged(change);
-        if (change.Property == CubeStyleProperty)
-        {
-            ApplyColors();
         }
     }
 

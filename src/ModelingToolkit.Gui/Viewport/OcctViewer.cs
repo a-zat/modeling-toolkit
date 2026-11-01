@@ -76,7 +76,6 @@ internal sealed class OcctViewer : IDisposable
         Copy(colors.CubeFace, native.CubeFace);
         Copy(colors.CubeEdge, native.CubeEdge);
         Copy(colors.CubeText, native.CubeText);
-        native.CubeTransparency = 1f - colors.CubeFace.A / 255f;
         Copy(colors.Highlight, native.Highlight);
         NativeMethods.SetColors(_handle, in native).ThrowIfFailed();
 
