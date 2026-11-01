@@ -16,8 +16,8 @@
           <StackPanel Orientation="Horizontal" Spacing="6">
             <Panel Width="16" Height="16" VerticalAlignment="Center">
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Document}" IsVisible="{Binding IsModel}" />
-              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Box}" IsVisible="{Binding IsReference}" />
-              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsMesh}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.CubeLink}" IsVisible="{Binding IsReference}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsMesh}" />
             </Panel>
             <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
             <TextBlock Text="{Binding Detail}" Classes="secondary" VerticalAlignment="Center" />

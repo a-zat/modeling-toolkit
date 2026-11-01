@@ -24,6 +24,10 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         _block = block;
     }
 
+    /// <summary>
+    /// The name of the entity; a block reference without one takes the name of its block, a mesh the name of its
+    /// material.
+    /// </summary>
     public string Name { get; }
 
     /// <summary>Secondary text: the number of triangles of a mesh, or the block of a reference with its own name.</summary>
@@ -66,8 +70,9 @@ public sealed partial class ModelNodeViewModel : ObservableObject
                 string? block = name == reference.Block.Name ? null : reference.Block.Name;
                 return new(name, block, entity, path, reference.Block, null);
             case MeshEntity mesh:
-                return new(entity.Name ?? "Mesh", $"{Formatting.Count(mesh.Triangles.Length)} triangles", entity, path,
-                    null, null);
+                // The meshes read from glTF files have no names: their materials tell them apart.
+                string label = entity.Name ?? entity.Material?.Name ?? "Mesh";
+                return new(label, $"{Formatting.Count(mesh.Triangles.Length)} triangles", entity, path, null, null);
             default:
                 return new(entity.Name ?? entity.GetType().Name, null, entity, path, null, null);
         }

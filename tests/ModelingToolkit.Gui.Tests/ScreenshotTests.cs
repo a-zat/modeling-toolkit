@@ -22,7 +22,13 @@ public sealed class ScreenshotTests(HeadlessSession headless)
         {
             var viewModel = HeadlessSession.Host.Services.GetRequiredService<MainWindowViewModel>();
             await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
-            viewModel.ModelTree.SelectedNode = viewModel.ModelTree.Roots[0].Children[0];
+            // The whole tree open, with a mesh selected: references and meshes at a glance.
+            ModelNodeViewModel[] nodes = [.. Flatten(viewModel.ModelTree.Roots[0])];
+            foreach (ModelNodeViewModel node in nodes)
+            {
+                node.IsExpanded = true;
+            }
+            viewModel.ModelTree.SelectedNode = nodes.First(node => node.IsMesh);
 
             int count = 0;
             foreach (bool dark in new[] { true, false })
@@ -44,4 +50,7 @@ public sealed class ScreenshotTests(HeadlessSession headless)
 
         Assert.Equal(2, rendered);
     }
+
+    private static IEnumerable<ModelNodeViewModel> Flatten(ModelNodeViewModel node) =>
+        [node, .. node.Children.SelectMany(Flatten)];
 }

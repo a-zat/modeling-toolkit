@@ -39,6 +39,18 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task MeshesWithoutANameAreNamedAfterTheirMaterial()
+    {
+        MainWindowViewModel viewModel = Create();
+
+        await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+
+        Assert.Equal(
+            ["wheels", "wheels", "truck", "glass", "window_trim"],
+            Flatten(viewModel.ModelTree.Roots[0]).Where(node => node.IsMesh).Select(node => node.Name));
+    }
+
+    [Fact]
     public async Task EachPlacementOfABlockHasANodeWithItsOwnPath()
     {
         MainWindowViewModel viewModel = Create();
