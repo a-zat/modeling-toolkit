@@ -69,6 +69,7 @@ internal sealed class OcctViewer : IDisposable
         var native = new ViewerColors();
         Copy(colors.BackgroundTop, native.BackgroundTop);
         Copy(colors.BackgroundBottom, native.BackgroundBottom);
+        Copy(colors.Grid, native.Grid);
         Copy(colors.AxisX, native.AxisX);
         Copy(colors.AxisY, native.AxisY);
         Copy(colors.AxisZ, native.AxisZ);

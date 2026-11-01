@@ -52,15 +52,15 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void SwitchingToTheLightVariantAppliesIt()
+    public void SwitchingToTheDarkVariantAppliesIt()
     {
         var appearance = new RecordingAppearance();
         var viewModel = new MainWindowViewModel(new DocumentFormats([], []), appearance);
 
         viewModel.ToggleDarkCommand.Execute(null);
 
-        Assert.False(viewModel.IsDark);
-        Assert.Equal([false], appearance.Applied);
+        Assert.True(viewModel.IsDark);
+        Assert.Equal([true], appearance.Applied);
     }
 
     [Fact]

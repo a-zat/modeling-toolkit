@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 2
+#define MTK_OCCT_VIEWER_ABI_VERSION 3
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -63,6 +63,7 @@ typedef enum mtk_modifier_key {
 typedef struct mtk_viewer_colors {
     float background_top[3];
     float background_bottom[3];
+    float grid[3];   /* the lines of the grid on the ground */
     float axis_x[3]; /* the axes in the lower left corner, with their labels */
     float axis_y[3];
     float axis_z[3];
@@ -76,7 +77,8 @@ typedef struct mtk_viewer_colors {
 /*
  * Creates a viewer and its native view: an NSView on macOS, a child window of parent (an HWND) on Windows. On macOS
  * parent is ignored, as the application adds the view to its window. The view is drawn once it is in a window and
- * has a size.
+ * has a size. It shows the ground, the XY plane, in perspective, with a grid of squares of one metre: the unit of the
+ * scene is the millimetre, as in the documents.
  */
 MTK_VIEWER_API mtk_status mtk_viewer_create(void* parent, mtk_viewer** out_viewer);
 

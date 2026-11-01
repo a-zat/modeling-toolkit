@@ -9,6 +9,7 @@ namespace ModelingToolkit.Gui.Viewport;
 internal sealed record ViewportColors(
     Color BackgroundTop,
     Color BackgroundBottom,
+    Color Grid,
     Color AxisX,
     Color AxisY,
     Color AxisZ,

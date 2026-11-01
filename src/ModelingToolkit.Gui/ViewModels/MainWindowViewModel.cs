@@ -28,7 +28,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Summary = "Open a model with File › Open";
         StatusMessage = string.Empty;
         ActivePanel = SidePanel.Model;
-        IsDark = true;
+        IsDark = false;
 
         ModelTree.PropertyChanged += (_, e) =>
         {

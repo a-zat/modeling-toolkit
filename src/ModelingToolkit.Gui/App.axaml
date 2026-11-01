@@ -14,9 +14,15 @@
     </ResourceDictionary>
   </Application.Resources>
 
-  <!-- Fluent, in its compact density: lower controls, more rows in trees and lists. Our styles go on top of it. -->
+  <!-- Fluent, in its compact density: lower controls, more rows in trees and lists. Its accent is ours, the same as
+       Mtk.Accent, rather than the one of the system. Our styles go on top of it. -->
   <Application.Styles>
-    <FluentTheme DensityStyle="Compact" />
+    <FluentTheme DensityStyle="Compact">
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Light" Accent="#FF1D6EDF" />
+        <ColorPaletteResources x:Key="Dark" Accent="#FF3884F4" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
     <StyleInclude Source="/Styles/Controls.axaml" />
   </Application.Styles>
 

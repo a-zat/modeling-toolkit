@@ -72,12 +72,13 @@ public sealed class ViewportView : Border
         string cube = $"Mtk.ViewCube.{CubeStyle}.";
         return this.TryFindResource("Mtk.ViewportBackground", theme, out object? background) &&
                background is LinearGradientBrush { GradientStops.Count: >= 2 } gradient &&
+               Find("Mtk.Viewport.Grid", out Color grid) &&
                Find("Mtk.Viewport.AxisX", out Color axisX) && Find("Mtk.Viewport.AxisY", out Color axisY) &&
                Find("Mtk.Viewport.AxisZ", out Color axisZ) && Find(cube + "Face", out Color cubeFace) &&
                Find(cube + "Edge", out Color cubeEdge) && Find(cube + "Text", out Color cubeText) &&
                Find("SystemAccentColor", out Color highlight)
-            ? new ViewportColors(gradient.GradientStops[0].Color, gradient.GradientStops[^1].Color, axisX, axisY,
-                axisZ, cubeFace, cubeEdge, cubeText, highlight)
+            ? new ViewportColors(gradient.GradientStops[0].Color, gradient.GradientStops[^1].Color, grid, axisX,
+                axisY, axisZ, cubeFace, cubeEdge, cubeText, highlight)
             : null;
 
         bool Find(string key, out Color color)

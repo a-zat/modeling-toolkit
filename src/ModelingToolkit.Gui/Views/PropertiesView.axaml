@@ -5,30 +5,33 @@
              x:DataType="vm:PropertiesViewModel">
 
   <DockPanel>
-    <TextBlock DockPanel.Dock="Top" Classes="panelHeader" Text="PROPERTIES" />
+    <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="PROPERTIES" />
 
     <Panel>
       <ScrollViewer IsVisible="{Binding HasSelection}">
-        <StackPanel Margin="12,0,12,12" Spacing="10">
-          <StackPanel>
-            <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding Kind}" Classes="secondary" />
+        <Border Classes="card" Margin="10,0,10,10" VerticalAlignment="Top">
+          <StackPanel Spacing="12">
+            <StackPanel Spacing="2">
+              <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Kind}" Classes="secondary" FontSize="12" />
+            </StackPanel>
+            <Border Height="1" Background="{DynamicResource Mtk.Separator}" />
+            <ItemsControl ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:PropertyRow">
+                  <Grid Margin="0,3">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Name}" Classes="secondary" FontSize="12" Margin="0,0,14,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12" TextWrapping="Wrap" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
-          <ItemsControl ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate DataType="vm:PropertyRow">
-                <Grid Margin="0,3">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
-                    <ColumnDefinition Width="*" />
-                  </Grid.ColumnDefinitions>
-                  <TextBlock Text="{Binding Name}" Classes="secondary" Margin="0,0,12,0" />
-                  <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
+        </Border>
       </ScrollViewer>
 
       <TextBlock Classes="placeholder" Text="Select an element of the model to see its properties."

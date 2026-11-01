@@ -1,14 +1,11 @@
-<!-- Our styles, on top of the theme: they use the tokens of Tokens.axaml and leave the look of the controls to the
-     theme. -->
+<!-- Our styles, on top of the theme: they use the tokens of Tokens.axaml. The chrome around the 3D view is one light
+     surface, divided by thin lines; what stands on it (groups of tools, fields, cards) is a raised surface with a
+     border; what is selected or turned on is tinted with the accent. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- Toolbar buttons: icon-only, the tooltip gives the name and the shortcut. Plain buttons are flat; toggle buttons
-       keep the background of the theme, which is what shows them checked. -->
-  <Style Selector="Button.tool">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-  </Style>
+  <!-- Tool buttons: icon-only and flat, the tooltip gives the name and the shortcut. Toggle buttons turned on take the
+       tint of the accent. The checked style comes after the pointer one, so that it wins when both apply. -->
   <Style Selector=":is(Button).tool">
     <Setter Property="Padding" Value="0" />
     <Setter Property="MinWidth" Value="0" />
@@ -17,59 +14,170 @@
     <Setter Property="Height" Value="{StaticResource Mtk.ToolSize}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundSecondary}" />
   </Style>
   <Style Selector=":is(Button).tool PathIcon">
     <Setter Property="Width" Value="{StaticResource Mtk.IconSize}" />
     <Setter Property="Height" Value="{StaticResource Mtk.IconSize}" />
   </Style>
+  <Style Selector=":is(Button).tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Mtk.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.Foreground}" />
+  </Style>
+  <Style Selector=":is(Button).tool:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Mtk.Pressed}" />
+  </Style>
+  <Style Selector="ToggleButton.tool:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Mtk.Selection}" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.AccentForeground}" />
+  </Style>
+  <Style Selector="ToggleButton.tool:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Mtk.SelectionHover}" />
+  </Style>
 
-  <Style Selector="Border.toolSeparator">
+  <!-- The activity bar has larger buttons, one per panel. -->
+  <Style Selector=":is(Button).activity">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector=":is(Button).activity PathIcon">
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+  </Style>
+
+  <!-- A group of tools, like a segmented control. -->
+  <Style Selector="Border.group">
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
+  </Style>
+
+  <!-- The field that opens the command palette. -->
+  <Style Selector="Button.search">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="10,0,5,0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundTertiary}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.search:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.BorderStrong}" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundSecondary}" />
+  </Style>
+
+  <!-- A key of the keyboard, or a gesture of the mouse, in a hint. -->
+  <Style Selector="Border.key">
+    <Setter Property="Padding" Value="5,0" />
+    <Setter Property="MinWidth" Value="18" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.key > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundSecondary}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+
+  <!-- The mark of the application, in the top bar. -->
+  <Style Selector="Border.appMark">
+    <Setter Property="Width" Value="22" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Accent}" />
+  </Style>
+  <Style Selector="Border.appMark > PathIcon">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <!-- Bars across the window, panels at its sides: all on the chrome, divided by thin lines. -->
+  <Style Selector="Border.topBar">
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Chrome}" />
+  </Style>
+  <Style Selector="Border.statusBar">
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="12,2,6,2" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Chrome}" />
+  </Style>
+  <Style Selector="Border.statusBar TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.activityBar">
+    <Setter Property="Padding" Value="6,8" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Chrome}" />
+  </Style>
+  <Style Selector="Border.sidePanel">
+    <Setter Property="Background" Value="{DynamicResource Mtk.Chrome}" />
+  </Style>
+
+  <!-- Between a panel and the 3D view, a splitter is the line that divides them, wider to the pointer than to the eye:
+       it takes one pixel in the layout and overlaps its neighbours, above them, by three pixels on each side. -->
+  <Style Selector="GridSplitter">
+    <Setter Property="Width" Value="7" />
+    <Setter Property="Margin" Value="-3,0" />
+    <Setter Property="ZIndex" Value="1" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}">
+          <Border Width="1" HorizontalAlignment="Center" Background="{DynamicResource Mtk.Separator}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Border.separator">
     <Setter Property="Width" Value="1" />
-    <Setter Property="Height" Value="20" />
-    <Setter Property="Margin" Value="6,0" />
+    <Setter Property="Height" Value="18" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="{DynamicResource Mtk.Separator}" />
   </Style>
 
-  <!-- Bars across the window: top bar, status bar. -->
-  <Style Selector="Border.topBar">
-    <Setter Property="Padding" Value="6,3" />
-    <Setter Property="BorderThickness" Value="0,0,0,1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
-  </Style>
-  <Style Selector="Border.statusBar">
-    <Setter Property="Padding" Value="10,3" />
-    <Setter Property="BorderThickness" Value="0,1,0,0" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
-    <Setter Property="Background" Value="{DynamicResource Mtk.StatusBarBackground}" />
+  <!-- A raised surface on a panel. -->
+  <Style Selector="Border.card">
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
   </Style>
 
-  <!-- Side panels and their separators. -->
-  <Style Selector="Border.leftPanel">
-    <Setter Property="BorderThickness" Value="0,0,1,0" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
-  </Style>
-  <Style Selector="Border.rightPanel">
-    <Setter Property="BorderThickness" Value="1,0,0,0" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
-  </Style>
-  <Style Selector="GridSplitter">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="MinWidth" Value="4" />
-  </Style>
-
-  <Style Selector="TextBlock.panelHeader">
-    <Setter Property="FontSize" Value="11" />
+  <!-- Text: labels in small capitals, as headers of panels and fields; secondary text; messages in empty panels. -->
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontSize" Value="10.5" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Margin" Value="12,10,12,6" />
-    <Setter Property="Opacity" Value="0.65" />
+    <Setter Property="LetterSpacing" Value="0.8" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundTertiary}" />
+  </Style>
+  <Style Selector="TextBlock.panelHeader">
+    <Setter Property="Margin" Value="14,14,14,8" />
   </Style>
   <Style Selector="TextBlock.secondary">
-    <Setter Property="Opacity" Value="0.6" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundSecondary}" />
   </Style>
   <Style Selector="TextBlock.placeholder">
-    <Setter Property="Opacity" Value="0.6" />
-    <Setter Property="Margin" Value="16" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundTertiary}" />
+    <Setter Property="Margin" Value="20" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="TextAlignment" Value="Center" />
     <Setter Property="HorizontalAlignment" Value="Center" />
@@ -78,11 +186,11 @@
 
   <Style Selector="Border.palette">
     <Setter Property="Padding" Value="8" />
-    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="CornerRadius" Value="12" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
     <Setter Property="Background" Value="{DynamicResource Mtk.PopupBackground}" />
-    <Setter Property="BoxShadow" Value="0 8 24 0 #66000000" />
+    <Setter Property="BoxShadow" Value="0 12 32 0 #40000000" />
   </Style>
 
 </Styles>

@@ -4,7 +4,9 @@
 
 #include <AIS_AnimationCamera.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <Aspect_GridParams.hxx>
 #include <Aspect_ScrollDelta.hxx>
+#include <Graphic3d_Camera.hxx>
 #include <Graphic3d_DiagnosticInfo.hxx>
 #include <Graphic3d_TransformPers.hxx>
 #include <NCollection_IndexedDataMap.hxx>
@@ -24,7 +26,7 @@ struct mtk_viewer : mtk::Viewer {
 };
 
 // The managed side declares the same layout: this size must match the one it checks in its tests.
-static_assert(sizeof(mtk_viewer_colors) == 112);
+static_assert(sizeof(mtk_viewer_colors) == 124);
 
 namespace {
 
@@ -35,6 +37,11 @@ constexpr double view_cube_bevel = 0.08;  // width of the edges and corners, rel
 constexpr double view_cube_text = 0.13;   // height of the labels, relative to the size
 constexpr double axes_size = 0.07;        // unit of V3d_Trihedron: 500 pixels
 constexpr double axes_label_height = 12.0;
+
+// The camera and the ground, in millimetres.
+constexpr double field_of_view = 35.0;         // vertical, in degrees
+constexpr double initial_view_size = 12000.0; // the ground shown before a model is opened
+constexpr double grid_step = 1000.0;
 
 // The sans-serif font of the system: OpenCASCADE would draw the labels of the axes in Courier.
 #if defined(__APPLE__)
@@ -87,6 +94,21 @@ Quantity_Color to_color(const float (&rgb)[3]) {
     return Quantity_Color(rgb[0], rgb[1], rgb[2], Quantity_TOC_sRGB);
 }
 
+// The ViewCube and the axes keep a parallel projection in a view in perspective: in its corners they would be
+// distorted.
+Graphic3d_TransModeFlags navigation_aid_persistence() {
+    return Graphic3d_TMF_TriedronPers | Graphic3d_TMF_OrthoPers;
+}
+
+// The grid on the ground, drawn by a shader over the whole plane. Its lines are hidden by the objects in front of them.
+Aspect_GridParams ground_grid(const Quantity_Color& color) {
+    Aspect_GridParams grid;
+    grid.SetColor(color);
+    grid.SetScale(1.0 / grid_step); // squares per millimetre
+    grid.SetIsDrawAxis(false);
+    return grid;
+}
+
 } // namespace
 
 template <typename Body>
@@ -119,10 +141,15 @@ mtk::Viewer::Viewer(void* parent) {
     // Drawn only by redraw() and by the native view, never as a side effect of a change.
     view_->SetImmediateUpdate(false);
     view_->SetProj(V3d_TypeOfOrientation_Zup_AxoRight);
+    view_->Camera()->SetProjectionType(Graphic3d_Camera::Projection_Perspective);
+    view_->Camera()->SetFOVy(field_of_view);
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
+    view_->GridDisplay(ground_grid(Quantity_NOC_GRAY70));
 
     const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
     axes->SetPosition(Aspect_TOTP_LEFT_LOWER);
+    const occ::handle<Graphic3d_TransformPers>& placement = axes->TransformPersistence();
+    placement->SetPersistence(navigation_aid_persistence(), placement->Corner2d(), placement->Offset2d());
     for (V3d_TypeOfAxe axis : {V3d_X, V3d_Y, V3d_Z}) {
         axes->LabelAspect(axis)->SetFont(label_font);
         axes->LabelAspect(axis)->SetHeight(axes_label_height);
@@ -182,6 +209,7 @@ void mtk::Viewer::view_exposed() noexcept {
 void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     view_->SetBgGradientColors(to_color(colors.background_top), to_color(colors.background_bottom),
                                Aspect_GradientFillMethod_Vertical);
+    view_->GridDisplay(ground_grid(to_color(colors.grid)));
 
     const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
     const Quantity_Color x = to_color(colors.axis_x), y = to_color(colors.axis_y), z = to_color(colors.axis_z);
@@ -272,6 +300,8 @@ void mtk::Viewer::attach() {
     window->SetSize(size.x(), size.y());
     view_->SetWindow(window);
     window_ = window;
+    // Across the longer side of the window, which the view knows now.
+    view_->SetSize(initial_view_size);
 
     apply_scale(native_view_->scale());
     view_->Redraw();
@@ -305,7 +335,7 @@ void mtk::Viewer::apply_scale(double scale) {
     view_cube_->SetFontHeight(size * view_cube_text);
     const int offset = static_cast<int>(std::lround(view_cube_offset * scale));
     view_cube_->SetTransformPersistence(new Graphic3d_TransformPers(
-        Graphic3d_TMF_TriedronPers, Aspect_TOTP_RIGHT_UPPER, NCollection_Vec2<int>(offset, offset)));
+        navigation_aid_persistence(), Aspect_TOTP_RIGHT_UPPER, NCollection_Vec2<int>(offset, offset)));
     if (context_->IsDisplayed(view_cube_)) {
         context_->Redisplay(view_cube_, false);
     }
@@ -378,9 +408,9 @@ mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* co
         if (viewer == nullptr || colors == nullptr) {
             return mtk::invalid_argument("viewer and colors must not be null.");
         }
-        for (const float(*color)[3] : {&colors->background_top, &colors->background_bottom, &colors->axis_x,
-                                       &colors->axis_y, &colors->axis_z, &colors->cube_face, &colors->cube_edge,
-                                       &colors->cube_text, &colors->highlight}) {
+        for (const float(*color)[3] : {&colors->background_top, &colors->background_bottom, &colors->grid,
+                                       &colors->axis_x, &colors->axis_y, &colors->axis_z, &colors->cube_face,
+                                       &colors->cube_edge, &colors->cube_text, &colors->highlight}) {
             if (!is_color(*color)) {
                 return mtk::invalid_argument("Colour components must be between 0 and 1.");
             }

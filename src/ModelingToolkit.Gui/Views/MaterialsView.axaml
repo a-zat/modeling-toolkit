@@ -11,7 +11,7 @@
         <DataTemplate DataType="vm:MaterialItem">
           <StackPanel Orientation="Horizontal" Spacing="10">
             <Border Width="22" Height="22" CornerRadius="4" BorderThickness="1" VerticalAlignment="Center"
-                    BorderBrush="{DynamicResource Mtk.Separator}"
+                    BorderBrush="{DynamicResource Mtk.Border}"
                     Background="{Binding BaseColor, Converter={x:Static views:ColorConverters.ToBrush}}" />
             <StackPanel VerticalAlignment="Center">
               <TextBlock Text="{Binding Name}" />

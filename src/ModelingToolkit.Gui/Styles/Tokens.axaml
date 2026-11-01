@@ -1,46 +1,107 @@
-<!-- Colours and sizes of our own parts of the interface (bars, panels, viewport), in one place for both variants.
-     The controls keep the colours of the theme. -->
+<!-- Colours and sizes of the interface, in one place for both variants: our own parts (bars, panels, viewport) and the
+     resources of the theme that we change to match them. The accent colour is set in App.axaml, on the theme. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <ResourceDictionary.ThemeDictionaries>
-    <ResourceDictionary x:Key="Dark">
-      <SolidColorBrush x:Key="Mtk.Separator" Color="#2EFFFFFF" />
-      <SolidColorBrush x:Key="Mtk.StatusBarBackground" Color="#12FFFFFF" />
-      <SolidColorBrush x:Key="Mtk.PopupBackground" Color="#FF2A2C31" />
-      <SolidColorBrush x:Key="Mtk.ViewportForeground" Color="#B3FFFFFF" />
-      <LinearGradientBrush x:Key="Mtk.ViewportBackground" StartPoint="0%,0%" EndPoint="0%,100%">
-        <GradientStop Offset="0" Color="#FF4A505A" />
-        <GradientStop Offset="1" Color="#FF1C1F24" />
-      </LinearGradientBrush>
-      <Color x:Key="Mtk.ViewCube.Graphite.Face">#FF5B626D</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Edge">#FF5B626D</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Text">#FFECEFF3</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Face">#FFEEF1F4</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Edge">#FFCDD4DC</Color>
-      <Color x:Key="Mtk.ViewCube.Light.Text">#FF39404A</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Face">#2EFFFFFF</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Edge">#FFFFFFFF</Color>
-      <Color x:Key="Mtk.ViewCube.Glass.Text">#FFFFFFFF</Color>
-    </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
-      <SolidColorBrush x:Key="Mtk.Separator" Color="#1F000000" />
-      <SolidColorBrush x:Key="Mtk.StatusBarBackground" Color="#0A000000" />
+      <!-- Surfaces: the chrome around the 3D view (bars and panels), what stands on it (groups, fields, cards). -->
+      <SolidColorBrush x:Key="Mtk.Chrome" Color="#FFF5F6F8" />
+      <SolidColorBrush x:Key="Mtk.Surface" Color="#FFFFFFFF" />
+      <SolidColorBrush x:Key="Mtk.Separator" Color="#FFE3E6EB" />
+      <SolidColorBrush x:Key="Mtk.Border" Color="#FFDCE0E6" />
+      <SolidColorBrush x:Key="Mtk.BorderStrong" Color="#FFC5CBD3" />
+      <SolidColorBrush x:Key="Mtk.Hover" Color="#0F1F2937" />
+      <SolidColorBrush x:Key="Mtk.Pressed" Color="#1A1F2937" />
       <SolidColorBrush x:Key="Mtk.PopupBackground" Color="#FFFFFFFF" />
+      <!-- Text: primary, secondary (details, values), tertiary (labels in capitals, hints). -->
+      <SolidColorBrush x:Key="Mtk.Foreground" Color="#FF1F2329" />
+      <SolidColorBrush x:Key="Mtk.ForegroundSecondary" Color="#FF5F6773" />
+      <SolidColorBrush x:Key="Mtk.ForegroundTertiary" Color="#FF8B929C" />
+      <!-- The accent: filled, and as a tint behind what is selected or turned on. -->
+      <SolidColorBrush x:Key="Mtk.Accent" Color="#FF1D6EDF" />
+      <SolidColorBrush x:Key="Mtk.AccentForeground" Color="#FF1A62CC" />
+      <SolidColorBrush x:Key="Mtk.Selection" Color="#FFE3ECFB" />
+      <SolidColorBrush x:Key="Mtk.SelectionHover" Color="#FFD7E5FA" />
+
       <SolidColorBrush x:Key="Mtk.ViewportForeground" Color="#99000000" />
       <LinearGradientBrush x:Key="Mtk.ViewportBackground" StartPoint="0%,0%" EndPoint="0%,100%">
-        <GradientStop Offset="0" Color="#FFF7F8FA" />
-        <GradientStop Offset="1" Color="#FFC5CCD6" />
+        <GradientStop Offset="0" Color="#FFDCE0E6" />
+        <GradientStop Offset="1" Color="#FFE9ECF0" />
       </LinearGradientBrush>
-      <Color x:Key="Mtk.ViewCube.Graphite.Face">#FFE6EAEF</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Edge">#FFCFD5DD</Color>
-      <Color x:Key="Mtk.ViewCube.Graphite.Text">#FF3F4652</Color>
+      <Color x:Key="Mtk.Viewport.Grid">#FFCDD3DB</Color>
+      <Color x:Key="Mtk.ViewCube.Graphite.Face">#FFFFFFFF</Color>
+      <Color x:Key="Mtk.ViewCube.Graphite.Edge">#FFC9D0D9</Color>
+      <Color x:Key="Mtk.ViewCube.Graphite.Text">#FF4B5563</Color>
       <Color x:Key="Mtk.ViewCube.Light.Face">#FFEEF1F4</Color>
       <Color x:Key="Mtk.ViewCube.Light.Edge">#FFCDD4DC</Color>
       <Color x:Key="Mtk.ViewCube.Light.Text">#FF39404A</Color>
       <Color x:Key="Mtk.ViewCube.Glass.Face">#4D26303D</Color>
       <Color x:Key="Mtk.ViewCube.Glass.Edge">#FF26303D</Color>
       <Color x:Key="Mtk.ViewCube.Glass.Text">#FF26303D</Color>
+
+      <!-- Selected rows of trees and lists, toggle buttons turned on: the tint of the accent, as above. -->
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="#0F1F2937" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPressed" Color="#1A1F2937" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#FFE3ECFB" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#FFD7E5FA" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#FFD7E5FA" />
+      <SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="#FF1F2329" />
+      <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPointerOver" Color="#FF1F2329" />
+      <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPressed" Color="#FF1F2329" />
+      <SolidColorBrush x:Key="SystemControlHighlightListLowBrush" Color="#0F1F2937" />
+      <SolidColorBrush x:Key="SystemControlHighlightListMediumBrush" Color="#1A1F2937" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#FFE3ECFB" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#FFD7E5FA" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#FFD7E5FA" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="Mtk.Chrome" Color="#FF1C1E22" />
+      <SolidColorBrush x:Key="Mtk.Surface" Color="#FF25282D" />
+      <SolidColorBrush x:Key="Mtk.Separator" Color="#FF2C3036" />
+      <SolidColorBrush x:Key="Mtk.Border" Color="#FF363A41" />
+      <SolidColorBrush x:Key="Mtk.BorderStrong" Color="#FF4A4F57" />
+      <SolidColorBrush x:Key="Mtk.Hover" Color="#14FFFFFF" />
+      <SolidColorBrush x:Key="Mtk.Pressed" Color="#1FFFFFFF" />
+      <SolidColorBrush x:Key="Mtk.PopupBackground" Color="#FF25282D" />
+      <SolidColorBrush x:Key="Mtk.Foreground" Color="#FFE6E8EB" />
+      <SolidColorBrush x:Key="Mtk.ForegroundSecondary" Color="#FFA0A6AF" />
+      <SolidColorBrush x:Key="Mtk.ForegroundTertiary" Color="#FF767D87" />
+      <SolidColorBrush x:Key="Mtk.Accent" Color="#FF3884F4" />
+      <SolidColorBrush x:Key="Mtk.AccentForeground" Color="#FF8AB6FA" />
+      <SolidColorBrush x:Key="Mtk.Selection" Color="#FF1E324F" />
+      <SolidColorBrush x:Key="Mtk.SelectionHover" Color="#FF243B5C" />
+
+      <SolidColorBrush x:Key="Mtk.ViewportForeground" Color="#B3FFFFFF" />
+      <LinearGradientBrush x:Key="Mtk.ViewportBackground" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="#FF2E3238" />
+        <GradientStop Offset="1" Color="#FF22252A" />
+      </LinearGradientBrush>
+      <Color x:Key="Mtk.Viewport.Grid">#FF363B42</Color>
+      <Color x:Key="Mtk.ViewCube.Graphite.Face">#FF3E434B</Color>
+      <Color x:Key="Mtk.ViewCube.Graphite.Edge">#FF545B66</Color>
+      <Color x:Key="Mtk.ViewCube.Graphite.Text">#FFE3E6EA</Color>
+      <Color x:Key="Mtk.ViewCube.Light.Face">#FFEEF1F4</Color>
+      <Color x:Key="Mtk.ViewCube.Light.Edge">#FFCDD4DC</Color>
+      <Color x:Key="Mtk.ViewCube.Light.Text">#FF39404A</Color>
+      <Color x:Key="Mtk.ViewCube.Glass.Face">#2EFFFFFF</Color>
+      <Color x:Key="Mtk.ViewCube.Glass.Edge">#FFFFFFFF</Color>
+      <Color x:Key="Mtk.ViewCube.Glass.Text">#FFFFFFFF</Color>
+
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="#14FFFFFF" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundPressed" Color="#1FFFFFFF" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#FF1E324F" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#FF243B5C" />
+      <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#FF243B5C" />
+      <SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="#FFE6E8EB" />
+      <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPointerOver" Color="#FFE6E8EB" />
+      <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPressed" Color="#FFE6E8EB" />
+      <SolidColorBrush x:Key="SystemControlHighlightListLowBrush" Color="#14FFFFFF" />
+      <SolidColorBrush x:Key="SystemControlHighlightListMediumBrush" Color="#1FFFFFFF" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#FF1E324F" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#FF243B5C" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#FF243B5C" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
@@ -50,7 +111,12 @@
   <Color x:Key="Mtk.Viewport.AxisY">#FF57AB5A</Color>
   <Color x:Key="Mtk.Viewport.AxisZ">#FF539BF5</Color>
 
-  <x:Double x:Key="Mtk.ToolSize">30</x:Double>
-  <x:Double x:Key="Mtk.IconSize">18</x:Double>
+  <x:Double x:Key="Mtk.ToolSize">28</x:Double>
+  <x:Double x:Key="Mtk.IconSize">16</x:Double>
+
+  <!-- Text a little smaller than the theme's, and rounder corners. -->
+  <x:Double x:Key="ControlContentThemeFontSize">13</x:Double>
+  <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+  <CornerRadius x:Key="OverlayCornerRadius">10</CornerRadius>
 
 </ResourceDictionary>

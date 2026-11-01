@@ -29,6 +29,7 @@ internal unsafe struct ViewerColors
 {
     public fixed float BackgroundTop[3];
     public fixed float BackgroundBottom[3];
+    public fixed float Grid[3];
     public fixed float AxisX[3];
     public fixed float AxisY[3];
     public fixed float AxisZ[3];

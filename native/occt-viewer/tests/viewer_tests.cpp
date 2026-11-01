@@ -47,8 +47,8 @@ ViewerPtr create_viewer(const Parent& parent) {
 
 mtk_viewer_colors colors(float value) {
     mtk_viewer_colors result{};
-    for (float(*color)[3] : {&result.background_top, &result.background_bottom, &result.axis_x, &result.axis_y,
-                             &result.axis_z, &result.cube_face, &result.cube_edge, &result.cube_text,
+    for (float(*color)[3] : {&result.background_top, &result.background_bottom, &result.grid, &result.axis_x,
+                             &result.axis_y, &result.axis_z, &result.cube_face, &result.cube_edge, &result.cube_text,
                              &result.highlight}) {
         for (float& component : *color) {
             component = value;

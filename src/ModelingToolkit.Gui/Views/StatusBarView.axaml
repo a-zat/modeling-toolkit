@@ -6,15 +6,32 @@
 
   <Border Classes="statusBar">
     <DockPanel>
-      <ToggleButton DockPanel.Dock="Right" Classes="tool" IsChecked="{Binding IsDark}"
+      <ToggleButton DockPanel.Dock="Right" Classes="tool" Width="24" Height="24" IsChecked="{Binding IsDark}"
                     ToolTip.Tip="Dark or light theme">
         <Panel>
-          <PathIcon Data="{StaticResource Icon.WeatherMoon}" IsVisible="{Binding IsDark}" />
-          <PathIcon Data="{StaticResource Icon.WeatherSunny}" IsVisible="{Binding !IsDark}" />
+          <PathIcon Data="{StaticResource Icon.WeatherMoon}" Width="14" Height="14" IsVisible="{Binding IsDark}" />
+          <PathIcon Data="{StaticResource Icon.WeatherSunny}" Width="14" Height="14" IsVisible="{Binding !IsDark}" />
         </Panel>
       </ToggleButton>
 
-      <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+      <!-- How to move around the 3D view, which has no other hint. -->
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="14" Margin="12,0">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="Drag" /></Border>
+          <TextBlock Classes="secondary" Text="orbit" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="{OnPlatform Default='Shift + drag', macOS='⇧ drag'}" /></Border>
+          <TextBlock Classes="secondary" Text="pan" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="Scroll" /></Border>
+          <TextBlock Classes="secondary" Text="zoom" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock Classes="label" Text="MODEL" />
         <TextBlock Text="{Binding Summary}" />
         <TextBlock Text="{Binding StatusMessage}" Classes="secondary" TextTrimming="CharacterEllipsis" />
       </StackPanel>
