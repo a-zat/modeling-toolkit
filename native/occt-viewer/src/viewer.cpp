@@ -51,6 +51,9 @@ constexpr double initial_view_size = 12000.0; // the ground shown before a model
 constexpr double grid_step = 1000.0;
 constexpr double fit_margin = 0.1; // around the scene, relative to its size on screen
 
+// The instance under the pointer is tinted with the colour of the highlight, half transparent.
+constexpr float hover_transparency = 0.5f;
+
 // Textures larger than graphics cards accept, and meshes larger than the arrays of OpenCASCADE can index with three
 // indices or vertices per triangle, are refused.
 constexpr int32_t max_texture_size = 16384;
@@ -256,6 +259,9 @@ void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     view_cube_->DynamicHilightAttributes()->SetColor(highlight);
     view_cube_->DynamicHilightAttributes()->ShadingAspect()->SetColor(highlight);
     context_->Redisplay(view_cube_, false);
+    const occ::handle<Prs3d_Drawer>& hover = context_->HighlightStyle(Prs3d_TypeOfHighlight_Dynamic);
+    hover->SetColor(highlight);
+    hover->SetTransparency(hover_transparency);
 
     view_->Invalidate();
 }
@@ -291,7 +297,7 @@ int mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
         // Stretched or sheared: a copy of the triangles of its own.
         instance = new MeshObject(transform_triangles(meshes_[mesh], transform), materials_[material]);
     }
-    context_->Display(instance, MeshObject::shaded_mode, -1, false); // shown, not pickable yet (#15)
+    context_->Display(instance, MeshObject::shaded_mode, 0, false); // shown, and picked as a whole
     instances_.push_back(instance);
     return instance_count() - 1;
 }
@@ -320,6 +326,7 @@ void mtk::Viewer::clear() {
         context_->Remove(instance, false);
     }
     instances_.clear();
+    pick_.reset();
     shared_meshes_.clear();
     materials_.clear();
     textures_.clear();
@@ -358,6 +365,33 @@ bool mtk::Viewer::mouse_leave() {
 
 bool mtk::Viewer::scroll(double x, double y, double delta) {
     return is_attached() && UpdateMouseScroll(Aspect_ScrollDelta(to_pixels(x, y), delta));
+}
+
+bool mtk::Viewer::take_pick(int& instance) {
+    if (!pick_) {
+        return false;
+    }
+    instance = *pick_;
+    pick_.reset();
+    return true;
+}
+
+// Called by FlushViewEvents for each click: on an instance, on nothing, or on the ViewCube, which has turned the view
+// and leaves the pick as it is. The selection is shown by set_selection, not by the context.
+void mtk::Viewer::OnSelectionChanged(const occ::handle<AIS_InteractiveContext>& context,
+                                     const occ::handle<V3d_View>&) {
+    const occ::handle<SelectMgr_EntityOwner>& detected = context->DetectedOwner();
+    if (detected.IsNull()) {
+        pick_ = -1;
+    } else {
+        const auto picked = std::find_if(instances_.begin(), instances_.end(), [&](const auto& instance) {
+            return instance.get() == detected->Selectable().get();
+        });
+        if (picked != instances_.end()) {
+            pick_ = static_cast<int>(picked - instances_.begin());
+        }
+    }
+    context->ClearSelected(false);
 }
 
 bool mtk::Viewer::redraw() {
@@ -714,6 +748,22 @@ mtk_status mtk_viewer_mouse_leave(mtk_viewer* viewer, int32_t* out_redraw) {
             *out_redraw = viewer->mouse_leave() ? 1 : 0;
         }
         return status;
+    });
+}
+
+mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, int32_t* out_instance) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || out_picked == nullptr || out_instance == nullptr) {
+            return mtk::invalid_argument("viewer, out_picked and out_instance must not be null.");
+        }
+        *out_picked = 0;
+        *out_instance = 0;
+        int instance = -1;
+        if (viewer->take_pick(instance)) {
+            *out_picked = 1;
+            *out_instance = instance;
+        }
+        return MTK_STATUS_OK;
     });
 }
 

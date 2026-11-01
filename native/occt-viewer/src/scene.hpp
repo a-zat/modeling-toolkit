@@ -36,8 +36,8 @@ private:
     void Compute(const occ::handle<PrsMgr_PresentationManager>& manager,
                  const occ::handle<Prs3d_Presentation>& presentation, const int mode) override;
 
-    // Meshes cannot be picked yet (#15).
-    void ComputeSelection(const occ::handle<SelectMgr_Selection>&, const int) override {}
+    // Picked as a whole, by any of its triangles.
+    void ComputeSelection(const occ::handle<SelectMgr_Selection>& selection, const int mode) override;
 
     occ::handle<Graphic3d_ArrayOfTriangles> triangles_;
     MaterialAspects aspects_;

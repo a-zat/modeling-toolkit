@@ -130,6 +130,9 @@ TEST(Viewer, IgnoresInputUntilTheViewIsInAWindow) {
     int32_t animating = 1;
     EXPECT_EQ(mtk_viewer_redraw(viewer.get(), &animating), MTK_STATUS_OK) << mtk_viewer_last_error_message();
     EXPECT_EQ(animating, 0);
+    int32_t picked = 1, instance = 1;
+    EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &picked, &instance), MTK_STATUS_OK);
+    EXPECT_EQ(picked, 0) << "the click was not applied";
 }
 
 TEST(Viewer, AcceptsColoursBetweenZeroAndOne) {
@@ -359,6 +362,9 @@ TEST(Viewer, NullArgumentsAreRejected) {
     EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 0, 0, identity, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_selection(nullptr, nullptr, 0), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_take_pick(nullptr, &flag, &flag), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &flag, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_clear(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_fit_all(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     mtk_viewer_release(nullptr);

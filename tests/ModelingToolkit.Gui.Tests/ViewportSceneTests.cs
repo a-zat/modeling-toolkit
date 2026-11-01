@@ -114,6 +114,32 @@ public sealed class ViewportSceneTests
     }
 
     [Fact]
+    public void ThePathOfAnInstanceLeadsToItsMesh()
+    {
+        var wheel = new Block("Wheel") { Entities = { Square() } };
+        var left = new BlockReference(wheel, Transform.Translation(-500, 0, 0));
+        var right = new BlockReference(wheel, Transform.Translation(500, 0, 0));
+        var axle = new Block("Axle") { Entities = { new MeshEntity([new Point3d(0, 0, 0)], []), left, right } };
+        var front = new BlockReference(axle, Transform.Translation(0, 2000, 0));
+        var rear = new BlockReference(axle, Transform.Identity);
+        MeshEntity body = Square();
+        var document = new Document();
+        document.Root.Entities.Add(front);
+        document.Root.Entities.Add(rear);
+        document.Root.Entities.Add(body);
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Equal([rear, right, wheel.Entities[0]], scene.PathOf(3));
+        Assert.Equal([body], scene.PathOf(4));
+        Assert.All(Enumerable.Range(0, scene.Instances.Count),
+            instance => Assert.Equal(instance..(instance + 1), scene.InstancesOf(scene.PathOf(instance)!)));
+        Assert.Null(scene.PathOf(-1));
+        Assert.Null(scene.PathOf(scene.Instances.Count));
+        Assert.Null(scene.PathOfShown(0)); // not shown in a viewer
+    }
+
+    [Fact]
     public void PathsThatAreNotInTheDocumentPlaceNothing()
     {
         MeshEntity square = Square();

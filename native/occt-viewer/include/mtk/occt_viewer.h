@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 6
+#define MTK_OCCT_VIEWER_ABI_VERSION 7
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -152,6 +152,13 @@ MTK_VIEWER_API mtk_status mtk_viewer_mouse_move(mtk_viewer* viewer, double x, do
 
 /* The pointer left the view: the object under it is no longer highlighted. */
 MTK_VIEWER_API mtk_status mtk_viewer_mouse_leave(mtk_viewer* viewer, int32_t* out_redraw);
+
+/*
+ * Whether the view was clicked since the last call, other than on the ViewCube, which turns the view instead: clicks
+ * are applied by mtk_viewer_redraw. out_instance receives the instance under the pointer, or -1 for none. The viewer
+ * shows no selection by itself: see mtk_viewer_set_selection.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, int32_t* out_instance);
 
 /* Zooms at (x, y) by delta notches of the mouse wheel, positive to zoom in; fractions come from touchpads. */
 MTK_VIEWER_API mtk_status mtk_viewer_scroll(mtk_viewer* viewer, double x, double y, double delta,

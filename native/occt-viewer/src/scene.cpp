@@ -8,6 +8,9 @@
 #include <Graphic3d_TextureSet.hxx>
 #include <Image_PixMap.hxx>
 #include <Prs3d_Presentation.hxx>
+#include <Select3D_SensitivePrimitiveArray.hxx>
+#include <SelectMgr_EntityOwner.hxx>
+#include <SelectMgr_Selection.hxx>
 #include <gp_Mat.hxx>
 
 #include <algorithm>
@@ -83,6 +86,16 @@ void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
     const occ::handle<Graphic3d_Group> group = presentation->NewGroup();
     group->SetGroupPrimitivesAspect(mode == faded_mode ? aspects_.faded : aspects_.shaded);
     group->AddPrimitiveArray(triangles_);
+}
+
+void mtk::MeshObject::ComputeSelection(const occ::handle<SelectMgr_Selection>& selection, const int mode) {
+    if (mode != 0) {
+        return;
+    }
+    const occ::handle<Select3D_SensitivePrimitiveArray> sensitive =
+        new Select3D_SensitivePrimitiveArray(new SelectMgr_EntityOwner(this));
+    sensitive->InitTriangulation(triangles_->Attributes(), triangles_->Indices(), TopLoc_Location());
+    selection->Add(sensitive);
 }
 
 occ::handle<Graphic3d_ArrayOfTriangles> mtk::make_triangles(const mtk_viewer_mesh& mesh) {

@@ -71,6 +71,37 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task PickingAPathOpensTheTreeDownToItsNode()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        // The first mesh of the document, under the first reference of every block on the way.
+        var path = new List<Entity>();
+        Entity entity = viewModel.Document!.Root.Entities[0];
+        for (; entity is BlockReference reference; entity = reference.Block.Entities[0])
+        {
+            path.Add(entity);
+        }
+        path.Add(entity);
+
+        viewModel.ModelTree.SelectCommand.Execute(path);
+
+        ModelNodeViewModel node = viewModel.ModelTree.Roots[0];
+        foreach (Entity step in path)
+        {
+            Assert.True(node.IsExpanded);
+            node = node.Children.Single(child => child.Entity == step);
+        }
+        Assert.Same(node, viewModel.ModelTree.SelectedNode);
+        Assert.Equal("Mesh", viewModel.Properties.Kind);
+
+        viewModel.ModelTree.SelectCommand.Execute(null);
+
+        Assert.Null(viewModel.ModelTree.SelectedNode);
+        Assert.False(viewModel.Properties.HasSelection);
+    }
+
+    [Fact]
     public async Task AFileThatCannotBeReadIsReportedInTheStatusBar()
     {
         MainWindowViewModel viewModel = Create();

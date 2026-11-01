@@ -126,6 +126,54 @@ internal sealed class ViewportScene
     }
 
     /// <summary>
+    /// The path of the leaf of the model tree that places an instance: the entities from the model to its mesh. Null
+    /// for an index out of range.
+    /// </summary>
+    public IReadOnlyList<Entity>? PathOf(int instance)
+    {
+        if (instance < 0 || instance >= Instances.Count)
+        {
+            return null;
+        }
+
+        // Down from the model, into the entity whose instances include this one, until its mesh.
+        var path = new List<Entity>();
+        Block block = _root;
+        while (true)
+        {
+            Entity? next = null;
+            foreach (Entity entity in block.Entities)
+            {
+                int count = InstanceCount(entity);
+                if (instance < count)
+                {
+                    next = entity;
+                    break;
+                }
+
+                instance -= count;
+            }
+
+            if (next is null)
+            {
+                return null;
+            }
+
+            path.Add(next);
+            if (next is not BlockReference reference)
+            {
+                return path;
+            }
+
+            block = reference.Block;
+        }
+    }
+
+    /// <summary>As <see cref="PathOf"/>, for an instance of the viewer that shows the scene; null for -1.</summary>
+    public IReadOnlyList<Entity>? PathOfShown(int viewerInstance) =>
+        viewerInstance < 0 ? null : PathOf(Array.IndexOf(_shownInstances, viewerInstance));
+
+    /// <summary>
     /// Shows as selected the instances of a node of the model tree, given its path, in the viewer that shows the scene;
     /// none for null.
     /// </summary>

@@ -36,7 +36,9 @@ inspector of the visual tree and of the styles.
 The 3D view shows the ground in perspective, with a grid of squares of one metre whose X and Y axes, red and green,
 cross at the origin. The left button rotates, the middle button or Shift with the left button pans, and the wheel, a
 pinch or the right button zooms; the status bar recalls it. Clicking a face of the cube in the upper right corner turns
-the view to it. Selecting a node of the model tree fades the rest of the model, so that the selection stands out.
+the view to it. Clicking a mesh selects it in the model tree, which opens down to it, and clicking the empty space
+clears the selection; the mesh under the pointer is tinted. Selecting a node of the tree fades the rest of the model,
+so that the selection stands out.
 
 After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
 

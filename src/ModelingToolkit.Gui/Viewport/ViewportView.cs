@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -26,6 +27,9 @@ public sealed class ViewportView : Border
 
     public static readonly StyledProperty<IReadOnlyList<Entity>?> SelectionProperty =
         AvaloniaProperty.Register<ViewportView, IReadOnlyList<Entity>?>(nameof(Selection));
+
+    public static readonly StyledProperty<ICommand?> PickCommandProperty =
+        AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(PickCommand));
 
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
@@ -79,6 +83,16 @@ public sealed class ViewportView : Border
     {
         get => GetValue(SelectionProperty);
         set => SetValue(SelectionProperty, value);
+    }
+
+    /// <summary>
+    /// Executed when the view is clicked, with the path of the mesh under the pointer, a leaf of the model tree, or
+    /// null when there is none. Clicks on the ViewCube turn the view instead.
+    /// </summary>
+    public ICommand? PickCommand
+    {
+        get => GetValue(PickCommandProperty);
+        set => SetValue(PickCommandProperty, value);
     }
 
     private OcctViewer? Viewer => _host.Viewer;
@@ -193,7 +207,25 @@ public sealed class ViewportView : Border
         topLevel.RequestAnimationFrame(_ =>
         {
             _frameRequested = false;
-            Send(viewer => viewer.Redraw());
+            int? picked = null;
+            Send(viewer =>
+            {
+                bool animating = viewer.Redraw();
+                if (viewer.TakePick(out int instance))
+                {
+                    picked = instance;
+                }
+
+                return animating;
+            });
+            if (picked is { } instance)
+            {
+                IReadOnlyList<Entity>? path = _shownScene?.PathOfShown(instance);
+                if (PickCommand is { } command && command.CanExecute(path))
+                {
+                    command.Execute(path);
+                }
+            }
         });
     }
 

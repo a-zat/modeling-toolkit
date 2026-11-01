@@ -13,6 +13,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -88,12 +89,18 @@ public:
     bool mouse_leave();
     bool scroll(double x, double y, double delta);
 
+    // Whether the view was clicked since the last call, and on which instance: -1 for none.
+    bool take_pick(int& instance);
+
     // Applies the input and draws if needed; returns true while an animation needs more frames.
     bool redraw();
 
     const std::string& diagnostics();
 
 private:
+    void OnSelectionChanged(const occ::handle<AIS_InteractiveContext>& context,
+                            const occ::handle<V3d_View>& view) override;
+
     bool is_attached() const { return !window_.IsNull(); }
     void attach();
     void update_size();
@@ -114,6 +121,7 @@ private:
     std::map<std::pair<int, int>, occ::handle<MeshObject>> shared_meshes_; // by mesh and material
     std::vector<occ::handle<AIS_InteractiveObject>> instances_;
     Graphic3d_ZLayerId faded_layer_ = Graphic3d_ZLayerId_UNKNOWN;
+    std::optional<int> pick_; // the instance clicked, -1 for none, not yet taken
     double scale_ = 0.0;
     std::string failure_;
     std::string diagnostics_;

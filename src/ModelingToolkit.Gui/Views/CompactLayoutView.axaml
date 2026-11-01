@@ -111,7 +111,8 @@
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
 
       <viewport:ViewportView Grid.Column="3" Document="{Binding Document}"
-                             Selection="{Binding ModelTree.SelectedNode.Path}" />
+                             Selection="{Binding ModelTree.SelectedNode.Path}"
+                             PickCommand="{Binding ModelTree.SelectCommand}" />
 
       <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />
       <Border Grid.Column="5" Classes="sidePanel" IsVisible="{Binding Properties.HasSelection}">

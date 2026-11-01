@@ -196,6 +196,17 @@ internal sealed class OcctViewer : IDisposable
         return redraw != 0;
     }
 
+    /// <summary>
+    /// Whether the view was clicked since the last call, other than on the ViewCube: the clicks are applied by
+    /// <see cref="Redraw"/>. The viewer shows no selection by itself: see <see cref="SetSelection"/>.
+    /// </summary>
+    /// <param name="instance">The instance under the pointer, or -1 for none.</param>
+    public bool TakePick(out int instance)
+    {
+        NativeMethods.TakePick(_handle, out int picked, out instance).ThrowIfFailed();
+        return picked != 0;
+    }
+
     /// <param name="delta">Notches of the mouse wheel, positive to zoom in.</param>
     public bool Scroll(Point position, double delta)
     {
