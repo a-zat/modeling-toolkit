@@ -1,0 +1,76 @@
+name: Release
+
+# Packages the applications for Windows when a version is tagged, and attaches the package to the GitHub release of
+# the tag, created as a draft if it does not exist yet. The macOS package is made on a Mac with the same script
+# (packaging/package.py): macOS minutes cost ten times as much in private repositories, and the vcpkg cache of CI is
+# kept for Windows only. It can be built here too, from the Actions tab.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the release to attach the packages to
+        required: true
+      macos:
+        description: Also package for macOS
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.macos && '["windows-latest", "macos-latest"]' || '["windows-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+          submodules: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install Ninja
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      # The packages that CI built and cached on main: tags can read the caches of the default branch.
+      - name: Restore vcpkg cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-${{ runner.os }}-none
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      - name: Build and test
+        run: |
+          dotnet build --configuration Release
+          dotnet test --configuration Release --no-build
+
+      - name: Package
+        run: python packaging/package.py
+
+      - name: Attach to the release
+        shell: bash
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --verify-tag --title "$TAG" --notes ""
+          gh release upload "$TAG" artifacts/packages/*.zip --clobber
