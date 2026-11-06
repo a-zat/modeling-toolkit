@@ -105,6 +105,10 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 throw new InvalidDataException(
                     $"Format version {manifest.Version} is newer than the supported one ({NativeFormat.Version}).");
             }
+            if (manifest.Version < 1)
+            {
+                throw new InvalidDataException($"Format version {manifest.Version} does not exist.");
+            }
             if (manifest.Units != NativeFormat.Units || manifest.UpAxis != NativeFormat.UpAxis)
             {
                 throw new InvalidDataException($"Unsupported units '{manifest.Units}' or up axis '{manifest.UpAxis}'.");

@@ -225,15 +225,17 @@ public sealed class NativeFormatTests : IDisposable
         Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
     }
 
-    [Fact]
-    public void Newer_versions_are_rejected()
+    [Theory]
+    [InlineData(3)] // newer than this reader
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Versions_that_this_reader_does_not_know_are_rejected(int version)
     {
-        string path = Archive("future.mtk", """
-            {"format": "modeling-toolkit", "version": 99, "units": "mm", "upAxis": "Z", "textures": [],
-             "materials": [], "root": {"name": "Model", "entities": []}, "blocks": []}
-            """);
+        string path = Archive("unknown.mtk", Manifest($$"""{"version": {{version}}}"""));
 
-        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+        var exception = Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+
+        Assert.Contains($"version {version}", exception.Message);
     }
 
     [Theory]
