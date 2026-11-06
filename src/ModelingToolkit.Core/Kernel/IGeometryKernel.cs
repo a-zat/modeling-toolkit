@@ -80,6 +80,7 @@ public interface IGeometryKernel
     IKernelShape Intersect(IKernelShape first, IKernelShape second, IProgress<double>? progress = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The volume of the solids of the shape, in cubic millimetres.</summary>
     double ComputeVolume(IKernelShape shape);
 
     /// <summary>
@@ -110,5 +111,6 @@ public interface IGeometryKernel
         IProgress<double>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>The smallest box with its sides along the axes that contains the shape.</summary>
+    /// <exception cref="ArgumentException">The shape has no geometry, as an empty compound.</exception>
     BoundingBox GetBoundingBox(IKernelShape shape);
 }

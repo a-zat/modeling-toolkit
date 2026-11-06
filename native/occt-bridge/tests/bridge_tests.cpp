@@ -613,6 +613,29 @@ TEST(Tessellation, RejectsNullArgumentsForFacesAndEdges) {
     EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, &indices, nullptr), MTK_STATUS_INVALID_ARGUMENT);
 }
 
+TEST(Tessellation, ClearsTheOutputsOfACallThatFails) {
+    TessellationPtr tessellation = tessellate(make_box(1.0, 1.0, 1.0), 1.0);
+    const int32_t* indices = nullptr;
+    const double* points = nullptr;
+    int32_t count = 0;
+    ASSERT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, &indices, &count), MTK_STATUS_OK);
+    ASSERT_NE(count, 0);
+
+    EXPECT_EQ(mtk_tessellation_get_edges(nullptr, &points, &indices, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(points, nullptr);
+    EXPECT_EQ(indices, nullptr);
+    EXPECT_EQ(count, 0);
+
+    ASSERT_EQ(mtk_tessellation_get_faces(tessellation.get(), &indices, &count), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_tessellation_get_faces(nullptr, &indices, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(indices, nullptr);
+    EXPECT_EQ(count, 0);
+
+    double bounds[6] = {1, 1, 1, 1, 1, 1};
+    EXPECT_EQ(mtk_shape_bounds(nullptr, bounds), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_TRUE(std::all_of(std::begin(bounds), std::end(bounds), [](double value) { return value == 0.0; }));
+}
+
 // Records the progress reported by an operation, and asks it to stop after some reports.
 struct ProgressRecorder {
     std::vector<double> reports;

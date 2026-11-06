@@ -12,9 +12,10 @@ internal static unsafe class MeshInfoExtensions
     {
         int vertexCount = mesh.VertexCount;
 
-        // The native arrays are flat (x, y, z, x, y, z...): reinterpreted as structs, they are copied in one go.
-        Point3d[] vertices = Copy<double, Point3d>(mesh.Vertices, 3 * vertexCount)!;
-        Triangle[] triangles = Copy<int, Triangle>(mesh.Triangles, 3 * mesh.TriangleCount)!;
+        // The native arrays are flat (x, y, z, x, y, z...): reinterpreted as structs, they are copied in one go. The
+        // bridge may give null for an empty array.
+        Point3d[] vertices = Copy<double, Point3d>(mesh.Vertices, 3 * vertexCount) ?? [];
+        Triangle[] triangles = Copy<int, Triangle>(mesh.Triangles, 3 * mesh.TriangleCount) ?? [];
         Vector3[]? normals = Copy<float, Vector3>(mesh.Normals, 3 * vertexCount);
         Vector2[]? textureCoordinates = Copy<float, Vector2>(mesh.TextureCoordinates, 2 * vertexCount);
 

@@ -8,12 +8,14 @@
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <GCPnts_TangentialDeflection.hxx>
+#include <NCollection_IndexedDataMap.hxx>
+#include <NCollection_List.hxx>
 #include <Poly_PolygonOnTriangulation.hxx>
 #include <Poly_Triangulation.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
-#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopTools_ShapeMapHasher.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
@@ -146,10 +148,10 @@ bool too_many(size_t values) {
 mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection, double angular_deflection,
                                 const mtk_progress* progress, mtk_tessellation** out_tessellation) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_tessellation);
         if (shape == nullptr || out_tessellation == nullptr) {
             return mtk::invalid_argument("shape and out_tessellation must not be null.");
         }
-        *out_tessellation = nullptr;
         if (!std::isfinite(linear_deflection) || linear_deflection <= 0.0) {
             return mtk::invalid_argument("The linear deflection must be a positive finite number.");
         }
@@ -186,7 +188,7 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
         result->first_triangles.push_back(static_cast<int32_t>(result->triangles.size() / 3));
 
         // Each edge once, with the faces it bounds.
-        TopTools_IndexedDataMapOfShapeListOfShape edges;
+        NCollection_IndexedDataMap<TopoDS_Shape, NCollection_List<TopoDS_Shape>, TopTools_ShapeMapHasher> edges;
         TopExp::MapShapesAndAncestors(copy, TopAbs_EDGE, TopAbs_FACE, edges);
         for (int index = 1; index <= edges.Extent(); ++index) {
             const TopoDS_Edge& edge = TopoDS::Edge(edges.FindKey(index));
@@ -206,10 +208,10 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
 
 mtk_status mtk_tessellation_get_mesh(const mtk_tessellation* tessellation, mtk_mesh_info* out_mesh) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_mesh);
         if (tessellation == nullptr || out_mesh == nullptr) {
             return mtk::invalid_argument("tessellation and out_mesh must not be null.");
         }
-        *out_mesh = {};
         out_mesh->material = -1;
         out_mesh->vertex_count = static_cast<int32_t>(tessellation->vertices.size() / 3);
         out_mesh->triangle_count = static_cast<int32_t>(tessellation->triangles.size() / 3);
@@ -223,6 +225,7 @@ mtk_status mtk_tessellation_get_mesh(const mtk_tessellation* tessellation, mtk_m
 mtk_status mtk_tessellation_get_faces(const mtk_tessellation* tessellation, const int32_t** out_first_triangles,
                                       int32_t* out_face_count) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_first_triangles, out_face_count);
         if (tessellation == nullptr || out_first_triangles == nullptr || out_face_count == nullptr) {
             return mtk::invalid_argument("tessellation, out_first_triangles and out_face_count must not be null.");
         }
@@ -235,6 +238,7 @@ mtk_status mtk_tessellation_get_faces(const mtk_tessellation* tessellation, cons
 mtk_status mtk_tessellation_get_edges(const mtk_tessellation* tessellation, const double** out_points,
                                       const int32_t** out_first_points, int32_t* out_edge_count) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_points, out_first_points, out_edge_count);
         if (tessellation == nullptr || out_points == nullptr || out_first_points == nullptr ||
             out_edge_count == nullptr) {
             return mtk::invalid_argument("tessellation, out_points, out_first_points and out_edge_count must not be "

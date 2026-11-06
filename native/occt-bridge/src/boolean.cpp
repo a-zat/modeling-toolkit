@@ -54,10 +54,10 @@ mtk_status run(const TopoDS_Shape& first, const TopoDS_Shape& second, const mtk_
 mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* second, int32_t operation,
                              const mtk_progress* progress, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (first == nullptr || second == nullptr || out_shape == nullptr) {
             return mtk::invalid_argument("first, second and out_shape must not be null.");
         }
-        *out_shape = nullptr;
 
         switch (operation) {
         case MTK_BOOLEAN_UNION:

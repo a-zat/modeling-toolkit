@@ -31,6 +31,13 @@ void clear_last_error() noexcept;
 // Records the error and returns MTK_STATUS_INVALID_ARGUMENT; used for argument checks inside guarded().
 mtk_status invalid_argument(const char* message) noexcept;
 
+// Sets each output that is not null to zero. Called first, before the arguments are checked, so that the outputs are
+// zero after every failure, as the C APIs promise.
+template <typename... Outputs>
+void clear_outputs(Outputs*... outputs) noexcept {
+    ((outputs != nullptr ? void(*outputs = {}) : void()), ...);
+}
+
 // Runs the body of an exported function and converts any exception into a status code:
 // C++ and OpenCASCADE exceptions must never cross the C boundary.
 template <typename Body>

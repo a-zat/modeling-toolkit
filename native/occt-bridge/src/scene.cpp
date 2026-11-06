@@ -441,8 +441,10 @@ std::unique_ptr<mtk_scene> read_gltf(const char* path, const mtk_progress* progr
     return scene;
 }
 
-// Checks the arguments shared by the mtk_scene_get_* functions.
-mtk_status check_item(const mtk_scene* scene, const void* output, size_t count, int32_t index) {
+// Checks the arguments shared by the mtk_scene_get_* functions, after setting the output to zero.
+template <typename Output>
+mtk_status check_item(const mtk_scene* scene, Output* output, size_t count, int32_t index) {
+    mtk::clear_outputs(output);
     if (scene == nullptr || output == nullptr) {
         return mtk::invalid_argument("The scene and the output must not be null.");
     }
@@ -461,10 +463,10 @@ const T* data_or_null(const std::vector<T>& values) {
 
 mtk_status mtk_scene_read_gltf(const char* path, const mtk_progress* progress, mtk_scene** out_scene) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_scene);
         if (out_scene == nullptr) {
             return mtk::invalid_argument("out_scene must not be null.");
         }
-        *out_scene = nullptr;
         if (path == nullptr || *path == '\0') {
             return mtk::invalid_argument("path must not be empty.");
         }
@@ -480,6 +482,7 @@ void mtk_scene_release(mtk_scene* scene) {
 
 mtk_status mtk_scene_get_info(const mtk_scene* scene, mtk_scene_info* out_info) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_info);
         if (scene == nullptr || out_info == nullptr) {
             return mtk::invalid_argument("scene and out_info must not be null.");
         }

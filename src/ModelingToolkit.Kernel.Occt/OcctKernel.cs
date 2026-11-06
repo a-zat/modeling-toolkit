@@ -95,7 +95,7 @@ public sealed class OcctKernel : IGeometryKernel
         NativeProgress native = bridge.Native;
         NativeStatus status = NativeMethods.ShapeBoolean(
             a, b, (int)operation, bridge.IsUsed ? &native : null, out ShapeHandle handle);
-        bridge.ThrowIfFailed(status);
+        ThrowIfFailed(bridge, status, handle);
         return new OcctShape(handle);
     }
 
@@ -132,7 +132,7 @@ public sealed class OcctKernel : IGeometryKernel
             NativeProgress native = bridge.Native;
             NativeStatus status = NativeMethods.ShapeTessellate(
                 unwrapped, linearDeflection, angularDeflection, bridge.IsUsed ? &native : null, out handle);
-            bridge.ThrowIfFailed(status);
+            ThrowIfFailed(bridge, status, handle);
         }
         using (handle)
         {
@@ -156,6 +156,21 @@ public sealed class OcctKernel : IGeometryKernel
         NativeMethods.ShapeBounds(Unwrap(shape), bounds).ThrowIfFailed();
         return new BoundingBox(
             new Point3d(bounds[0], bounds[1], bounds[2]), new Point3d(bounds[3], bounds[4], bounds[5]));
+    }
+
+    // The progress may throw after the operation has made its result: the result is then released at once, not left to
+    // the finalizer.
+    private static void ThrowIfFailed(ProgressBridge bridge, NativeStatus status, SafeHandle result)
+    {
+        try
+        {
+            bridge.ThrowIfFailed(status);
+        }
+        catch
+        {
+            result.Dispose();
+            throw;
+        }
     }
 
     private static ShapeHandle Unwrap(IKernelShape shape)

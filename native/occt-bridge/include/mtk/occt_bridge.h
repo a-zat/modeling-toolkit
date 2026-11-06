@@ -90,9 +90,8 @@ typedef enum mtk_boolean_operation {
 /*
  * A new shape: the result of a boolean operation on two shapes, which are not changed. The faces and edges of the
  * result that lie on the same surface or curve are merged, so that, for example, the union of two boxes side by side
- * has six faces. A failure of the operation, for
- * example on shapes that are not valid, and an empty result, such as the intersection of shapes that do not meet, are
- * reported as MTK_STATUS_KERNEL_ERROR.
+ * has six faces. A failure of the operation, for example on shapes that are not valid, and an empty result, such as the
+ * intersection of shapes that do not meet, are reported as MTK_STATUS_KERNEL_ERROR.
  */
 MTK_API mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* second,
                                      int32_t operation /* mtk_boolean_operation */, const mtk_progress* progress,

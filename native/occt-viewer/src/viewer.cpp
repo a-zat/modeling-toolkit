@@ -596,10 +596,10 @@ namespace {
 
 // Checks the arguments shared by the input functions.
 mtk_status check_input(const mtk_viewer* viewer, int32_t* out_redraw) {
+    mtk::clear_outputs(out_redraw);
     if (viewer == nullptr || out_redraw == nullptr) {
         return mtk::invalid_argument("viewer and out_redraw must not be null.");
     }
-    *out_redraw = 0;
     return MTK_STATUS_OK;
 }
 
@@ -698,10 +698,10 @@ const char* mtk_viewer_last_error_message(void) {
 
 mtk_status mtk_viewer_create(void* parent, mtk_viewer** out_viewer) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_viewer);
         if (out_viewer == nullptr) {
             return mtk::invalid_argument("out_viewer must not be null.");
         }
-        *out_viewer = nullptr;
 #if defined(_WIN32)
         if (parent == nullptr) {
             return mtk::invalid_argument("parent must be the window that will contain the view.");
@@ -718,6 +718,7 @@ void mtk_viewer_release(mtk_viewer* viewer) {
 
 mtk_status mtk_viewer_get_native_view(const mtk_viewer* viewer, void** out_view) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_view);
         if (viewer == nullptr || out_view == nullptr) {
             return mtk::invalid_argument("viewer and out_view must not be null.");
         }
@@ -746,10 +747,10 @@ mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* co
 
 mtk_status mtk_viewer_add_mesh(mtk_viewer* viewer, const mtk_viewer_mesh* mesh, int32_t* out_mesh) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_mesh);
         if (viewer == nullptr || mesh == nullptr || out_mesh == nullptr) {
             return mtk::invalid_argument("viewer, mesh and out_mesh must not be null.");
         }
-        *out_mesh = 0;
         const mtk_status status = check_mesh(*mesh);
         if (status == MTK_STATUS_OK) {
             *out_mesh = viewer->add_mesh(*mesh);
@@ -761,10 +762,10 @@ mtk_status mtk_viewer_add_mesh(mtk_viewer* viewer, const mtk_viewer_mesh* mesh, 
 mtk_status mtk_viewer_add_texture(mtk_viewer* viewer, const uint8_t* pixels, int32_t width, int32_t height,
                                   int32_t* out_texture) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_texture);
         if (viewer == nullptr || pixels == nullptr || out_texture == nullptr) {
             return mtk::invalid_argument("viewer, pixels and out_texture must not be null.");
         }
-        *out_texture = 0;
         if (width <= 0 || height <= 0 || width > max_texture_size || height > max_texture_size) {
             return mtk::invalid_argument("A texture must have from 1 to 16384 pixels on each side.");
         }
@@ -775,10 +776,10 @@ mtk_status mtk_viewer_add_texture(mtk_viewer* viewer, const uint8_t* pixels, int
 
 mtk_status mtk_viewer_add_material(mtk_viewer* viewer, const mtk_viewer_material* material, int32_t* out_material) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_material);
         if (viewer == nullptr || material == nullptr || out_material == nullptr) {
             return mtk::invalid_argument("viewer, material and out_material must not be null.");
         }
-        *out_material = 0;
         const mtk_status status = check_material(*material, viewer->texture_count());
         if (status == MTK_STATUS_OK) {
             *out_material = viewer->add_material(*material);
@@ -790,10 +791,10 @@ mtk_status mtk_viewer_add_material(mtk_viewer* viewer, const mtk_viewer_material
 mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material, const double* transform,
                                    int32_t* out_instance) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_instance);
         if (viewer == nullptr || out_instance == nullptr) {
             return mtk::invalid_argument("viewer and out_instance must not be null.");
         }
-        *out_instance = 0;
         if (mesh < 0 || mesh >= viewer->mesh_count() || material < 0 || material >= viewer->material_count()) {
             return mtk::invalid_argument("An instance needs a mesh and a material added to the viewer.");
         }
@@ -929,11 +930,10 @@ mtk_status mtk_viewer_mouse_leave(mtk_viewer* viewer, int32_t* out_redraw) {
 
 mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, int32_t* out_instance) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_picked, out_instance);
         if (viewer == nullptr || out_picked == nullptr || out_instance == nullptr) {
             return mtk::invalid_argument("viewer, out_picked and out_instance must not be null.");
         }
-        *out_picked = 0;
-        *out_instance = 0;
         int instance = -1;
         if (viewer->take_pick(instance)) {
             *out_picked = 1;
@@ -961,10 +961,10 @@ mtk_status mtk_viewer_scroll(mtk_viewer* viewer, double x, double y, double delt
 
 mtk_status mtk_viewer_redraw(mtk_viewer* viewer, int32_t* out_animating) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_animating);
         if (viewer == nullptr || out_animating == nullptr) {
             return mtk::invalid_argument("viewer and out_animating must not be null.");
         }
-        *out_animating = 0;
         *out_animating = viewer->redraw() ? 1 : 0;
         return MTK_STATUS_OK;
     });
@@ -972,10 +972,10 @@ mtk_status mtk_viewer_redraw(mtk_viewer* viewer, int32_t* out_animating) {
 
 mtk_status mtk_viewer_get_diagnostics(mtk_viewer* viewer, const char** out_text) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_text);
         if (viewer == nullptr || out_text == nullptr) {
             return mtk::invalid_argument("viewer and out_text must not be null.");
         }
-        *out_text = nullptr;
         *out_text = viewer->diagnostics().c_str();
         return MTK_STATUS_OK;
     });

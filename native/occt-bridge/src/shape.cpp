@@ -57,10 +57,10 @@ std::optional<gp_Trsf> to_rigid_placement(const double* matrix) {
 
 mtk_status mtk_shape_make_box(double dx, double dy, double dz, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (out_shape == nullptr) {
             return mtk::invalid_argument("out_shape must not be null.");
         }
-        *out_shape = nullptr;
         if (!is_positive_length(dx) || !is_positive_length(dy) || !is_positive_length(dz)) {
             return mtk::invalid_argument("Box dimensions must be positive finite numbers.");
         }
@@ -73,10 +73,10 @@ mtk_status mtk_shape_make_box(double dx, double dy, double dz, mtk_shape** out_s
 
 mtk_status mtk_shape_make_cylinder(double radius, double height, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (out_shape == nullptr) {
             return mtk::invalid_argument("out_shape must not be null.");
         }
-        *out_shape = nullptr;
         if (!is_positive_length(radius) || !is_positive_length(height)) {
             return mtk::invalid_argument("Cylinder radius and height must be positive finite numbers.");
         }
@@ -89,10 +89,10 @@ mtk_status mtk_shape_make_cylinder(double radius, double height, mtk_shape** out
 
 mtk_status mtk_shape_make_sphere(double radius, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (out_shape == nullptr) {
             return mtk::invalid_argument("out_shape must not be null.");
         }
-        *out_shape = nullptr;
         if (!is_positive_length(radius)) {
             return mtk::invalid_argument("Sphere radius must be a positive finite number.");
         }
@@ -105,10 +105,10 @@ mtk_status mtk_shape_make_sphere(double radius, mtk_shape** out_shape) {
 
 mtk_status mtk_shape_make_cone(double bottom_radius, double top_radius, double height, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (out_shape == nullptr) {
             return mtk::invalid_argument("out_shape must not be null.");
         }
-        *out_shape = nullptr;
         const auto is_radius = [](double value) { return std::isfinite(value) && value >= 0.0; };
         if (!is_radius(bottom_radius) || !is_radius(top_radius) || !is_positive_length(height)) {
             return mtk::invalid_argument(
@@ -129,10 +129,10 @@ mtk_status mtk_shape_make_cone(double bottom_radius, double top_radius, double h
 
 mtk_status mtk_shape_make_torus(double major_radius, double minor_radius, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (out_shape == nullptr) {
             return mtk::invalid_argument("out_shape must not be null.");
         }
-        *out_shape = nullptr;
         if (!is_positive_length(major_radius) || !is_positive_length(minor_radius)) {
             return mtk::invalid_argument("Torus radii must be positive finite numbers.");
         }
@@ -148,10 +148,10 @@ mtk_status mtk_shape_make_torus(double major_radius, double minor_radius, mtk_sh
 
 mtk_status mtk_shape_place(const mtk_shape* shape, const double* placement, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (shape == nullptr || placement == nullptr || out_shape == nullptr) {
             return mtk::invalid_argument("shape, placement and out_shape must not be null.");
         }
-        *out_shape = nullptr;
         const std::optional<gp_Trsf> rigid = to_rigid_placement(placement);
         if (!rigid) {
             return mtk::invalid_argument(
@@ -165,10 +165,12 @@ mtk_status mtk_shape_place(const mtk_shape* shape, const double* placement, mtk_
 
 mtk_status mtk_shape_bounds(const mtk_shape* shape, double* out_bounds) {
     return mtk::guarded([&] {
+        if (out_bounds != nullptr) {
+            std::fill_n(out_bounds, 6, 0.0);
+        }
         if (shape == nullptr || out_bounds == nullptr) {
             return mtk::invalid_argument("shape and out_bounds must not be null.");
         }
-        std::fill_n(out_bounds, 6, 0.0);
 
         // The tight box of curved surfaces, not the one of the control points, and without the tolerances of the shape.
         Bnd_Box box;
@@ -183,10 +185,10 @@ mtk_status mtk_shape_bounds(const mtk_shape* shape, double* out_bounds) {
 
 mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_volume);
         if (shape == nullptr || out_volume == nullptr) {
             return mtk::invalid_argument("shape and out_volume must not be null.");
         }
-        *out_volume = 0.0;
 
         GProp_GProps properties;
         BRepGProp::VolumeProperties(shape->value, properties);

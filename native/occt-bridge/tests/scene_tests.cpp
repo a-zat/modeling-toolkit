@@ -213,6 +213,22 @@ TEST(Scene, InvalidArgumentsAreRejected) {
     mtk_scene_release(nullptr);
 }
 
+TEST(Scene, ClearsTheOutputsOfACallThatFails) {
+    ScenePtr scene = read("Box.glb");
+    ASSERT_NE(scene, nullptr);
+    mtk_block_info block{};
+    ASSERT_EQ(mtk_scene_get_block(scene.get(), 0, &block), MTK_STATUS_OK);
+    ASSERT_NE(block.name, nullptr);
+
+    EXPECT_EQ(mtk_scene_get_block(scene.get(), -1, &block), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(block.name, nullptr);
+    EXPECT_EQ(block.mesh_count, 0);
+
+    mtk_scene_info info = info_of(scene.get());
+    EXPECT_EQ(mtk_scene_get_info(nullptr, &info), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(info.block_count, 0);
+}
+
 } // namespace
 
 TEST(Scene, ReportsTheProgressOfReadingAndStopsWhenAsked) {

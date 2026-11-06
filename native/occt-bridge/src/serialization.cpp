@@ -6,7 +6,6 @@
 
 #include <cstdint>
 #include <limits>
-#include <memory>
 #include <sstream>
 #include <string>
 
@@ -17,10 +16,10 @@ struct mtk_bytes {
 
 mtk_status mtk_shape_write(const mtk_shape* shape, mtk_bytes** out_bytes) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_bytes);
         if (shape == nullptr || out_bytes == nullptr) {
             return mtk::invalid_argument("shape and out_bytes must not be null.");
         }
-        *out_bytes = nullptr;
 
         // The geometry only: a mesh is made again when needed, from the geometry.
         std::ostringstream stream;
@@ -32,6 +31,7 @@ mtk_status mtk_shape_write(const mtk_shape* shape, mtk_bytes** out_bytes) {
 
 mtk_status mtk_bytes_get(const mtk_bytes* bytes, const uint8_t** out_data, int64_t* out_size) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_data, out_size);
         if (bytes == nullptr || out_data == nullptr || out_size == nullptr) {
             return mtk::invalid_argument("bytes, out_data and out_size must not be null.");
         }
@@ -47,10 +47,10 @@ void mtk_bytes_release(mtk_bytes* bytes) {
 
 mtk_status mtk_shape_read(const uint8_t* data, int64_t size, mtk_shape** out_shape) {
     return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
         if (out_shape == nullptr) {
             return mtk::invalid_argument("out_shape must not be null.");
         }
-        *out_shape = nullptr;
         if (data == nullptr || size <= 0 || static_cast<uint64_t>(size) > std::numeric_limits<size_t>::max()) {
             return mtk::invalid_argument("data must hold the bytes of a shape.");
         }
