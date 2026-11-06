@@ -13,7 +13,7 @@ namespace ModelingToolkit.Gui.Viewport;
 /// must be called on the thread of the user interface. Positions are in device-independent units from the top-left
 /// corner of the view, as Avalonia gives them.
 /// </summary>
-internal sealed class OcctViewer : IDisposable
+internal sealed class OcctViewer : IViewerScene, IDisposable
 {
     private readonly ViewerHandle _handle;
 

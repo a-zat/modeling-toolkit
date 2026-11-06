@@ -42,7 +42,7 @@ public sealed class ViewportSceneTests
         var scene = ViewportScene.Of(document);
 
         Assert.Equal(2, scene.Meshes.Count);
-        Assert.All(scene.Meshes, mesh => Assert.NotEmpty(mesh.Triangles));
+        Assert.All(scene.Meshes, mesh => Assert.NotEmpty(mesh!.Triangles));
         Assert.Equal([0, 1, 1], scene.Instances.Select(instance => instance.Mesh));
         Assert.Equal(
             [Transform.Identity, Transform.Translation(200, 0, 0), Transform.Translation(300, 0, 0)],
@@ -86,8 +86,8 @@ public sealed class ViewportSceneTests
         var large = new Document();
         large.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeSphere(2000)));
 
-        int smallTriangles = ViewportScene.Of(small).Meshes.Single().Triangles.Length;
-        int largeTriangles = ViewportScene.Of(large).Meshes.Single().Triangles.Length;
+        int smallTriangles = ViewportScene.Of(small).Meshes.Single()!.Triangles.Length;
+        int largeTriangles = ViewportScene.Of(large).Meshes.Single()!.Triangles.Length;
 
         Assert.True(smallTriangles > 100);
         Assert.Equal(smallTriangles, largeTriangles);
@@ -104,8 +104,8 @@ public sealed class ViewportSceneTests
         var scene = ViewportScene.Of(document);
 
         Assert.Equal(2, scene.Meshes.Count);
-        Assert.Equal(12, scene.MeshEdges[0].Count);
-        Assert.Equal(4, scene.MeshEdges[1].Count); // the border of the square, not its diagonal
+        Assert.Equal(12, scene.MeshEdges[0]!.Count);
+        Assert.Equal(4, scene.MeshEdges[1]!.Count); // the border of the square, not its diagonal
     }
 
     [Fact]

@@ -10,7 +10,10 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Gui.Viewport.Interop;
+using ModelingToolkit.Core.Kernel;
+using BrepEntity = ModelingToolkit.Core.Model.BrepEntity;
 using Document = ModelingToolkit.Core.Model.Document;
+using DocumentChange = ModelingToolkit.Core.Model.DocumentChange;
 using Entity = ModelingToolkit.Core.Model.Entity;
 
 namespace ModelingToolkit.Gui.Viewport;
@@ -52,6 +55,8 @@ public sealed class ViewportView : Border, IViewCamera
     private bool _frameRequested;
     private int _shownDocuments;
     private ViewportScene? _shownScene;
+    private Document? _followedDocument;
+    private bool _updatePosted;
 
     public ViewportView()
     {
@@ -179,6 +184,7 @@ public sealed class ViewportView : Border, IViewCamera
         base.OnPropertyChanged(change);
         if (change.Property == DocumentProperty)
         {
+            Follow(Document);
             _ = ShowDocumentAsync();
         }
         else if (change.Property == SelectionProperty && _shownScene is { } scene)
@@ -343,7 +349,6 @@ public sealed class ViewportView : Border, IViewCamera
             if (prepared is { } ready)
             {
                 ready.Scene.ShowIn(viewer, ready.Images);
-                ready.Scene.ShowSelectionIn(viewer, Selection);
             }
             else
             {
@@ -352,6 +357,71 @@ public sealed class ViewportView : Border, IViewCamera
 
             return true;
         });
+        // With the changes made while the scene was prepared, and the selection.
+        UpdateScene();
+    }
+
+    // The changes of the document shown update the scene; those of the previous document are no longer of interest.
+    private void Follow(Document? document)
+    {
+        if (_followedDocument is not null)
+        {
+            _followedDocument.Changed -= OnDocumentChanged;
+        }
+        _followedDocument = document;
+        if (document is not null)
+        {
+            document.Changed += OnDocumentChanged;
+        }
+    }
+
+    // The changes made together, such as those of one command, update the scene once, after them.
+    private void OnDocumentChanged(object? sender, DocumentChange change)
+    {
+        if (_updatePosted)
+        {
+            return;
+        }
+
+        _updatePosted = true;
+        Dispatcher.UIThread.Post(UpdateScene, DispatcherPriority.Background);
+    }
+
+    private void UpdateScene()
+    {
+        _updatePosted = false;
+        if (_shownScene is not { } scene)
+        {
+            return; // the scene being prepared is updated once ready
+        }
+
+        Send(viewer =>
+        {
+            scene.Update();
+            scene.ShowSelectionIn(viewer, Selection);
+            return true;
+        });
+        foreach ((BrepEntity entity, IKernelShape shape) in scene.TakeShapesToTessellate())
+        {
+            _ = TessellateAsync(scene, entity, shape);
+        }
+    }
+
+    // A shape that changed is tessellated away from the user interface; the scene discards the tessellation if the shape
+    // has changed again meanwhile, or if another document is shown.
+    private async Task TessellateAsync(ViewportScene scene, BrepEntity entity, IKernelShape shape)
+    {
+        ShapeMesh result = await Task.Run(() => ViewportScene.Tessellate(entity, shape));
+        if (scene != _shownScene || !scene.Accept(result))
+        {
+            return;
+        }
+
+        if (result.Warning is { } warning && WarningsCommand is { } command && command.CanExecute(new[] { warning }))
+        {
+            command.Execute(new[] { warning });
+        }
+        UpdateScene();
     }
 
     private bool ApplySettings(OcctViewer viewer)
