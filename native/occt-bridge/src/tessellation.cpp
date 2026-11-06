@@ -1,5 +1,6 @@
 #include "internal.hpp"
 
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
@@ -30,20 +31,6 @@ struct mtk_tessellation {
 namespace {
 
 constexpr double pi = 3.14159265358979323846;
-
-// Removes the triangulations that meshing attaches to the faces, which would otherwise remain in the shape and be
-// reused, whatever the deflection asked for later, by the next tessellation of it or of a shape sharing its faces.
-class TriangulationCleaner {
-public:
-    explicit TriangulationCleaner(const TopoDS_Shape& shape) : shape_(shape) { BRepTools::Clean(shape_); }
-    ~TriangulationCleaner() { BRepTools::Clean(shape_); }
-
-    TriangulationCleaner(const TriangulationCleaner&) = delete;
-    TriangulationCleaner& operator=(const TriangulationCleaner&) = delete;
-
-private:
-    TopoDS_Shape shape_;
-};
 
 // Appends the triangulation of a face, in the coordinates of the shape, with the front of its triangles and its normals
 // on the outside of the solid.
@@ -103,15 +90,20 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
             return mtk::invalid_argument("The angular deflection must be greater than 0 and not greater than pi.");
         }
 
+        // Meshing attaches triangulations to the faces it meshes. It meshes a copy of the topology, which shares the
+        // geometry, so that the shape and those sharing its faces are not written to, and calls on them can run on
+        // other threads at the same time; the triangulations go with the copy. The copy starts without any, even if
+        // the shape was read with some, so that the mesh depends only on the deflection. The faces are meshed in
+        // parallel.
+        const TopoDS_Shape copy = BRepBuilderAPI_Copy(shape->value, false, false).Shape();
+        BRepTools::Clean(copy);
+        BRepMesh_IncrementalMesh mesher(copy, linear_deflection, false, angular_deflection, true);
+
         auto result = std::make_unique<mtk_tessellation>();
-        {
-            const TriangulationCleaner cleaner(shape->value);
-            BRepMesh_IncrementalMesh mesher(shape->value, linear_deflection, false, angular_deflection, true);
-            for (TopExp_Explorer faces(shape->value, TopAbs_FACE); faces.More(); faces.Next()) {
-                append_face(TopoDS::Face(faces.Current()), *result);
-                if (result->vertices.size() / 3 > static_cast<size_t>(std::numeric_limits<int32_t>::max() / 3)) {
-                    return mtk::invalid_argument("The shape has too many triangles for this deflection.");
-                }
+        for (TopExp_Explorer faces(copy, TopAbs_FACE); faces.More(); faces.Next()) {
+            append_face(TopoDS::Face(faces.Current()), *result);
+            if (result->vertices.size() / 3 > static_cast<size_t>(std::numeric_limits<int32_t>::max() / 3)) {
+                return mtk::invalid_argument("The shape has too many triangles for this deflection.");
             }
         }
         if (result->triangles.empty()) {

@@ -1,4 +1,5 @@
 find_package(GTest CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 include(GoogleTest)
 
 add_executable(mtk_occt_bridge_tests
@@ -6,7 +7,7 @@ add_executable(mtk_occt_bridge_tests
     header_is_valid_c.c
     scene_tests.cpp)
 
-target_link_libraries(mtk_occt_bridge_tests PRIVATE mtk_occt_bridge GTest::gtest_main)
+target_link_libraries(mtk_occt_bridge_tests PRIVATE mtk_occt_bridge GTest::gtest_main Threads::Threads)
 mtk_set_compile_options(mtk_occt_bridge_tests)
 
 cmake_path(SET test_assets_dir NORMALIZE "${PROJECT_SOURCE_DIR}/../tests/assets")

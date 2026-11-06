@@ -7,7 +7,11 @@ namespace ModelingToolkit.Core.Kernel;
 /// Exact-geometry operations (B-rep solids, NURBS, booleans, tessellation...) provided by a geometry kernel.
 /// The core depends only on this interface; implementations wrap a specific kernel, such as OpenCASCADE.
 /// </summary>
-/// <remarks>Lengths are in millimetres.</remarks>
+/// <remarks>
+/// Lengths are in millimetres. The operations do not change the shapes they are given, and may run on several threads
+/// at the same time, on the same shapes too: the application tessellates in the background while the interface reads
+/// the same shapes, for example.
+/// </remarks>
 public interface IGeometryKernel
 {
     KernelInfo Info { get; }

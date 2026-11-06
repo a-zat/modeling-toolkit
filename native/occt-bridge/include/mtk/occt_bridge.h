@@ -6,7 +6,9 @@
  *    describes the error and output parameters are set to zero/null;
  *  - objects created by the bridge are opaque handles owned by the caller,
  *    to be released with the matching *_release function;
- *  - lengths are in millimetres.
+ *  - lengths are in millimetres;
+ *  - the functions on shapes may be called from several threads at the same time, on the same shape or on shapes that
+ *    share geometry: they do not change the shapes they are given.
  */
 #ifndef MTK_OCCT_BRIDGE_H
 #define MTK_OCCT_BRIDGE_H

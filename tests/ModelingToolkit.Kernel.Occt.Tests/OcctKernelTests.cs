@@ -243,6 +243,33 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void Shapes_can_be_used_from_several_threads_at_the_same_time()
+    {
+        using IKernelShape box = _kernel.MakeBox(100, 100, 100);
+        using IKernelShape drill = _kernel.Place(_kernel.MakeCylinder(20, 120), Transform.Translation(50, 50, -10));
+        using IKernelShape drilled = _kernel.Subtract(box, drill);
+        int triangles = _kernel.Tessellate(drilled, 0.1).Triangles.Length;
+        double volume = _kernel.ComputeVolume(drilled);
+
+        // The same shape tessellated, measured, written and cut on many threads at once.
+        var results = new System.Collections.Concurrent.ConcurrentBag<(int Triangles, double Volume, double Cut)>();
+        Parallel.For(0, 32, _ =>
+        {
+            using IKernelShape cut = _kernel.Subtract(box, drill);
+            Assert.NotEmpty(_kernel.Serialize(drilled));
+            results.Add((_kernel.Tessellate(drilled, 0.1).Triangles.Length, _kernel.ComputeVolume(drilled),
+                _kernel.ComputeVolume(cut)));
+        });
+
+        Assert.All(results, result =>
+        {
+            Assert.Equal(triangles, result.Triangles);
+            Assert.Equal(volume, result.Volume, precision: 6);
+            Assert.Equal(volume, result.Cut, precision: 6);
+        });
+    }
+
+    [Fact]
     public void A_disposed_shape_cannot_be_used()
     {
         IKernelShape box = _kernel.MakeBox(1, 1, 1);

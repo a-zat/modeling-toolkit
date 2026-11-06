@@ -18,6 +18,8 @@ template <typename Operation>
 mtk_status run(const TopoDS_Shape& first, const TopoDS_Shape& second, mtk_shape** out_shape) {
     Operation operation;
     operation.SetRunParallel(true);
+    // The operands are left as they are, tolerances included, as other threads may be reading them.
+    operation.SetNonDestructive(true);
     operation.SetArguments(NCollection_List<TopoDS_Shape>{first});
     operation.SetTools(NCollection_List<TopoDS_Shape>{second});
     operation.Build();

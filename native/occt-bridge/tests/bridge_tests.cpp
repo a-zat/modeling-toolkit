@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -483,6 +485,76 @@ TEST(Tessellation, KeepsTheShapeAsItWasAndItsPlacement) {
     EXPECT_EQ(measures.triangles_against_their_normals, 0);
     EXPECT_NEAR(volume_of(placed), 6000.0, 1e-6);
     EXPECT_EQ(mesh_of(tessellate(box, 1.0)).triangle_count, 12);
+}
+
+TEST(Concurrency, CallsOnSharedShapesFromManyThreadsAtOnceGiveTheResultsOfOneThread) {
+    // A drilled box shares its untouched faces with the box, and a placed copy all its faces with the drilled box.
+    ShapePtr box = make_box(100.0, 100.0, 100.0);
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(20.0, 120.0, &made), MTK_STATUS_OK);
+    ShapePtr drill = place(ShapePtr(made), {1, 0, 0, 50, 0, 1, 0, 50, 0, 0, 1, -10});
+    ASSERT_EQ(mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, &made), MTK_STATUS_OK);
+    ShapePtr drilled(made);
+    ShapePtr placed = place(drilled, {0, -1, 0, 500, 1, 0, 0, 0, 0, 0, 1, 0});
+    const ShapePtr* shapes[] = {&box, &drilled, &placed};
+
+    struct Expected {
+        int coarse_triangles;
+        int fine_triangles;
+        double volume;
+    };
+    std::vector<Expected> expected;
+    for (const ShapePtr* shape : shapes) {
+        expected.push_back({mesh_of(tessellate(*shape, 1.0)).triangle_count,
+                            mesh_of(tessellate(*shape, 0.05)).triangle_count, volume_of(*shape)});
+    }
+    const double drilled_volume = volume_of(drilled);
+
+    std::atomic<int> failures{0};
+    const auto work = [&](int thread) {
+        for (int round = 0; round < 10; ++round) {
+            const int index = (thread + round) % 3;
+            const mtk_shape* shape = shapes[index]->get();
+            const bool fine = (thread + round) % 2 == 0;
+
+            mtk_tessellation* tessellation = nullptr;
+            mtk_mesh_info mesh{};
+            double volume = 0.0;
+            std::array<double, 6> bounds{};
+            mtk_bytes* bytes = nullptr;
+            mtk_shape* cut = nullptr;
+            if (mtk_shape_tessellate(shape, fine ? 0.05 : 1.0, 0.5, &tessellation) != MTK_STATUS_OK ||
+                mtk_tessellation_get_mesh(tessellation, &mesh) != MTK_STATUS_OK ||
+                mesh.triangle_count !=
+                    (fine ? expected[index].fine_triangles : expected[index].coarse_triangles) ||
+                mtk_shape_volume(shape, &volume) != MTK_STATUS_OK ||
+                std::abs(volume - expected[index].volume) > 1e-6 ||
+                mtk_shape_bounds(shape, bounds.data()) != MTK_STATUS_OK ||
+                mtk_shape_write(shape, &bytes) != MTK_STATUS_OK ||
+                mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, &cut) != MTK_STATUS_OK ||
+                mtk_shape_volume(cut, &volume) != MTK_STATUS_OK || std::abs(volume - drilled_volume) > 1e-6) {
+                ++failures;
+            }
+            mtk_tessellation_release(tessellation);
+            mtk_bytes_release(bytes);
+            mtk_shape_release(cut);
+        }
+    };
+
+    std::vector<std::thread> threads;
+    for (int thread = 0; thread < 8; ++thread) {
+        threads.emplace_back(work, thread);
+    }
+    for (std::thread& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(failures.load(), 0);
+    // The shapes are as they were: the meshes made on the other threads did not stay on them.
+    for (size_t index = 0; index < expected.size(); ++index) {
+        EXPECT_EQ(mesh_of(tessellate(*shapes[index], 1.0)).triangle_count, expected[index].coarse_triangles);
+        EXPECT_NEAR(volume_of(*shapes[index]), expected[index].volume, 1e-6);
+    }
 }
 
 TEST(Tessellation, RejectsInvalidArguments) {
