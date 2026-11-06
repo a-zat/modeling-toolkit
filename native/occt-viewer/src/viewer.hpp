@@ -77,6 +77,9 @@ public:
     int add_texture(const uint8_t* pixels, int width, int height);
     int add_material(const mtk_viewer_material& material);
     int add_instance(int mesh, int material, const double* transform);
+    void set_instance(int instance, int mesh, int material, const double* transform);
+    void remove_instance(int instance);
+    void remove_mesh(int mesh);
     void set_selection(const int32_t* instances, int count);
     void clear();
     void fit_all();
@@ -90,6 +93,14 @@ public:
     int texture_count() const { return static_cast<int>(textures_.size()); }
     int material_count() const { return static_cast<int>(materials_.size()); }
     int instance_count() const { return static_cast<int>(instances_.size()); }
+
+    // Whether an index refers to a mesh or an instance that was added and not removed.
+    bool has_mesh(int mesh) const { return mesh >= 0 && mesh < mesh_count() && !meshes_[mesh].triangles.IsNull(); }
+    bool has_instance(int instance) const {
+        return instance >= 0 && instance < instance_count() && !instances_[instance].IsNull();
+    }
+    // Whether an instance that was not removed places the mesh.
+    bool is_placed(int mesh) const;
 
     // Input; each returns true when the view must be drawn again.
     bool mouse_buttons(double x, double y, uint32_t buttons, uint32_t modifiers);
@@ -116,6 +127,7 @@ private:
     void update_size();
     void apply_scale(double scale);
     void set_grid_step(double step);
+    occ::handle<AIS_InteractiveObject> make_instance(int mesh, int material, const double* transform);
     NCollection_Vec2<int> to_pixels(double x, double y) const;
 
     template <typename Body>
@@ -137,7 +149,9 @@ private:
     std::vector<occ::handle<Graphic3d_Texture2D>> textures_;
     std::vector<MaterialAspects> materials_;
     std::map<std::pair<int, int>, occ::handle<MeshObject>> shared_meshes_; // by mesh and material
+    // The removed meshes have no triangles, the removed instances are null: indices are never given again.
     std::vector<occ::handle<AIS_InteractiveObject>> instances_;
+    std::vector<int> instance_meshes_; // the mesh of each instance
     Graphic3d_ZLayerId faded_layer_ = Graphic3d_ZLayerId_UNKNOWN;
     std::optional<int> pick_; // the instance clicked, -1 for none, not yet taken
     bool needs_next_frame_ = false; // whether the last redraw asked for another frame, see handleViewRedraw()

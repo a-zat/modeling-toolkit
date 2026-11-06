@@ -319,6 +319,68 @@ TEST(Viewer, SelectsAnyOfItsInstances) {
     EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), nullptr, 0), MTK_STATUS_OK);
 }
 
+TEST(Viewer, ChangesAndRemovesInstancesKeepingTheIndicesOfTheOthers) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const Square square;
+    const int32_t first_mesh = add_mesh(viewer.get(), square.mesh());
+    const int32_t second_mesh = add_mesh(viewer.get(), square.mesh());
+    const int32_t material = add_material(viewer.get(), grey());
+    const int32_t other_material = add_material(viewer.get(), grey());
+    const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    const int32_t first = add_instance(viewer.get(), first_mesh, material, identity);
+    const int32_t second = add_instance(viewer.get(), first_mesh, material, identity);
+    const int32_t third = add_instance(viewer.get(), first_mesh, material, identity);
+    ASSERT_EQ(mtk_viewer_set_selection(viewer.get(), &first, 1), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+
+    // Faded and shown again, connected and with triangles of its own.
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), second, second_mesh, other_material, stretched), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), first, second_mesh, material, identity), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_remove_mesh(viewer.get(), first_mesh), MTK_STATUS_INVALID_ARGUMENT)
+        << "the third instance places it";
+    EXPECT_EQ(mtk_viewer_remove_instance(viewer.get(), third), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_remove_mesh(viewer.get(), first_mesh), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+
+    EXPECT_EQ(add_instance(viewer.get(), second_mesh, material, identity), 3) << "indices are not given again";
+    const int32_t both[2] = {first, second};
+    EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), both, 2), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), &third, 1), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_remove_instance(viewer.get(), third), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), third, second_mesh, material, identity),
+              MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), first, first_mesh, material, identity),
+              MTK_STATUS_INVALID_ARGUMENT)
+        << "the mesh was removed";
+    int32_t instance = -1;
+    EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), first_mesh, material, identity, &instance),
+              MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_remove_mesh(viewer.get(), first_mesh), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_fit_all(viewer.get()), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
+}
+
+TEST(Viewer, RejectsChangesOfInstancesItCannotPlace) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t mesh = add_mesh(viewer.get(), Square().mesh());
+    const int32_t material = add_material(viewer.get(), grey());
+    const int32_t instance = add_instance(viewer.get(), mesh, material, identity);
+    const double flat[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0};
+
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), instance, mesh, material, flat), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), instance, mesh, 1, identity), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), instance, -1, material, identity), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), instance, mesh, material, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_instance(nullptr, instance, mesh, material, identity), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_remove_instance(nullptr, instance), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_remove_mesh(nullptr, mesh), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_remove_mesh(viewer.get(), 5), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_STRNE(mtk_viewer_last_error_message(), "");
+}
+
 TEST(Viewer, RejectsMeshesItCannotShow) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);

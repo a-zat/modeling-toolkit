@@ -302,7 +302,7 @@ int mtk::Viewer::add_material(const mtk_viewer_material& material) {
     return material_count() - 1;
 }
 
-int mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
+occ::handle<AIS_InteractiveObject> mtk::Viewer::make_instance(int mesh, int material, const double* transform) {
     occ::handle<AIS_InteractiveObject> instance;
     if (const std::optional<gp_Trsf> placement = to_placement(transform)) {
         occ::handle<MeshObject>& shared = shared_meshes_[{mesh, material}];
@@ -316,9 +316,44 @@ int mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
         // Stretched or sheared: a copy of the triangles of its own.
         instance = new MeshObject(transform_mesh(meshes_[mesh], transform), materials_[material], edge_aspects_);
     }
+    return instance;
+}
+
+int mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
+    const occ::handle<AIS_InteractiveObject> instance = make_instance(mesh, material, transform);
     context_->Display(instance, MeshObject::shaded_mode, 0, false); // shown, and picked as a whole
     instances_.push_back(instance);
+    instance_meshes_.push_back(mesh);
     return instance_count() - 1;
+}
+
+void mtk::Viewer::set_instance(int index, int mesh, int material, const double* transform) {
+    const occ::handle<AIS_InteractiveObject> instance = make_instance(mesh, material, transform);
+    const bool faded = instances_[index]->ZLayer() == faded_layer_;
+    context_->Remove(instances_[index], false);
+    context_->Display(instance, faded ? MeshObject::faded_mode : MeshObject::shaded_mode, 0, false);
+    if (faded) {
+        context_->SetZLayer(instance, faded_layer_);
+    }
+    instances_[index] = instance;
+    instance_meshes_[index] = mesh;
+    view_->Invalidate();
+}
+
+void mtk::Viewer::remove_instance(int index) {
+    context_->Remove(instances_[index], false);
+    instances_[index].Nullify();
+    instance_meshes_[index] = -1;
+    view_->Invalidate();
+}
+
+bool mtk::Viewer::is_placed(int mesh) const {
+    return std::find(instance_meshes_.begin(), instance_meshes_.end(), mesh) != instance_meshes_.end();
+}
+
+void mtk::Viewer::remove_mesh(int mesh) {
+    meshes_[mesh] = Mesh{};
+    std::erase_if(shared_meshes_, [mesh](const auto& entry) { return entry.first.first == mesh; });
 }
 
 void mtk::Viewer::set_selection(const int32_t* instances, int count) {
@@ -327,10 +362,14 @@ void mtk::Viewer::set_selection(const int32_t* instances, int count) {
         selected[instances[i]] = true;
     }
     const auto selected_count = std::count(selected.begin(), selected.end(), true);
-    const bool fading = selected_count > 0 && selected_count < static_cast<std::ptrdiff_t>(selected.size());
+    const auto shown_count = std::count_if(instances_.begin(), instances_.end(), [](const auto& i) { return !i.IsNull(); });
+    const bool fading = selected_count > 0 && selected_count < shown_count;
 
     for (size_t index = 0; index < instances_.size(); ++index) {
         const occ::handle<AIS_InteractiveObject>& instance = instances_[index];
+        if (instance.IsNull()) {
+            continue;
+        }
         const bool faded = fading && !selected[index];
         if (faded != (instance->ZLayer() == faded_layer_)) {
             context_->SetZLayer(instance, faded ? faded_layer_ : Graphic3d_ZLayerId_Default);
@@ -342,9 +381,12 @@ void mtk::Viewer::set_selection(const int32_t* instances, int count) {
 
 void mtk::Viewer::clear() {
     for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
-        context_->Remove(instance, false);
+        if (!instance.IsNull()) {
+            context_->Remove(instance, false);
+        }
     }
     instances_.clear();
+    instance_meshes_.clear();
     pick_.reset();
     shared_meshes_.clear();
     materials_.clear();
@@ -366,6 +408,9 @@ void mtk::Viewer::fit_all() {
     // The grid follows the size of the scene, which is shown whole now.
     Bnd_Box scene;
     for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
+        if (instance.IsNull()) {
+            continue;
+        }
         Bnd_Box box;
         instance->BoundingBox(box);
         scene.Add(box);
@@ -414,7 +459,7 @@ void mtk::Viewer::set_display_mode(mtk_viewer_display_mode mode) {
         mesh->SynchronizeAspects();
     }
     for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
-        if (!instance->IsKind(STANDARD_TYPE(AIS_ConnectedInteractive))) {
+        if (!instance.IsNull() && !instance->IsKind(STANDARD_TYPE(AIS_ConnectedInteractive))) {
             instance->SynchronizeAspects();
         }
     }
@@ -483,7 +528,7 @@ void mtk::Viewer::OnSelectionChanged(const occ::handle<AIS_InteractiveContext>& 
         pick_ = -1;
     } else {
         const auto picked = std::find_if(instances_.begin(), instances_.end(), [&](const auto& instance) {
-            return instance.get() == detected->Selectable().get();
+            return !instance.IsNull() && instance.get() == detected->Selectable().get();
         });
         if (picked != instances_.end()) {
             pick_ = static_cast<int>(picked - instances_.begin());
@@ -795,7 +840,7 @@ mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t mat
         if (viewer == nullptr || out_instance == nullptr) {
             return mtk::invalid_argument("viewer and out_instance must not be null.");
         }
-        if (mesh < 0 || mesh >= viewer->mesh_count() || material < 0 || material >= viewer->material_count()) {
+        if (!viewer->has_mesh(mesh) || material < 0 || material >= viewer->material_count()) {
             return mtk::invalid_argument("An instance needs a mesh and a material added to the viewer.");
         }
         const mtk_status status = check_transform(transform);
@@ -803,6 +848,55 @@ mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t mat
             *out_instance = viewer->add_instance(mesh, material, transform);
         }
         return status;
+    });
+}
+
+mtk_status mtk_viewer_set_instance(mtk_viewer* viewer, int32_t instance, int32_t mesh, int32_t material,
+                                   const double* transform) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (!viewer->has_instance(instance)) {
+            return mtk::invalid_argument("The viewer does not have the instance.");
+        }
+        if (!viewer->has_mesh(mesh) || material < 0 || material >= viewer->material_count()) {
+            return mtk::invalid_argument("An instance needs a mesh and a material added to the viewer.");
+        }
+        const mtk_status status = check_transform(transform);
+        if (status == MTK_STATUS_OK) {
+            viewer->set_instance(instance, mesh, material, transform);
+        }
+        return status;
+    });
+}
+
+mtk_status mtk_viewer_remove_instance(mtk_viewer* viewer, int32_t instance) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (!viewer->has_instance(instance)) {
+            return mtk::invalid_argument("The viewer does not have the instance.");
+        }
+        viewer->remove_instance(instance);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_remove_mesh(mtk_viewer* viewer, int32_t mesh) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (!viewer->has_mesh(mesh)) {
+            return mtk::invalid_argument("The viewer does not have the mesh.");
+        }
+        if (viewer->is_placed(mesh)) {
+            return mtk::invalid_argument("The mesh is placed by an instance: remove the instance first.");
+        }
+        viewer->remove_mesh(mesh);
+        return MTK_STATUS_OK;
     });
 }
 
@@ -815,7 +909,7 @@ mtk_status mtk_viewer_set_selection(mtk_viewer* viewer, const int32_t* instances
             return mtk::invalid_argument("count must not be negative.");
         }
         for (int32_t i = 0; i < count; ++i) {
-            if (instances[i] < 0 || instances[i] >= viewer->instance_count()) {
+            if (!viewer->has_instance(instances[i])) {
                 return mtk::invalid_argument("The selection refers to an instance that the viewer does not have.");
             }
         }

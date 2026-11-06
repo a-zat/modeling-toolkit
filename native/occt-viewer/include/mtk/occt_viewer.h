@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 9
+#define MTK_OCCT_VIEWER_ABI_VERSION 10
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -110,7 +110,8 @@ MTK_VIEWER_API mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_vi
 
 /*
  * The scene: meshes, each uploaded once, placed by instances with a material. The functions below return indices,
- * from 0, that identify meshes, textures, materials and instances until mtk_viewer_clear. After changing the scene,
+ * from 0, that identify meshes, textures, materials and instances until mtk_viewer_clear. A removed mesh or instance
+ * keeps its index, which is not given again: the others keep theirs. After changing the scene,
  * the view must be drawn again with mtk_viewer_redraw. Arrays are read during the call only.
  */
 
@@ -156,6 +157,19 @@ MTK_VIEWER_API mtk_status mtk_viewer_add_material(mtk_viewer* viewer, const mtk_
  */
 MTK_VIEWER_API mtk_status mtk_viewer_add_instance(mtk_viewer* viewer, int32_t mesh, int32_t material,
                                                   const double* transform, int32_t* out_instance);
+
+/*
+ * Changes the mesh, the material and the placement of an instance, as mtk_viewer_add_instance takes them, keeping its
+ * index and whether it is faded around the selection.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_set_instance(mtk_viewer* viewer, int32_t instance, int32_t mesh, int32_t material,
+                                                  const double* transform);
+
+/* Removes an instance from the view. The selection stays as it is: set it again if the instance was part of it. */
+MTK_VIEWER_API mtk_status mtk_viewer_remove_instance(mtk_viewer* viewer, int32_t instance);
+
+/* Releases a mesh that no instance places any more, such as the tessellation of a shape that changed. */
+MTK_VIEWER_API mtk_status mtk_viewer_remove_mesh(mtk_viewer* viewer, int32_t mesh);
 
 /*
  * Shows count instances as selected, in place of the previous selection: the others are faded and drawn behind them,

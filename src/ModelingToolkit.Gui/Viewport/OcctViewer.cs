@@ -160,14 +160,48 @@ internal sealed class OcctViewer : IDisposable
     /// <exception cref="ArgumentException">The placement is not invertible.</exception>
     public unsafe int AddInstance(int mesh, int material, Transform placement)
     {
-        double* values = stackalloc double[]
-        {
-            placement.M00, placement.M01, placement.M02, placement.M03,
-            placement.M10, placement.M11, placement.M12, placement.M13,
-            placement.M20, placement.M21, placement.M22, placement.M23,
-        };
+        double* values = stackalloc double[12];
+        Write(placement, values);
         NativeMethods.AddInstance(_handle, mesh, material, values, out int index).ThrowIfFailed();
         return index;
+    }
+
+    /// <summary>
+    /// Changes the mesh, the material and the placement of an instance, keeping its index and whether it is faded.
+    /// </summary>
+    /// <exception cref="ArgumentException">The instance was removed, or the placement is not invertible.</exception>
+    public unsafe void SetInstance(int instance, int mesh, int material, Transform placement)
+    {
+        double* values = stackalloc double[12];
+        Write(placement, values);
+        NativeMethods.SetInstance(_handle, instance, mesh, material, values).ThrowIfFailed();
+    }
+
+    /// <summary>
+    /// Removes an instance; the others keep their indices, and its index is not given again. The selection stays as
+    /// it is.
+    /// </summary>
+    public void RemoveInstance(int instance) => NativeMethods.RemoveInstance(_handle, instance).ThrowIfFailed();
+
+    /// <summary>Releases a mesh that no instance places any more.</summary>
+    /// <exception cref="ArgumentException">An instance still places the mesh.</exception>
+    public void RemoveMesh(int mesh) => NativeMethods.RemoveMesh(_handle, mesh).ThrowIfFailed();
+
+    // The first three rows of the matrix, as the viewer takes them.
+    private static unsafe void Write(Transform placement, double* values)
+    {
+        values[0] = placement.M00;
+        values[1] = placement.M01;
+        values[2] = placement.M02;
+        values[3] = placement.M03;
+        values[4] = placement.M10;
+        values[5] = placement.M11;
+        values[6] = placement.M12;
+        values[7] = placement.M13;
+        values[8] = placement.M20;
+        values[9] = placement.M21;
+        values[10] = placement.M22;
+        values[11] = placement.M23;
     }
 
     /// <summary>
