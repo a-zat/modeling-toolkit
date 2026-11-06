@@ -50,6 +50,8 @@ function(mtk_copy_runtime_dependencies target)
             COMMAND ${CMAKE_COMMAND}
                 -D "LIBRARY=$<TARGET_FILE:${target}>"
                 -D "DESTINATION=$<TARGET_FILE_DIR:${target}>"
+                -D "SEARCH_DIRECTORY=$<TARGET_FILE_DIR:TKernel>"
+                -D "WORK_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/runtime-dependencies/${target}"
                 -P "${PROJECT_SOURCE_DIR}/cmake/CopyRuntimeDependencies.cmake"
             VERBATIM)
     endif()

@@ -1,0 +1,12 @@
+diff --git a/adm/cmake/draco.cmake b/adm/cmake/draco.cmake
+--- a/adm/cmake/draco.cmake
++++ b/adm/cmake/draco.cmake
+@@ -36,7 +36,7 @@ macro (SEARCH_DRACO_LIB)
+ endmacro()
+
+ # vcpkg processing
+-if (BUILD_USE_VCPKG)
++if (BUILD_USE_VCPKG OR VCPKG_TOOLCHAIN)
+   find_package (draco CONFIG REQUIRED)
+   set(CSF_Draco draco::draco)
+   return()

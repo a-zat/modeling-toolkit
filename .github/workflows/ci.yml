@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
-          echo "prefix=vcpkg-${{ runner.os }}-$(git rev-parse HEAD:external/vcpkg)-${{ hashFiles('native/vcpkg.json', 'native/triplets/**') }}" >> "$GITHUB_OUTPUT"
+          echo "prefix=vcpkg-${{ runner.os }}-$(git rev-parse HEAD:external/vcpkg)-${{ hashFiles('native/vcpkg.json', 'native/ports/**', 'native/triplets/**') }}" >> "$GITHUB_OUTPUT"
 
       # A cache entry can never be overwritten, so a run that adds packages stores a new entry, whose key ends with the
       # run id, and the newest entry with the same prefix is restored. With a fixed key, an incomplete entry (saved by a

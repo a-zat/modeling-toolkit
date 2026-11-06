@@ -22,6 +22,18 @@ public sealed class GltfReaderTests
     }
 
     [Fact]
+    public void Meshes_compressed_by_draco_are_decoded()
+    {
+        Document document = _reader.Read(Asset(Path.Combine("draco", "Box.gltf")));
+
+        // Draco quantizes the positions.
+        AssertBox(new Point3d(-500, -500, -500), new Point3d(500, 500, 500), WorldBoundingBox(document), 1);
+        MeshEntity mesh = Assert.Single(Meshes(document));
+        Assert.Equal(12, mesh.Triangles.Length);
+        Assert.Same(Assert.Single(document.Materials), mesh.Material);
+    }
+
+    [Fact]
     public void Hierarchy_and_shared_meshes_are_preserved()
     {
         Document document = _reader.Read(Asset("CesiumMilkTruck.glb"));
@@ -123,9 +135,8 @@ public sealed class GltfReaderTests
         }
     }
 
-    private static void AssertBox(Point3d min, Point3d max, BoundingBox actual)
+    private static void AssertBox(Point3d min, Point3d max, BoundingBox actual, double tolerance = 1e-3)
     {
-        const double tolerance = 1e-3;
         Assert.Equal(min.X, actual.Min.X, tolerance);
         Assert.Equal(min.Y, actual.Min.Y, tolerance);
         Assert.Equal(min.Z, actual.Min.Z, tolerance);

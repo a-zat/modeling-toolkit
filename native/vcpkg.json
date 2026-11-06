@@ -5,11 +5,12 @@
   "dependencies": [
     {
       "name": "opencascade",
-      "features": [ "rapidjson" ]
+      "features": [ "draco", "rapidjson" ]
     },
     "gtest"
   ],
   "vcpkg-configuration": {
+    "overlay-ports": [ "ports" ],
     "overlay-triplets": [ "triplets" ]
   }
 }
