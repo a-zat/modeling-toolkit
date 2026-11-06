@@ -32,7 +32,20 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 7
+#define MTK_OCCT_BRIDGE_ABI_VERSION 8
+
+/*
+ * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
+ * thread of the call or from threads of the operation, but never twice at the same time; it returns nonzero to ask the
+ * operation to stop, which it does as soon as it can, failing with MTK_STATUS_CANCELLED. The operations that take a
+ * progress accept null for none.
+ */
+typedef int32_t (*mtk_progress_report)(double done, void* user_data);
+
+typedef struct mtk_progress {
+    mtk_progress_report report;
+    void* user_data;
+} mtk_progress;
 
 /* Opaque handle to an OpenCASCADE shape. */
 typedef struct mtk_shape mtk_shape;
@@ -82,7 +95,8 @@ typedef enum mtk_boolean_operation {
  * reported as MTK_STATUS_KERNEL_ERROR.
  */
 MTK_API mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* second,
-                                     int32_t operation /* mtk_boolean_operation */, mtk_shape** out_shape);
+                                     int32_t operation /* mtk_boolean_operation */, const mtk_progress* progress,
+                                     mtk_shape** out_shape);
 
 /* The smallest box with the sides along the axes that contains the shape: out_bounds receives the minimum x, y and z,
  * then the maximum x, y and z. */
@@ -161,7 +175,7 @@ typedef struct mtk_texture_info {
 } mtk_texture_info;
 
 /* Reads a glTF (.gltf or .glb) file, converting it from metres and Y up. */
-MTK_API mtk_status mtk_scene_read_gltf(const char* path, mtk_scene** out_scene);
+MTK_API mtk_status mtk_scene_read_gltf(const char* path, const mtk_progress* progress, mtk_scene** out_scene);
 MTK_API void mtk_scene_release(mtk_scene* scene);
 
 MTK_API mtk_status mtk_scene_get_info(const mtk_scene* scene, mtk_scene_info* out_info);
@@ -183,7 +197,7 @@ typedef struct mtk_tessellation mtk_tessellation;
  * the normals of neighbouring triangles. The shape is left as it was. A shape without faces is rejected.
  */
 MTK_API mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection, double angular_deflection,
-                                        mtk_tessellation** out_tessellation);
+                                        const mtk_progress* progress, mtk_tessellation** out_tessellation);
 
 /*
  * The mesh, as for a scene, without a material or texture coordinates: the faces have their own vertices, with the

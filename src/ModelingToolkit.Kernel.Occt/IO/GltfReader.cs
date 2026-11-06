@@ -14,7 +14,8 @@ public sealed class GltfReader : IDocumentReader
 
     public IReadOnlyList<string> Extensions { get; } = [".gltf", ".glb"];
 
-    public Document Read(string path, ICollection<string> warnings)
+    public unsafe Document Read(string path, ICollection<string> warnings, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(warnings);
@@ -26,12 +27,17 @@ public sealed class GltfReader : IDocumentReader
 
         GltfExtensions.Check(path, warnings);
 
-        NativeStatus status = NativeMethods.SceneReadGltf(fullPath, out SceneHandle scene);
-        if (status == NativeStatus.KernelError)
+        SceneHandle scene;
+        using (var bridge = new ProgressBridge(progress, cancellationToken))
         {
-            throw new InvalidDataException(NativeMethods.LastErrorMessage());
+            NativeProgress native = bridge.Native;
+            NativeStatus status = NativeMethods.SceneReadGltf(fullPath, bridge.IsUsed ? &native : null, out scene);
+            if (status == NativeStatus.KernelError)
+            {
+                throw new InvalidDataException(NativeMethods.LastErrorMessage());
+            }
+            bridge.ThrowIfFailed(status);
         }
-        status.ThrowIfFailed();
 
         using (scene)
         {

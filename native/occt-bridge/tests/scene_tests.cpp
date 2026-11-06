@@ -27,7 +27,7 @@ std::string asset(const std::string& name) {
 
 ScenePtr read(const std::string& name) {
     mtk_scene* scene = nullptr;
-    EXPECT_EQ(mtk_scene_read_gltf(asset(name).c_str(), &scene), MTK_STATUS_OK) << mtk_last_error_message();
+    EXPECT_EQ(mtk_scene_read_gltf(asset(name).c_str(), nullptr, &scene), MTK_STATUS_OK) << mtk_last_error_message();
     return ScenePtr(scene);
 }
 
@@ -193,15 +193,15 @@ TEST(Scene, MeshesWithoutMaterialHaveNone) {
 
 TEST(Scene, MissingFileIsAKernelError) {
     mtk_scene* scene = nullptr;
-    EXPECT_EQ(mtk_scene_read_gltf(asset("Missing.glb").c_str(), &scene), MTK_STATUS_KERNEL_ERROR);
+    EXPECT_EQ(mtk_scene_read_gltf(asset("Missing.glb").c_str(), nullptr, &scene), MTK_STATUS_KERNEL_ERROR);
     EXPECT_EQ(scene, nullptr);
     EXPECT_NE(std::string(mtk_last_error_message()).find("Missing.glb"), std::string::npos);
 }
 
 TEST(Scene, InvalidArgumentsAreRejected) {
     mtk_scene* out = nullptr;
-    EXPECT_EQ(mtk_scene_read_gltf(nullptr, &out), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_scene_read_gltf(asset("Box.glb").c_str(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_scene_read_gltf(nullptr, nullptr, &out), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_scene_read_gltf(asset("Box.glb").c_str(), nullptr, nullptr), MTK_STATUS_INVALID_ARGUMENT);
 
     ScenePtr scene = read("Box.glb");
     ASSERT_NE(scene, nullptr);
@@ -214,3 +214,25 @@ TEST(Scene, InvalidArgumentsAreRejected) {
 }
 
 } // namespace
+
+TEST(Scene, ReportsTheProgressOfReadingAndStopsWhenAsked) {
+    std::vector<double> reports;
+    const mtk_progress progress{[](double done, void* user_data) -> int32_t {
+                                    static_cast<std::vector<double>*>(user_data)->push_back(done);
+                                    return 0;
+                                },
+                                &reports};
+    mtk_scene* scene = nullptr;
+    ASSERT_EQ(mtk_scene_read_gltf(asset("CesiumMilkTruck.glb").c_str(), &progress, &scene), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    ScenePtr owned(scene);
+    ASSERT_GE(reports.size(), 2u);
+    EXPECT_EQ(reports.front(), 0.0);
+    EXPECT_EQ(reports.back(), 1.0);
+    EXPECT_TRUE(std::is_sorted(reports.begin(), reports.end()));
+
+    const mtk_progress stop{[](double, void*) -> int32_t { return 1; }, nullptr};
+    scene = nullptr;
+    EXPECT_EQ(mtk_scene_read_gltf(asset("CesiumMilkTruck.glb").c_str(), &stop, &scene), MTK_STATUS_CANCELLED);
+    EXPECT_EQ(scene, nullptr);
+}

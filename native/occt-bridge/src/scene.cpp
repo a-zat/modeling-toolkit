@@ -1,4 +1,5 @@
 #include "internal.hpp"
+#include "progress.hpp"
 
 #include <BRep_Tool.hxx>
 #include <Graphic3d_AlphaMode.hxx>
@@ -407,7 +408,7 @@ private:
     int skipped_shapes_ = 0;
 };
 
-std::unique_ptr<mtk_scene> read_gltf(const char* path) {
+std::unique_ptr<mtk_scene> read_gltf(const char* path, const mtk_progress* progress) {
     // OpenCASCADE reports messages through a global messenger: one file at a time keeps them apart.
     static std::mutex read_mutex;
     const std::lock_guard lock(read_mutex);
@@ -422,7 +423,10 @@ std::unique_ptr<mtk_scene> read_gltf(const char* path) {
     reader.SetDoublePrecision(true);
     reader.SetParallel(true);
 
-    if (!reader.Perform(TCollection_AsciiString(path), Message_ProgressRange())) {
+    const occ::handle<mtk::Progress> indicator = new mtk::Progress(progress);
+    const bool read = reader.Perform(TCollection_AsciiString(path), indicator->start());
+    indicator->finish();
+    if (!read) {
         std::string message = std::string("Cannot read '") + path + "'.";
         for (const std::string& failure : collector.messages().failures) {
             message += " " + failure;
@@ -455,7 +459,7 @@ const T* data_or_null(const std::vector<T>& values) {
 
 } // namespace
 
-mtk_status mtk_scene_read_gltf(const char* path, mtk_scene** out_scene) {
+mtk_status mtk_scene_read_gltf(const char* path, const mtk_progress* progress, mtk_scene** out_scene) {
     return mtk::guarded([&] {
         if (out_scene == nullptr) {
             return mtk::invalid_argument("out_scene must not be null.");
@@ -465,7 +469,7 @@ mtk_status mtk_scene_read_gltf(const char* path, mtk_scene** out_scene) {
             return mtk::invalid_argument("path must not be empty.");
         }
 
-        *out_scene = read_gltf(path).release();
+        *out_scene = read_gltf(path, progress).release();
         return MTK_STATUS_OK;
     });
 }

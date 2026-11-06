@@ -1,4 +1,5 @@
 #include "internal.hpp"
+#include "progress.hpp"
 
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -15,14 +16,17 @@ namespace {
 
 // Runs a boolean operation of OpenCASCADE: the algorithm works on lists of arguments and tools.
 template <typename Operation>
-mtk_status run(const TopoDS_Shape& first, const TopoDS_Shape& second, mtk_shape** out_shape) {
+mtk_status run(const TopoDS_Shape& first, const TopoDS_Shape& second, const mtk_progress* progress,
+               mtk_shape** out_shape) {
+    const occ::handle<mtk::Progress> indicator = new mtk::Progress(progress);
     Operation operation;
     operation.SetRunParallel(true);
     // The operands are left as they are, tolerances included, as other threads may be reading them.
     operation.SetNonDestructive(true);
     operation.SetArguments(NCollection_List<TopoDS_Shape>{first});
     operation.SetTools(NCollection_List<TopoDS_Shape>{second});
-    operation.Build();
+    operation.Build(indicator->start());
+    indicator->finish();
 
     if (operation.HasErrors() || !operation.IsDone()) {
         std::ostringstream report;
@@ -48,7 +52,7 @@ mtk_status run(const TopoDS_Shape& first, const TopoDS_Shape& second, mtk_shape*
 } // namespace
 
 mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* second, int32_t operation,
-                             mtk_shape** out_shape) {
+                             const mtk_progress* progress, mtk_shape** out_shape) {
     return mtk::guarded([&] {
         if (first == nullptr || second == nullptr || out_shape == nullptr) {
             return mtk::invalid_argument("first, second and out_shape must not be null.");
@@ -57,11 +61,11 @@ mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* second, in
 
         switch (operation) {
         case MTK_BOOLEAN_UNION:
-            return run<BRepAlgoAPI_Fuse>(first->value, second->value, out_shape);
+            return run<BRepAlgoAPI_Fuse>(first->value, second->value, progress, out_shape);
         case MTK_BOOLEAN_DIFFERENCE:
-            return run<BRepAlgoAPI_Cut>(first->value, second->value, out_shape);
+            return run<BRepAlgoAPI_Cut>(first->value, second->value, progress, out_shape);
         case MTK_BOOLEAN_INTERSECTION:
-            return run<BRepAlgoAPI_Common>(first->value, second->value, out_shape);
+            return run<BRepAlgoAPI_Common>(first->value, second->value, progress, out_shape);
         default:
             return mtk::invalid_argument("operation is not a boolean operation.");
         }

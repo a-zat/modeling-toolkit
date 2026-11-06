@@ -40,6 +40,29 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task OpeningAFileKeepsTheFileCommandsWaitingAndCanBeCancelled()
+    {
+        MainWindowViewModel viewModel = Create();
+
+        Task opening = viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+
+        Assert.True(viewModel.IsBusy);
+        Assert.False(viewModel.OpenCommand.CanExecute(null));
+        Assert.True(viewModel.CancelCommand.CanExecute(null));
+        await opening;
+        Assert.False(viewModel.IsBusy);
+        Assert.True(viewModel.OpenCommand.CanExecute(null));
+        Assert.True(viewModel.SaveCommand.CanExecute(null));
+        Assert.False(viewModel.CancelCommand.CanExecute(null));
+
+        Task again = viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        viewModel.CancelCommand.Execute(null);
+        await again;
+        Assert.Equal("Opening CesiumMilkTruck.glb was cancelled.", viewModel.StatusMessage);
+        Assert.False(viewModel.IsBusy);
+    }
+
+    [Fact]
     public async Task TheSummaryCountsOneOfAKindInTheSingular()
     {
         MainWindowViewModel viewModel = Create();

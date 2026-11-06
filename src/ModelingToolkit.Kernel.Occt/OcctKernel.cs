@@ -75,19 +75,27 @@ public sealed class OcctKernel : IGeometryKernel
         Intersection,
     }
 
-    public IKernelShape Union(IKernelShape first, IKernelShape second) =>
-        Combine(first, second, BooleanOperation.Union);
+    public IKernelShape Union(IKernelShape first, IKernelShape second, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        Combine(first, second, BooleanOperation.Union, progress, cancellationToken);
 
-    public IKernelShape Subtract(IKernelShape shape, IKernelShape tool) =>
-        Combine(shape, tool, BooleanOperation.Difference);
+    public IKernelShape Subtract(IKernelShape shape, IKernelShape tool, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        Combine(shape, tool, BooleanOperation.Difference, progress, cancellationToken);
 
-    public IKernelShape Intersect(IKernelShape first, IKernelShape second) =>
-        Combine(first, second, BooleanOperation.Intersection);
+    public IKernelShape Intersect(IKernelShape first, IKernelShape second, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        Combine(first, second, BooleanOperation.Intersection, progress, cancellationToken);
 
-    private static OcctShape Combine(IKernelShape first, IKernelShape second, BooleanOperation operation)
+    private static unsafe OcctShape Combine(IKernelShape first, IKernelShape second, BooleanOperation operation,
+        IProgress<double>? progress, CancellationToken cancellationToken)
     {
-        NativeMethods.ShapeBoolean(Unwrap(first), Unwrap(second), (int)operation, out ShapeHandle handle)
-            .ThrowIfFailed();
+        ShapeHandle a = Unwrap(first), b = Unwrap(second);
+        using var bridge = new ProgressBridge(progress, cancellationToken);
+        NativeProgress native = bridge.Native;
+        NativeStatus status = NativeMethods.ShapeBoolean(
+            a, b, (int)operation, bridge.IsUsed ? &native : null, out ShapeHandle handle);
+        bridge.ThrowIfFailed(status);
         return new OcctShape(handle);
     }
 
@@ -113,11 +121,19 @@ public sealed class OcctKernel : IGeometryKernel
         return new OcctShape(handle);
     }
 
-    public unsafe ShapeTessellation Tessellate(
-        IKernelShape shape, double linearDeflection, double angularDeflection = 0.5)
+    public unsafe ShapeTessellation Tessellate(IKernelShape shape, double linearDeflection,
+        double angularDeflection = 0.5, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
-        NativeMethods.ShapeTessellate(Unwrap(shape), linearDeflection, angularDeflection, out TessellationHandle handle)
-            .ThrowIfFailed();
+        ShapeHandle unwrapped = Unwrap(shape);
+        TessellationHandle handle;
+        using (var bridge = new ProgressBridge(progress, cancellationToken))
+        {
+            NativeProgress native = bridge.Native;
+            NativeStatus status = NativeMethods.ShapeTessellate(
+                unwrapped, linearDeflection, angularDeflection, bridge.IsUsed ? &native : null, out handle);
+            bridge.ThrowIfFailed(status);
+        }
         using (handle)
         {
             NativeMethods.TessellationGetMesh(handle, out MeshInfo mesh).ThrowIfFailed();

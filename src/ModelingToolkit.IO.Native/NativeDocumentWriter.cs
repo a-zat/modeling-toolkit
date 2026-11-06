@@ -16,10 +16,12 @@ public sealed class NativeDocumentWriter : IDocumentWriter
     /// <exception cref="InvalidOperationException">
     /// An entity uses a block, a material or a texture that is not part of the document.
     /// </exception>
-    public void Write(Document document, string path)
+    public void Write(Document document, string path, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!BitConverter.IsLittleEndian)
         {
             throw new PlatformNotSupportedException("The native format is written on little-endian platforms only.");
@@ -33,7 +35,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
             using (FileStream stream = File.Create(temporaryPath))
             using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
-                new ArchiveWriter(document, archive).Write();
+                new ArchiveWriter(document, archive, progress, cancellationToken).Write();
             }
             File.Move(temporaryPath, fullPath, overwrite: true);
         }
@@ -44,8 +46,15 @@ public sealed class NativeDocumentWriter : IDocumentWriter
         }
     }
 
-    private sealed class ArchiveWriter(Document document, ZipArchive archive)
+    private sealed class ArchiveWriter(
+        Document document, ZipArchive archive, IProgress<double>? progress, CancellationToken cancellationToken)
     {
+        // A step for each file of the archive but the manifest.
+        private readonly Steps _steps = new(
+            document.Textures.Count + new[] { document.Root }.Concat(document.Blocks)
+                .Sum(block => block.Entities.Count(entity => entity is MeshEntity or BrepEntity)),
+            progress, cancellationToken);
+
         private readonly Dictionary<Texture, int> _textures = IndexOf(document.Textures);
         private readonly Dictionary<Material, int> _materials = IndexOf(document.Materials);
         private readonly Dictionary<Block, int> _blocks = IndexOf(document.Blocks);
@@ -70,6 +79,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
 
         private TextureEntry WriteTexture(Texture texture, int index)
         {
+            _steps.Next();
             string path = $"textures/{index}{ExtensionOf(texture.MediaType)}";
             // Images are already compressed: storing them as they are is faster and as small.
             using Stream stream = archive.CreateEntry(path, CompressionLevel.NoCompression).Open();
@@ -108,6 +118,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
 
         private MeshEntry WriteMesh(MeshEntity mesh, int? material)
         {
+            _steps.Next();
             string path = $"meshes/{_meshCount++}.bin";
             using (Stream stream = archive.CreateEntry(path, CompressionLevel.Optimal).Open())
             {
@@ -134,6 +145,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
 
         private BrepEntry WriteShape(BrepEntity brep, int? material)
         {
+            _steps.Next();
             string path = $"shapes/{_shapeCount++}.brep";
             using (Stream stream = archive.CreateEntry(path, CompressionLevel.Optimal).Open())
             {

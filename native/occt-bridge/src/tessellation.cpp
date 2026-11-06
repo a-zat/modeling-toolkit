@@ -1,4 +1,5 @@
 #include "internal.hpp"
+#include "progress.hpp"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
@@ -143,7 +144,7 @@ bool too_many(size_t values) {
 } // namespace
 
 mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection, double angular_deflection,
-                                mtk_tessellation** out_tessellation) {
+                                const mtk_progress* progress, mtk_tessellation** out_tessellation) {
     return mtk::guarded([&] {
         if (shape == nullptr || out_tessellation == nullptr) {
             return mtk::invalid_argument("shape and out_tessellation must not be null.");
@@ -163,7 +164,13 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
         // parallel.
         const TopoDS_Shape copy = BRepBuilderAPI_Copy(shape->value, false, false).Shape();
         BRepTools::Clean(copy);
-        BRepMesh_IncrementalMesh mesher(copy, linear_deflection, false, angular_deflection, true);
+        IMeshTools_Parameters parameters;
+        parameters.Deflection = linear_deflection;
+        parameters.Angle = angular_deflection;
+        parameters.InParallel = true;
+        const occ::handle<mtk::Progress> indicator = new mtk::Progress(progress);
+        BRepMesh_IncrementalMesh mesher(copy, parameters, indicator->start());
+        indicator->finish();
 
         auto result = std::make_unique<mtk_tessellation>();
         for (TopExp_Explorer faces(copy, TopAbs_FACE); faces.More(); faces.Next()) {

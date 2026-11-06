@@ -55,24 +55,30 @@ public interface IGeometryKernel
     /// <exception cref="ArgumentException">The placement is not a rotation and a translation.</exception>
     IKernelShape Place(IKernelShape shape, Transform placement);
 
+    // The long operations, booleans and tessellation, report their progress, from 0 to 1, to an optional progress,
+    // possibly from other threads, and stop when the token is cancelled, throwing OperationCanceledException.
+
     // The boolean operations make a new shape and leave their operands as they are. The faces and edges of the result
     // that lie on the same surface or curve are merged: two boxes side by side unite into a box of six faces.
 
     /// <summary>What is in either shape.</summary>
     /// <exception cref="GeometryKernelException">The operation fails, for example on invalid shapes.</exception>
-    IKernelShape Union(IKernelShape first, IKernelShape second);
+    IKernelShape Union(IKernelShape first, IKernelShape second, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>What is in <paramref name="shape"/> and not in <paramref name="tool"/>.</summary>
     /// <exception cref="GeometryKernelException">
     /// The operation fails, or leaves nothing, as when a shape is subtracted from itself.
     /// </exception>
-    IKernelShape Subtract(IKernelShape shape, IKernelShape tool);
+    IKernelShape Subtract(IKernelShape shape, IKernelShape tool, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>What is in both shapes.</summary>
     /// <exception cref="GeometryKernelException">
     /// The operation fails, or leaves nothing, as for shapes that do not meet.
     /// </exception>
-    IKernelShape Intersect(IKernelShape first, IKernelShape second);
+    IKernelShape Intersect(IKernelShape first, IKernelShape second, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default);
 
     double ComputeVolume(IKernelShape shape);
 
@@ -100,7 +106,8 @@ public interface IGeometryKernel
     /// <exception cref="ArgumentException">
     /// A deflection is not valid, or the shape has no faces, or too many triangles for the deflection.
     /// </exception>
-    ShapeTessellation Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5);
+    ShapeTessellation Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5,
+        IProgress<double>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>The smallest box with its sides along the axes that contains the shape.</summary>
     BoundingBox GetBoundingBox(IKernelShape shape);

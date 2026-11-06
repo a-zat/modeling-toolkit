@@ -293,6 +293,58 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void Long_operations_report_their_progress_from_zero_to_one()
+    {
+        using IKernelShape box = _kernel.MakeBox(30, 30, 30);
+        using IKernelShape sphere = _kernel.MakeSphere(25);
+        var meshing = new RecordingProgress();
+        var cutting = new RecordingProgress();
+
+        _kernel.Tessellate(sphere, 0.01, progress: meshing);
+        using IKernelShape cut = _kernel.Subtract(box, sphere, cutting);
+
+        foreach (RecordingProgress progress in new[] { meshing, cutting })
+        {
+            Assert.Equal(0, progress.Reports[0]);
+            Assert.Equal(1, progress.Reports[^1]);
+            Assert.Equal(progress.Reports.Order(), progress.Reports);
+        }
+    }
+
+    [Fact]
+    public void Long_operations_stop_when_their_token_is_cancelled()
+    {
+        using IKernelShape box = _kernel.MakeBox(30, 30, 30);
+        using IKernelShape sphere = _kernel.MakeSphere(25);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        using var cancelling = new CancellationTokenSource();
+        var cancelOnFirstReport = new RecordingProgress(_ => cancelling.Cancel());
+
+        Assert.Throws<OperationCanceledException>(() => _kernel.Tessellate(sphere, 0.01, cancellationToken: cancelled.Token));
+        Assert.Throws<OperationCanceledException>(() => _kernel.Union(box, sphere, cancellationToken: cancelled.Token));
+        Assert.Throws<OperationCanceledException>(
+            () => _kernel.Subtract(box, sphere, cancelOnFirstReport, cancelling.Token));
+        Assert.Throws<OperationCanceledException>(
+            () => _kernel.Tessellate(sphere, 0.01, progress: new RecordingProgress(_ => cancelling.Cancel()),
+                cancellationToken: cancelling.Token));
+
+        Assert.Equal(27000, _kernel.ComputeVolume(box), precision: 6);
+        Assert.NotEmpty(_kernel.Tessellate(sphere, 0.01).Mesh.Triangles);
+    }
+
+    [Fact]
+    public void An_exception_of_the_progress_stops_the_operation_and_is_thrown()
+    {
+        using IKernelShape sphere = _kernel.MakeSphere(25);
+        var failing = new RecordingProgress(_ => throw new InvalidOperationException("from the progress"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => _kernel.Tessellate(sphere, 0.01, progress: failing));
+
+        Assert.Equal("from the progress", exception.Message);
+    }
+
+    [Fact]
     public void A_disposed_shape_cannot_be_used()
     {
         IKernelShape box = _kernel.MakeBox(1, 1, 1);

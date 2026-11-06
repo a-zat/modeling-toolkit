@@ -18,6 +18,21 @@ public sealed class GltfReaderTests : IDisposable
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
     [Fact]
+    public void Reading_reports_its_progress_and_stops_when_cancelled()
+    {
+        var reader = new GltfReader();
+        var progress = new RecordingProgress();
+        using var cancelling = new CancellationTokenSource();
+
+        reader.Read(Asset("CesiumMilkTruck.glb"), [], progress);
+        Assert.Throws<OperationCanceledException>(() => reader.Read(
+            Asset("CesiumMilkTruck.glb"), [], new RecordingProgress(_ => cancelling.Cancel()), cancelling.Token));
+
+        Assert.Equal(0, progress.Reports[0]);
+        Assert.Equal(1, progress.Reports[^1]);
+    }
+
+    [Fact]
     public void Box_is_read_in_millimetres_with_its_material()
     {
         Document document = Read(Asset("Box.glb"));

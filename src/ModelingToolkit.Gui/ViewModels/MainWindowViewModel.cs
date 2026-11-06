@@ -16,6 +16,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IAppearance _appearance;
     private readonly bool _initialized;
     private string? _path;
+    private CancellationTokenSource? _operation; // of the file being opened or saved
 
     public MainWindowViewModel(DocumentFormats formats, IAppearance appearance)
     {
@@ -82,11 +83,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The open document, shown in the 3D view.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDocument))]
+    [NotifyPropertyChangedFor(nameof(HasDocument), nameof(CanSave))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(SaveAsCommand))]
     public partial Document? Document { get; private set; }
 
     public bool HasDocument => Document is not null;
+
+    /// <summary>Whether a file is being opened or saved; the other file commands wait for it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(IsIdle))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(SaveCommand), nameof(SaveAsCommand),
+        nameof(CancelCommand))]
+    public partial bool IsBusy { get; private set; }
+
+    public bool IsIdle => !IsBusy;
+
+    public bool CanSave => HasDocument && !IsBusy;
+
+    /// <summary>The part done of the file being opened or saved, from 0 to 1.</summary>
+    [ObservableProperty]
+    public partial double OperationProgress { get; private set; }
 
     [ObservableProperty]
     public partial string Title { get; private set; }
@@ -144,16 +160,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Applies the variant of the theme chosen here.</summary>
     public void ApplyAppearance() => _appearance.Apply(IsDark);
 
-    /// <summary>Reads a model and shows it; failures are reported in the status bar.</summary>
+    /// <summary>
+    /// Reads a model and shows it, with its progress in the status bar, where <see cref="CancelCommand"/> stops it;
+    /// failures are reported there too.
+    /// </summary>
     public async Task LoadAsync(string path)
     {
         string name = Path.GetFileName(path);
         StatusMessage = $"Opening {name}…";
+        using CancellationTokenSource cancellation = BeginOperation();
         try
         {
             IDocumentReader reader = _formats.ReaderFor(path);
             var warnings = new List<string>();
-            Document document = await Task.Run(() => reader.Read(path, warnings));
+            IProgress<double> progress = OperationProgressReporter();
+            Document document = await Task.Run(
+                () => reader.Read(path, warnings, progress, cancellation.Token), cancellation.Token);
             Show(document, path);
             StatusMessage = warnings.Count switch
             {
@@ -163,11 +185,40 @@ public sealed partial class MainWindowViewModel : ObservableObject
             };
             StatusDetails = warnings.Count > 0 ? string.Join(Environment.NewLine, warnings) : null;
         }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = $"Opening {name} was cancelled.";
+        }
         catch (Exception exception) when (IsExpected(exception))
         {
             StatusMessage = $"Cannot open {name}: {exception.Message}";
         }
+        finally
+        {
+            EndOperation();
+        }
     }
+
+    /// <summary>Stops the file being opened or saved.</summary>
+    [RelayCommand(CanExecute = nameof(IsBusy))]
+    private void Cancel() => _operation?.Cancel();
+
+    private CancellationTokenSource BeginOperation()
+    {
+        _operation = new CancellationTokenSource();
+        OperationProgress = 0;
+        IsBusy = true;
+        return _operation;
+    }
+
+    private void EndOperation()
+    {
+        _operation = null;
+        IsBusy = false;
+    }
+
+    // Reports on the thread of the interface, which Progress<T> captures, however the operation reports.
+    private Progress<double> OperationProgressReporter() => new(done => OperationProgress = done);
 
     partial void OnStatusMessageChanged(string value) => StatusDetails = null;
 
@@ -199,7 +250,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task Open()
     {
         if (FileDialogs is null)
@@ -219,12 +270,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasDocument))]
+    [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task Save()
     {
         if (_path is not null && IsWritable(_path))
         {
-            Write(_path);
+            await WriteAsync(_path);
         }
         else
         {
@@ -232,7 +283,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasDocument))]
+    [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAs()
     {
         if (FileDialogs is null)
@@ -246,7 +297,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             "Save the model", new FileType(writer.FormatName, writer.Extensions), suggestedName);
         if (path is not null)
         {
-            Write(path);
+            await WriteAsync(path);
         }
     }
 
@@ -302,21 +353,33 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Materials.Show(document);
     }
 
-    private void Write(string path)
+    private async Task WriteAsync(string path)
     {
         string name = Path.GetFileName(path);
+        StatusMessage = $"Saving {name}…";
+        Document document = Document!;
+        using CancellationTokenSource cancellation = BeginOperation();
         try
         {
             IDocumentWriter writer = _formats.WriterFor(path);
-            writer.Write(Document!, path);
+            IProgress<double> progress = OperationProgressReporter();
+            await Task.Run(() => writer.Write(document, path, progress, cancellation.Token), cancellation.Token);
             _path = path;
             DocumentName = name;
             Title = $"{name} — {ApplicationName}";
             StatusMessage = $"Saved {name} ({writer.FormatName}).";
         }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = $"Saving {name} was cancelled: the file is as it was.";
+        }
         catch (Exception exception) when (IsExpected(exception))
         {
             StatusMessage = $"Cannot save {name}: {exception.Message}";
+        }
+        finally
+        {
+            EndOperation();
         }
     }
 

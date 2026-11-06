@@ -72,6 +72,49 @@ public sealed class NativeFormatTests : IDisposable
     }
 
     [Fact]
+    public void Reading_and_writing_report_their_progress_to_the_end()
+    {
+        string path = PathOf("sample.mtk");
+        var writing = new RecordingProgress();
+        var reading = new RecordingProgress();
+
+        _writer.Write(SampleDocument(), path, writing);
+        _reader.Read(path, [], reading);
+
+        foreach (RecordingProgress progress in new[] { writing, reading })
+        {
+            Assert.NotEmpty(progress.Reports);
+            Assert.Equal(progress.Reports.Order(), progress.Reports);
+            Assert.Equal(1, progress.Reports[^1]);
+        }
+    }
+
+    [Fact]
+    public void A_cancelled_writing_leaves_the_file_as_it_was()
+    {
+        string path = PathOf("sample.mtk");
+        File.WriteAllText(path, "before");
+        using var cancelling = new CancellationTokenSource();
+
+        Assert.Throws<OperationCanceledException>(() => _writer.Write(
+            SampleDocument(), path, new RecordingProgress(_ => cancelling.Cancel()), cancelling.Token));
+
+        Assert.Equal("before", File.ReadAllText(path));
+        Assert.Equal([path], Directory.GetFiles(_folder));
+    }
+
+    [Fact]
+    public void A_cancelled_reading_throws()
+    {
+        string path = PathOf("sample.mtk");
+        _writer.Write(SampleDocument(), path);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => _reader.Read(path, [], cancellationToken: cancelled.Token));
+    }
+
+    [Fact]
     public void The_manifest_is_versioned_json()
     {
         string path = PathOf("sample.mtk");

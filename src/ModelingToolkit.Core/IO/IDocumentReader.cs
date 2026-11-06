@@ -14,6 +14,11 @@ public interface IDocumentReader
     /// <param name="path">The file to read.</param>
     /// <param name="warnings">Receives a message for each part of the file that cannot be read and is left out.</param>
     /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+    /// <param name="progress">Receives the part of the file read, from 0 to 1, possibly from other threads.</param>
+    /// <param name="cancellationToken">Stops the reading.</param>
+    /// <exception cref="FileNotFoundException">The file does not exist.</exception>
     /// <exception cref="InvalidDataException">The file is not valid, or needs what is not supported.</exception>
-    Document Read(string path, ICollection<string> warnings);
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    Document Read(string path, ICollection<string> warnings, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default);
 }

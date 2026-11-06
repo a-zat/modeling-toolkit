@@ -6,7 +6,7 @@ namespace ModelingToolkit.Kernel.Occt.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_BRIDGE_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 7;
+    public const int AbiVersion = 8;
 
     private const string LibraryName = "mtk_occt_bridge";
 
@@ -34,8 +34,8 @@ internal static partial class NativeMethods
         ShapeHandle shape, ReadOnlySpan<double> placement, out ShapeHandle placed);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_boolean")]
-    public static partial NativeStatus ShapeBoolean(
-        ShapeHandle first, ShapeHandle second, int operation, out ShapeHandle result);
+    public static unsafe partial NativeStatus ShapeBoolean(
+        ShapeHandle first, ShapeHandle second, int operation, NativeProgress* progress, out ShapeHandle result);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_volume")]
     public static partial NativeStatus ShapeVolume(ShapeHandle shape, out double volume);
@@ -59,8 +59,9 @@ internal static partial class NativeMethods
     public static partial NativeStatus ShapeRead(ReadOnlySpan<byte> data, long size, out ShapeHandle shape);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_tessellate")]
-    public static partial NativeStatus ShapeTessellate(
-        ShapeHandle shape, double linearDeflection, double angularDeflection, out TessellationHandle tessellation);
+    public static unsafe partial NativeStatus ShapeTessellate(
+        ShapeHandle shape, double linearDeflection, double angularDeflection, NativeProgress* progress,
+        out TessellationHandle tessellation);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_tessellation_get_mesh")]
     public static partial NativeStatus TessellationGetMesh(TessellationHandle tessellation, out MeshInfo mesh);
@@ -77,7 +78,7 @@ internal static partial class NativeMethods
     public static partial void TessellationRelease(nint tessellation);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_scene_read_gltf", StringMarshalling = StringMarshalling.Utf8)]
-    public static partial NativeStatus SceneReadGltf(string path, out SceneHandle scene);
+    public static unsafe partial NativeStatus SceneReadGltf(string path, NativeProgress* progress, out SceneHandle scene);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_scene_release")]
     public static partial void SceneRelease(nint scene);

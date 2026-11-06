@@ -17,10 +17,12 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
 
     public IReadOnlyList<string> Extensions { get; } = [NativeFormat.Extension];
 
-    public Document Read(string path, ICollection<string> warnings)
+    public Document Read(string path, ICollection<string> warnings, IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(warnings);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!BitConverter.IsLittleEndian)
         {
             throw new PlatformNotSupportedException("The native format is read on little-endian platforms only.");
@@ -46,7 +48,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
         {
             try
             {
-                return new ArchiveReader(archive, kernel).Read();
+                return new ArchiveReader(archive, kernel, progress, cancellationToken).Read();
             }
             catch (Exception exception) when (exception is JsonException or EndOfStreamException
                                                   or ArgumentException or InvalidOperationException
@@ -58,11 +60,18 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
         }
     }
 
-    private sealed class ArchiveReader(ZipArchive archive, IGeometryKernel kernel)
+    private sealed class ArchiveReader(
+        ZipArchive archive, IGeometryKernel kernel, IProgress<double>? progress, CancellationToken cancellationToken)
     {
+        // A step for each file of the archive that the manifest lists.
+        private Steps _steps = new(0, progress, cancellationToken);
+
         public Document Read()
         {
             Manifest manifest = ReadManifest();
+            int files = manifest.Textures.Count + new[] { manifest.Root }.Concat(manifest.Blocks)
+                .Sum(block => block.Entities.Count(entity => entity is MeshEntry or BrepEntry));
+            _steps = new Steps(files, progress, cancellationToken);
             var document = new Document();
 
             document.Textures.AddRange(manifest.Textures.Select(ReadTexture));
@@ -104,6 +113,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
 
         private Texture ReadTexture(TextureEntry entry)
         {
+            _steps.Next();
             using Stream stream = Entry(entry.Path).Open();
             using var data = new MemoryStream();
             stream.CopyTo(data);
@@ -144,6 +154,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
 
         private MeshEntity ReadMesh(MeshEntry entry)
         {
+            _steps.Next();
             var vertices = new Point3d[entry.VertexCount];
             var triangles = new Triangle[entry.TriangleCount];
             Vector3[]? normals = entry.HasNormals ? new Vector3[entry.VertexCount] : null;
@@ -167,6 +178,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
 
         private BrepEntity ReadShape(BrepEntry entry)
         {
+            _steps.Next();
             using Stream stream = Entry(entry.Path).Open();
             using var data = new MemoryStream();
             stream.CopyTo(data);

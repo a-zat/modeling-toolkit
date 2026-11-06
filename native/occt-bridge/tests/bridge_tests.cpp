@@ -59,7 +59,8 @@ ShapePtr place(const ShapePtr& shape, const std::array<double, 12>& placement) {
 
 TessellationPtr tessellate(const ShapePtr& shape, double linear_deflection, double angular_deflection = 0.5) {
     mtk_tessellation* tessellation = nullptr;
-    EXPECT_EQ(mtk_shape_tessellate(shape.get(), linear_deflection, angular_deflection, &tessellation), MTK_STATUS_OK)
+    EXPECT_EQ(mtk_shape_tessellate(shape.get(), linear_deflection, angular_deflection, nullptr, &tessellation),
+              MTK_STATUS_OK)
         << mtk_last_error_message();
     return TessellationPtr(tessellation);
 }
@@ -302,7 +303,7 @@ ShapePtr read_shape(const std::string& data) {
 
 ShapePtr combine(const ShapePtr& first, const ShapePtr& second, mtk_boolean_operation operation) {
     mtk_shape* result = nullptr;
-    EXPECT_EQ(mtk_shape_boolean(first.get(), second.get(), operation, &result), MTK_STATUS_OK)
+    EXPECT_EQ(mtk_shape_boolean(first.get(), second.get(), operation, nullptr, &result), MTK_STATUS_OK)
         << mtk_last_error_message();
     return ShapePtr(result);
 }
@@ -351,7 +352,7 @@ TEST(Boolean, MergesTheFacesAndEdgesThatTheOperationSplits) {
     ShapePtr left = make_box(10.0, 10.0, 10.0);
     ShapePtr right = place(make_box(10.0, 10.0, 10.0), {1, 0, 0, 10, 0, 1, 0, 0, 0, 0, 1, 0});
     mtk_shape* made = nullptr;
-    ASSERT_EQ(mtk_shape_boolean(left.get(), right.get(), MTK_BOOLEAN_UNION, &made), MTK_STATUS_OK)
+    ASSERT_EQ(mtk_shape_boolean(left.get(), right.get(), MTK_BOOLEAN_UNION, nullptr, &made), MTK_STATUS_OK)
         << mtk_last_error_message();
     ShapePtr united(made);
 
@@ -366,11 +367,11 @@ TEST(Boolean, ReportsAnEmptyResultAsAnError) {
     ShapePtr far = place(make_box(10.0, 10.0, 10.0), {1, 0, 0, 100, 0, 1, 0, 0, 0, 0, 1, 0});
     mtk_shape* result = nullptr;
 
-    EXPECT_EQ(mtk_shape_boolean(a.get(), far.get(), MTK_BOOLEAN_INTERSECTION, &result), MTK_STATUS_KERNEL_ERROR);
+    EXPECT_EQ(mtk_shape_boolean(a.get(), far.get(), MTK_BOOLEAN_INTERSECTION, nullptr, &result), MTK_STATUS_KERNEL_ERROR);
     EXPECT_EQ(result, nullptr);
     EXPECT_NE(std::string(mtk_last_error_message()).find("empty"), std::string::npos);
 
-    EXPECT_EQ(mtk_shape_boolean(a.get(), a.get(), MTK_BOOLEAN_DIFFERENCE, &result), MTK_STATUS_KERNEL_ERROR);
+    EXPECT_EQ(mtk_shape_boolean(a.get(), a.get(), MTK_BOOLEAN_DIFFERENCE, nullptr, &result), MTK_STATUS_KERNEL_ERROR);
     EXPECT_EQ(result, nullptr);
     EXPECT_NE(std::string(mtk_last_error_message()).find("empty"), std::string::npos);
 }
@@ -379,11 +380,11 @@ TEST(Boolean, RejectsInvalidArguments) {
     ShapePtr box = make_box(1.0, 1.0, 1.0);
     mtk_shape* result = nullptr;
 
-    EXPECT_EQ(mtk_shape_boolean(nullptr, box.get(), MTK_BOOLEAN_UNION, &result), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_shape_boolean(box.get(), nullptr, MTK_BOOLEAN_UNION, &result), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_shape_boolean(box.get(), box.get(), MTK_BOOLEAN_UNION, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_boolean(nullptr, box.get(), MTK_BOOLEAN_UNION, nullptr, &result), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_boolean(box.get(), nullptr, MTK_BOOLEAN_UNION, nullptr, &result), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_boolean(box.get(), box.get(), MTK_BOOLEAN_UNION, nullptr, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     for (int32_t operation : {-1, 3}) {
-        EXPECT_EQ(mtk_shape_boolean(box.get(), box.get(), operation, &result), MTK_STATUS_INVALID_ARGUMENT)
+        EXPECT_EQ(mtk_shape_boolean(box.get(), box.get(), operation, nullptr, &result), MTK_STATUS_INVALID_ARGUMENT)
             << operation;
         EXPECT_EQ(result, nullptr);
         EXPECT_STRNE(mtk_last_error_message(), "");
@@ -584,7 +585,7 @@ TEST(Tessellation, GivesTheEdgesOfABooleanResultWherePlaced) {
     mtk_shape* made = nullptr;
     ASSERT_EQ(mtk_shape_make_cylinder(20.0, 120.0, &made), MTK_STATUS_OK);
     ShapePtr drill = place(ShapePtr(made), {1, 0, 0, 50, 0, 1, 0, 50, 0, 0, 1, -10});
-    ASSERT_EQ(mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, &made), MTK_STATUS_OK);
+    ASSERT_EQ(mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, nullptr, &made), MTK_STATUS_OK);
     ShapePtr drilled = place(ShapePtr(made), {1, 0, 0, 1000, 0, 1, 0, 0, 0, 0, 1, 0});
 
     const std::vector<Polyline> edges = edges_of(tessellate(drilled, 0.1));
@@ -612,13 +613,83 @@ TEST(Tessellation, RejectsNullArgumentsForFacesAndEdges) {
     EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, &indices, nullptr), MTK_STATUS_INVALID_ARGUMENT);
 }
 
+// Records the progress reported by an operation, and asks it to stop after some reports.
+struct ProgressRecorder {
+    std::vector<double> reports;
+    size_t stop_after = std::numeric_limits<size_t>::max();
+
+    mtk_progress progress() {
+        return {[](double done, void* user_data) -> int32_t {
+                    auto& recorder = *static_cast<ProgressRecorder*>(user_data);
+                    recorder.reports.push_back(done);
+                    return recorder.reports.size() >= recorder.stop_after ? 1 : 0;
+                },
+                this};
+    }
+};
+
+TEST(Progress, GoesFromZeroToOneWithoutGoingBack) {
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_sphere(25.0, &made), MTK_STATUS_OK);
+    ShapePtr sphere(made);
+    ShapePtr box = make_box(30.0, 30.0, 30.0);
+
+    ProgressRecorder meshing;
+    const mtk_progress meshing_progress = meshing.progress();
+    mtk_tessellation* tessellation = nullptr;
+    ASSERT_EQ(mtk_shape_tessellate(sphere.get(), 0.01, 0.5, &meshing_progress, &tessellation), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    TessellationPtr owned(tessellation);
+
+    ProgressRecorder cutting;
+    const mtk_progress cutting_progress = cutting.progress();
+    ASSERT_EQ(mtk_shape_boolean(box.get(), sphere.get(), MTK_BOOLEAN_DIFFERENCE, &cutting_progress, &made),
+              MTK_STATUS_OK)
+        << mtk_last_error_message();
+    ShapePtr cut(made);
+
+    for (const ProgressRecorder* recorder : {&meshing, &cutting}) {
+        ASSERT_GE(recorder->reports.size(), 2u);
+        EXPECT_EQ(recorder->reports.front(), 0.0);
+        EXPECT_EQ(recorder->reports.back(), 1.0);
+        EXPECT_TRUE(std::is_sorted(recorder->reports.begin(), recorder->reports.end()));
+    }
+}
+
+TEST(Progress, StopsAnOperationWhenTheCallerAsks) {
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_sphere(25.0, &made), MTK_STATUS_OK);
+    ShapePtr sphere(made);
+    ShapePtr box = make_box(30.0, 30.0, 30.0);
+
+    ProgressRecorder meshing;
+    meshing.stop_after = 1;
+    const mtk_progress meshing_progress = meshing.progress();
+    mtk_tessellation* tessellation = nullptr;
+    EXPECT_EQ(mtk_shape_tessellate(sphere.get(), 0.01, 0.5, &meshing_progress, &tessellation), MTK_STATUS_CANCELLED);
+    EXPECT_EQ(tessellation, nullptr);
+    EXPECT_STRNE(mtk_last_error_message(), "");
+
+    ProgressRecorder cutting;
+    cutting.stop_after = 1;
+    const mtk_progress cutting_progress = cutting.progress();
+    made = nullptr;
+    EXPECT_EQ(mtk_shape_boolean(box.get(), sphere.get(), MTK_BOOLEAN_DIFFERENCE, &cutting_progress, &made),
+              MTK_STATUS_CANCELLED);
+    EXPECT_EQ(made, nullptr);
+
+    // A stopped operation leaves the shapes as they were.
+    EXPECT_GT(mesh_of(tessellate(sphere, 0.01)).triangle_count, 0);
+    EXPECT_NEAR(volume_of(box), 27000.0, 1e-6);
+}
+
 TEST(Concurrency, CallsOnSharedShapesFromManyThreadsAtOnceGiveTheResultsOfOneThread) {
     // A drilled box shares its untouched faces with the box, and a placed copy all its faces with the drilled box.
     ShapePtr box = make_box(100.0, 100.0, 100.0);
     mtk_shape* made = nullptr;
     ASSERT_EQ(mtk_shape_make_cylinder(20.0, 120.0, &made), MTK_STATUS_OK);
     ShapePtr drill = place(ShapePtr(made), {1, 0, 0, 50, 0, 1, 0, 50, 0, 0, 1, -10});
-    ASSERT_EQ(mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, &made), MTK_STATUS_OK);
+    ASSERT_EQ(mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, nullptr, &made), MTK_STATUS_OK);
     ShapePtr drilled(made);
     ShapePtr placed = place(drilled, {0, -1, 0, 500, 1, 0, 0, 0, 0, 0, 1, 0});
     const ShapePtr* shapes[] = {&box, &drilled, &placed};
@@ -648,7 +719,7 @@ TEST(Concurrency, CallsOnSharedShapesFromManyThreadsAtOnceGiveTheResultsOfOneThr
             std::array<double, 6> bounds{};
             mtk_bytes* bytes = nullptr;
             mtk_shape* cut = nullptr;
-            if (mtk_shape_tessellate(shape, fine ? 0.05 : 1.0, 0.5, &tessellation) != MTK_STATUS_OK ||
+            if (mtk_shape_tessellate(shape, fine ? 0.05 : 1.0, 0.5, nullptr, &tessellation) != MTK_STATUS_OK ||
                 mtk_tessellation_get_mesh(tessellation, &mesh) != MTK_STATUS_OK ||
                 mesh.triangle_count !=
                     (fine ? expected[index].fine_triangles : expected[index].coarse_triangles) ||
@@ -656,7 +727,7 @@ TEST(Concurrency, CallsOnSharedShapesFromManyThreadsAtOnceGiveTheResultsOfOneThr
                 std::abs(volume - expected[index].volume) > 1e-6 ||
                 mtk_shape_bounds(shape, bounds.data()) != MTK_STATUS_OK ||
                 mtk_shape_write(shape, &bytes) != MTK_STATUS_OK ||
-                mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, &cut) != MTK_STATUS_OK ||
+                mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, nullptr, &cut) != MTK_STATUS_OK ||
                 mtk_shape_volume(cut, &volume) != MTK_STATUS_OK || std::abs(volume - drilled_volume) > 1e-6) {
                 ++failures;
             }
@@ -687,18 +758,18 @@ TEST(Tessellation, RejectsInvalidArguments) {
     mtk_tessellation* tessellation = nullptr;
 
     for (double deflection : {0.0, -1.0, nan, infinity}) {
-        EXPECT_EQ(mtk_shape_tessellate(box.get(), deflection, 0.5, &tessellation), MTK_STATUS_INVALID_ARGUMENT)
+        EXPECT_EQ(mtk_shape_tessellate(box.get(), deflection, 0.5, nullptr, &tessellation), MTK_STATUS_INVALID_ARGUMENT)
             << deflection;
     }
     for (double angle : {0.0, -0.5, 3.2, nan, infinity}) {
-        EXPECT_EQ(mtk_shape_tessellate(box.get(), 0.1, angle, &tessellation), MTK_STATUS_INVALID_ARGUMENT) << angle;
+        EXPECT_EQ(mtk_shape_tessellate(box.get(), 0.1, angle, nullptr, &tessellation), MTK_STATUS_INVALID_ARGUMENT) << angle;
     }
     EXPECT_EQ(tessellation, nullptr);
     EXPECT_STRNE(mtk_last_error_message(), "");
 
     mtk_mesh_info mesh{};
-    EXPECT_EQ(mtk_shape_tessellate(nullptr, 0.1, 0.5, &tessellation), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_shape_tessellate(box.get(), 0.1, 0.5, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_tessellate(nullptr, 0.1, 0.5, nullptr, &tessellation), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_tessellate(box.get(), 0.1, 0.5, nullptr, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_tessellation_get_mesh(nullptr, &mesh), MTK_STATUS_INVALID_ARGUMENT);
     TessellationPtr valid = tessellate(box, 0.1);
     EXPECT_EQ(mtk_tessellation_get_mesh(valid.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);

@@ -35,6 +35,13 @@
         <TextBlock Text="{Binding Summary}" />
         <TextBlock Text="{Binding StatusMessage}" Classes="secondary" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding StatusDetails}" />
+        <!-- The file being opened or saved. -->
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsBusy}">
+          <ProgressBar Width="120" MinWidth="0" Height="4" MinHeight="4" VerticalAlignment="Center"
+                       Minimum="0" Maximum="1" Value="{Binding OperationProgress}" />
+          <Button Classes="tool" Padding="8,0" Height="22" Command="{Binding CancelCommand}" Content="Cancel"
+                  ToolTip.Tip="Stop opening or saving the file" />
+        </StackPanel>
       </StackPanel>
     </DockPanel>
   </Border>

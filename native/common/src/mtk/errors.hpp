@@ -16,6 +16,12 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+// The caller asked the operation to stop; reported as MTK_STATUS_CANCELLED.
+class cancelled : public std::runtime_error {
+public:
+    cancelled() : std::runtime_error("The operation was cancelled.") {}
+};
+
 // Message of the last error on the calling thread. Each library links its own copy of this code, so it keeps the
 // errors of its own calls.
 const char* last_error_message() noexcept;
@@ -32,6 +38,9 @@ mtk_status guarded(Body&& body) noexcept {
     clear_last_error();
     try {
         return body();
+    } catch (const cancelled& error) {
+        set_last_error(error.what());
+        return MTK_STATUS_CANCELLED;
     } catch (const kernel_error& error) {
         set_last_error(error.what());
         return MTK_STATUS_KERNEL_ERROR;

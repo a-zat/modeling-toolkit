@@ -9,6 +9,7 @@ internal enum NativeStatus
     InvalidArgument = 1,
     KernelError = 2,
     InternalError = 3,
+    Cancelled = 4,
 }
 
 internal static class NativeStatusExtensions
@@ -26,6 +27,7 @@ internal static class NativeStatusExtensions
         throw status switch
         {
             NativeStatus.InvalidArgument => new ArgumentException(message),
+            NativeStatus.Cancelled => new OperationCanceledException(message),
             _ => new GeometryKernelException(message),
         };
     }
