@@ -54,6 +54,16 @@ public interface IGeometryKernel
     double ComputeVolume(IKernelShape shape);
 
     /// <summary>
+    /// The shape as bytes in a format of the kernel, that only the same kind of kernel reads back with
+    /// <see cref="Deserialize"/>. The geometry, the placements and the topology are kept; triangles are not.
+    /// </summary>
+    byte[] Serialize(IKernelShape shape);
+
+    /// <summary>A shape from bytes written by <see cref="Serialize"/>.</summary>
+    /// <exception cref="ArgumentException">The bytes are empty or are not a shape of this kernel.</exception>
+    IKernelShape Deserialize(ReadOnlySpan<byte> data);
+
+    /// <summary>
     /// Turns the faces of a shape into one triangle mesh, in the coordinates of the shape. Each face has its own
     /// vertices, with the normals of its surface, so that the edges between faces look sharp; the front of the
     /// triangles is on the outside of a solid. The shape is not changed.

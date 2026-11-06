@@ -4,12 +4,14 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.IO;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.IO.Native;
 
 /// <summary>Reads documents in the native format (<see cref="NativeFormat"/>).</summary>
-public sealed class NativeDocumentReader : IDocumentReader
+/// <param name="kernel">The geometry kernel that reads the B-rep shapes of the documents.</param>
+public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentReader
 {
     public string FormatName => "Modeling Toolkit";
 
@@ -44,10 +46,11 @@ public sealed class NativeDocumentReader : IDocumentReader
         {
             try
             {
-                return new ArchiveReader(archive).Read();
+                return new ArchiveReader(archive, kernel).Read();
             }
             catch (Exception exception) when (exception is JsonException or EndOfStreamException
-                                                  or ArgumentException or InvalidOperationException)
+                                                  or ArgumentException or InvalidOperationException
+                                                  or GeometryKernelException)
             {
                 throw new InvalidDataException(
                     $"'{path}' is not a valid {NativeFormat.Extension} file: {exception.Message}", exception);
@@ -55,7 +58,7 @@ public sealed class NativeDocumentReader : IDocumentReader
         }
     }
 
-    private sealed class ArchiveReader(ZipArchive archive)
+    private sealed class ArchiveReader(ZipArchive archive, IGeometryKernel kernel)
     {
         public Document Read()
         {
@@ -129,6 +132,7 @@ public sealed class NativeDocumentReader : IDocumentReader
                 Entity entity = entityEntry switch
                 {
                     MeshEntry mesh => ReadMesh(mesh),
+                    BrepEntry shape => ReadShape(shape),
                     BlockReferenceEntry reference => ToBlockReference(reference, document.Blocks),
                     _ => throw new InvalidDataException($"Unknown entity in block '{entry.Name}'."),
                 };
@@ -159,6 +163,14 @@ public sealed class NativeDocumentReader : IDocumentReader
                 }
             }
             return new MeshEntity(vertices, triangles, normals, textureCoordinates);
+        }
+
+        private BrepEntity ReadShape(BrepEntry entry)
+        {
+            using Stream stream = Entry(entry.Path).Open();
+            using var data = new MemoryStream();
+            stream.CopyTo(data);
+            return new BrepEntity(kernel, kernel.Deserialize(data.ToArray()));
         }
 
         private static BlockReference ToBlockReference(BlockReferenceEntry entry, List<Block> blocks)

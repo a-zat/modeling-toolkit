@@ -6,7 +6,7 @@ namespace ModelingToolkit.Kernel.Occt.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_BRIDGE_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 4;
+    public const int AbiVersion = 5;
 
     private const string LibraryName = "mtk_occt_bridge";
 
@@ -41,6 +41,18 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_release")]
     public static partial void ShapeRelease(nint shape);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_write")]
+    public static partial NativeStatus ShapeWrite(ShapeHandle shape, out BytesHandle bytes);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_bytes_get")]
+    public static unsafe partial NativeStatus BytesGet(BytesHandle bytes, out byte* data, out long size);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_bytes_release")]
+    public static partial void BytesRelease(nint bytes);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_read")]
+    public static partial NativeStatus ShapeRead(ReadOnlySpan<byte> data, long size, out ShapeHandle shape);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_tessellate")]
     public static partial NativeStatus ShapeTessellate(

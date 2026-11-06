@@ -27,6 +27,7 @@ internal sealed record BlockEntry(string Name, List<EntityEntry> Entities);
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(MeshEntry), "mesh")]
+[JsonDerivedType(typeof(BrepEntry), "brep")]
 [JsonDerivedType(typeof(BlockReferenceEntry), "blockReference")]
 internal abstract record EntityEntry(string? Name, int? Material);
 
@@ -38,6 +39,8 @@ internal sealed record MeshEntry(
     int TriangleCount,
     bool HasNormals,
     bool HasTextureCoordinates) : EntityEntry(Name, Material);
+
+internal sealed record BrepEntry(string? Name, int? Material, string Path) : EntityEntry(Name, Material);
 
 internal sealed record BlockReferenceEntry(string? Name, int? Material, int Block, double[] Transform)
     : EntityEntry(Name, Material);

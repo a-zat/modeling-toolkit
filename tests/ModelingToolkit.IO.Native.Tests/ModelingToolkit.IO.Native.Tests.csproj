@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ModelingToolkit.IO.Native\ModelingToolkit.IO.Native.csproj" />
+    <ProjectReference Include="..\..\src\ModelingToolkit.Kernel.Occt\ModelingToolkit.Kernel.Occt.csproj" />
   </ItemGroup>
 
   <ItemGroup>

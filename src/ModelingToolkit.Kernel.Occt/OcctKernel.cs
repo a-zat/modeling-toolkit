@@ -72,6 +72,22 @@ public sealed class OcctKernel : IGeometryKernel
         return volume;
     }
 
+    public unsafe byte[] Serialize(IKernelShape shape)
+    {
+        NativeMethods.ShapeWrite(Unwrap(shape), out BytesHandle bytes).ThrowIfFailed();
+        using (bytes)
+        {
+            NativeMethods.BytesGet(bytes, out byte* data, out long size).ThrowIfFailed();
+            return new ReadOnlySpan<byte>(data, checked((int)size)).ToArray();
+        }
+    }
+
+    public IKernelShape Deserialize(ReadOnlySpan<byte> data)
+    {
+        NativeMethods.ShapeRead(data, data.Length, out ShapeHandle handle).ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
     public MeshEntity Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5)
     {
         NativeMethods.ShapeTessellate(Unwrap(shape), linearDeflection, angularDeflection, out TessellationHandle handle)

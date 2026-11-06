@@ -23,6 +23,12 @@ struct TessellationDeleter {
 
 using TessellationPtr = std::unique_ptr<mtk_tessellation, TessellationDeleter>;
 
+struct BytesDeleter {
+    void operator()(mtk_bytes* bytes) const noexcept { mtk_bytes_release(bytes); }
+};
+
+using BytesPtr = std::unique_ptr<mtk_bytes, BytesDeleter>;
+
 ShapePtr make_box(double dx, double dy, double dz) {
     mtk_shape* shape = nullptr;
     EXPECT_EQ(mtk_shape_make_box(dx, dy, dz, &shape), MTK_STATUS_OK) << mtk_last_error_message();
@@ -244,6 +250,85 @@ TEST(Shape, PrimitivesRejectInvalidDimensions) {
     EXPECT_EQ(mtk_shape_make_torus(2.0, 2.0, &shape), MTK_STATUS_INVALID_ARGUMENT) << "equal radii";
     EXPECT_EQ(mtk_shape_make_torus(2.0, 3.0, &shape), MTK_STATUS_INVALID_ARGUMENT) << "minor radius too large";
     EXPECT_STRNE(mtk_last_error_message(), "");
+}
+
+std::string written(const ShapePtr& shape) {
+    mtk_bytes* bytes = nullptr;
+    EXPECT_EQ(mtk_shape_write(shape.get(), &bytes), MTK_STATUS_OK) << mtk_last_error_message();
+    BytesPtr owner(bytes);
+    const uint8_t* data = nullptr;
+    int64_t size = 0;
+    EXPECT_EQ(mtk_bytes_get(bytes, &data, &size), MTK_STATUS_OK) << mtk_last_error_message();
+    return std::string(reinterpret_cast<const char*>(data), static_cast<size_t>(size));
+}
+
+ShapePtr read_shape(const std::string& data) {
+    mtk_shape* shape = nullptr;
+    EXPECT_EQ(mtk_shape_read(reinterpret_cast<const uint8_t*>(data.data()), static_cast<int64_t>(data.size()), &shape),
+              MTK_STATUS_OK)
+        << mtk_last_error_message();
+    return ShapePtr(shape);
+}
+
+TEST(Serialization, ASolidSurvivesAWriteAndARead) {
+    mtk_shape* shape = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(10.0, 40.0, &shape), MTK_STATUS_OK);
+    ShapePtr cylinder = place(ShapePtr(shape), {0, -1, 0, 100, 1, 0, 0, 200, 0, 0, 1, 300});
+
+    const std::string data = written(cylinder);
+    ShapePtr copy = read_shape(data);
+
+    EXPECT_FALSE(data.empty());
+    EXPECT_NEAR(volume_of(copy), pi * 10.0 * 10.0 * 40.0, 1e-3);
+    expect_bounds(copy, {90, 190, 300, 110, 210, 340});
+}
+
+TEST(Serialization, LeavesOutTheTrianglesOfAShape) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+    ASSERT_NE(tessellate(box, 1.0), nullptr);
+
+    const std::string data = written(box);
+
+    EXPECT_NE(data.find("\nTriangulations 0\n"), std::string::npos);
+}
+
+TEST(Serialization, RejectsDataThatIsNotAShape) {
+    mtk_shape* shape = nullptr;
+    const std::string text = "this is not a shape";
+    const std::string truncated = written(make_box(1.0, 1.0, 1.0)).substr(0, 40);
+    for (const std::string& data : {text, truncated, std::string(64, '\0'), std::string("DBRep_DrawableShape\n")}) {
+        EXPECT_EQ(mtk_shape_read(reinterpret_cast<const uint8_t*>(data.data()), static_cast<int64_t>(data.size()),
+                                 &shape),
+                  MTK_STATUS_INVALID_ARGUMENT)
+            << data.substr(0, 20);
+        EXPECT_EQ(shape, nullptr);
+        EXPECT_STRNE(mtk_last_error_message(), "");
+    }
+    const uint8_t byte = 0;
+    EXPECT_EQ(mtk_shape_read(&byte, 0, &shape), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_read(&byte, -1, &shape), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_read(nullptr, 1, &shape), MTK_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(Serialization, RejectsNullArguments) {
+    ShapePtr box = make_box(1.0, 1.0, 1.0);
+    mtk_bytes* bytes = nullptr;
+    const uint8_t* data = nullptr;
+    int64_t size = 0;
+    BytesPtr valid(nullptr);
+    {
+        mtk_bytes* raw = nullptr;
+        ASSERT_EQ(mtk_shape_write(box.get(), &raw), MTK_STATUS_OK);
+        valid.reset(raw);
+    }
+
+    EXPECT_EQ(mtk_shape_write(nullptr, &bytes), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_write(box.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_bytes_get(nullptr, &data, &size), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_bytes_get(valid.get(), nullptr, &size), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_bytes_get(valid.get(), &data, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_read(data, 1, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    mtk_bytes_release(nullptr);
 }
 
 TEST(Tessellation, TurnsABoxIntoTwelveTrianglesFacingOutwards) {

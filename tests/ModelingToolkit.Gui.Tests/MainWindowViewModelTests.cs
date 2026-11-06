@@ -203,7 +203,7 @@ public sealed class MainWindowViewModelTests
 
     private static MainWindowViewModel Create() => new(
         new DocumentFormats(
-            [new GltfReader(), new NativeDocumentReader()],
+            [new GltfReader(), new NativeDocumentReader(new OcctKernel())],
             [new NativeDocumentWriter()]),
         new RecordingAppearance());
 

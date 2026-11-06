@@ -50,6 +50,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
         private readonly Dictionary<Material, int> _materials = IndexOf(document.Materials);
         private readonly Dictionary<Block, int> _blocks = IndexOf(document.Blocks);
         private int _meshCount;
+        private int _shapeCount;
 
         public void Write()
         {
@@ -91,6 +92,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
             return entity switch
             {
                 MeshEntity mesh => WriteMesh(mesh, material),
+                BrepEntity brep => WriteShape(brep, material),
                 BlockReference reference => new BlockReferenceEntry(
                     reference.Name,
                     material,
@@ -128,6 +130,16 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                 mesh.Triangles.Length,
                 mesh.Normals is not null,
                 mesh.TextureCoordinates is not null);
+        }
+
+        private BrepEntry WriteShape(BrepEntity brep, int? material)
+        {
+            string path = $"shapes/{_shapeCount++}.brep";
+            using (Stream stream = archive.CreateEntry(path, CompressionLevel.Optimal).Open())
+            {
+                stream.Write(brep.Kernel.Serialize(brep.Shape));
+            }
+            return new BrepEntry(brep.Name, material, path);
         }
 
         private static Dictionary<T, int> IndexOf<T>(List<T> items)

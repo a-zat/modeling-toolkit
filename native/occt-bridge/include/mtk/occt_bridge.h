@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 4
+#define MTK_OCCT_BRIDGE_ABI_VERSION 5
 
 /* Opaque handle to an OpenCASCADE shape. */
 typedef struct mtk_shape mtk_shape;
@@ -71,6 +71,20 @@ MTK_API mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume);
 MTK_API mtk_status mtk_shape_bounds(const mtk_shape* shape, double* out_bounds /* 6 values */);
 
 MTK_API void mtk_shape_release(mtk_shape* shape);
+
+/* Bytes owned by the bridge, such as the data of a shape written by mtk_shape_write. */
+typedef struct mtk_bytes mtk_bytes;
+
+/*
+ * The shape in the BRep format of OpenCASCADE, a text that holds the geometry, the placements and the topology but no
+ * triangles. The data is valid until mtk_bytes_release.
+ */
+MTK_API mtk_status mtk_shape_write(const mtk_shape* shape, mtk_bytes** out_bytes);
+MTK_API mtk_status mtk_bytes_get(const mtk_bytes* bytes, const uint8_t** out_data, int64_t* out_size);
+MTK_API void mtk_bytes_release(mtk_bytes* bytes);
+
+/* A shape from data written by mtk_shape_write. Data that is not in the BRep format is rejected. */
+MTK_API mtk_status mtk_shape_read(const uint8_t* data, int64_t size, mtk_shape** out_shape);
 
 /*
  * Scenes: models read from files, as tables of blocks, meshes, references, materials and textures.

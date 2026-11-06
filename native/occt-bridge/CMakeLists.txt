@@ -1,6 +1,7 @@
 add_library(mtk_occt_bridge SHARED
     src/bridge.cpp
     src/scene.cpp
+    src/serialization.cpp
     src/shape.cpp
     src/tessellation.cpp)
 

@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Text.Json;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
+using ModelingToolkit.Kernel.Occt;
 
 namespace ModelingToolkit.IO.Native.Tests;
 
@@ -10,7 +11,10 @@ public sealed class NativeFormatTests : IDisposable
 {
     private readonly string _folder = Directory.CreateTempSubdirectory("mtk-tests-").FullName;
     private readonly NativeDocumentWriter _writer = new();
-    private readonly NativeDocumentReader _reader = new();
+    private readonly OcctKernel _kernel = new();
+    private readonly NativeDocumentReader _reader;
+
+    public NativeFormatTests() => _reader = new NativeDocumentReader(_kernel);
 
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
@@ -77,8 +81,88 @@ public sealed class NativeFormatTests : IDisposable
         using Stream stream = archive.GetEntry("manifest.json")!.Open();
         using JsonDocument manifest = JsonDocument.Parse(stream);
         Assert.Equal("modeling-toolkit", manifest.RootElement.GetProperty("format").GetString());
-        Assert.Equal(1, manifest.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(2, manifest.RootElement.GetProperty("version").GetInt32());
         Assert.Equal("mm", manifest.RootElement.GetProperty("units").GetString());
+    }
+
+    [Fact]
+    public void B_rep_shapes_survive_a_round_trip_with_their_placement_names_and_materials()
+    {
+        var steel = new Material("steel");
+        var document = new Document();
+        document.Materials.Add(steel);
+        using var cylinder = _kernel.MakeCylinder(10, 40);
+        var shaftEntity = new BrepEntity(_kernel, _kernel.Place(cylinder, RotatedAndMoved))
+        {
+            Name = "Shaft",
+            Material = steel,
+        };
+        var pin = new Block("Pin") { Entities = { shaftEntity } };
+        document.Blocks.Add(pin);
+        document.Root.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(10, 20, 30)));
+        document.Root.Entities.Add(new BlockReference(pin, Transform.Translation(500, 0, 0)));
+        string path = PathOf("shapes.mtk");
+
+        _writer.Write(document, path);
+        Document copy = _reader.Read(path, []);
+
+        Material material = Assert.Single(copy.Materials);
+        BrepEntity box = Assert.IsType<BrepEntity>(copy.Root.Entities[0]);
+        Assert.Null(box.Name);
+        Assert.Null(box.Material);
+        Assert.Equal(6000, _kernel.ComputeVolume(box.Shape), precision: 6);
+        Assert.Equal(new Point3d(10, 20, 30), box.GetBoundingBox().Max);
+
+        BlockReference reference = Assert.IsType<BlockReference>(copy.Root.Entities[1]);
+        BrepEntity shaft = Assert.IsType<BrepEntity>(Assert.Single(reference.Block.Entities));
+        Assert.Equal("Shaft", shaft.Name);
+        Assert.Same(material, shaft.Material);
+        Assert.Equal(Math.PI * 10 * 10 * 40, _kernel.ComputeVolume(shaft.Shape), precision: 3);
+        BoundingBox expected = shaftEntity.GetBoundingBox();
+        BoundingBox actual = shaft.GetBoundingBox();
+        Assert.Equal(expected.Min.X, actual.Min.X, tolerance: 1e-6);
+        Assert.Equal(expected.Max.Y, actual.Max.Y, tolerance: 1e-6);
+        Assert.Equal(expected.Max.Z, actual.Max.Z, tolerance: 1e-6);
+
+        using ZipArchive archive = ZipFile.OpenRead(path);
+        Assert.NotNull(archive.GetEntry("shapes/0.brep"));
+        Assert.NotNull(archive.GetEntry("shapes/1.brep"));
+        Assert.Null(archive.GetEntry("shapes/2.brep"));
+    }
+
+    [Fact]
+    public void Files_of_version_one_are_still_read()
+    {
+        string path = PathOf("old.mtk");
+        using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        using (var writer = new StreamWriter(archive.CreateEntry("manifest.json").Open()))
+        {
+            writer.Write("""
+                {"format": "modeling-toolkit", "version": 1, "units": "mm", "upAxis": "Z", "textures": [],
+                 "materials": [], "root": {"name": "Old", "entities": []}, "blocks": []}
+                """);
+        }
+
+        Assert.Equal("Old", _reader.Read(path, []).Root.Name);
+    }
+
+    [Fact]
+    public void A_shape_file_that_is_not_a_shape_makes_the_file_invalid()
+    {
+        var document = new Document();
+        document.Root.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(1, 1, 1)));
+        string path = PathOf("broken.mtk");
+        _writer.Write(document, path);
+        using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Update))
+        {
+            archive.GetEntry("shapes/0.brep")!.Delete();
+            using var writer = new StreamWriter(archive.CreateEntry("shapes/0.brep").Open());
+            writer.Write("this is not a shape");
+        }
+
+        var exception = Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+
+        Assert.Contains("not a shape", exception.Message);
     }
 
     [Fact]
