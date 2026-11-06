@@ -115,6 +115,7 @@ private:
     void attach();
     void update_size();
     void apply_scale(double scale);
+    void set_grid_step(double step);
     NCollection_Vec2<int> to_pixels(double x, double y) const;
 
     template <typename Body>
@@ -127,6 +128,7 @@ private:
     occ::handle<AIS_Line> vertical_axis_;
     Aspect_GridParams grid_;
     bool grid_visible_ = true;
+    double grid_step_ = 1000.0; // millimetres
     mtk_viewer_display_mode display_mode_ = MTK_VIEWER_DISPLAY_SHADED;
     Quantity_Color edge_color_ = Quantity_NOC_GRAY30;
     occ::handle<Aspect_NeutralWindow> window_;

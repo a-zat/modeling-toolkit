@@ -8,6 +8,7 @@
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_GridParams.hxx>
 #include <Aspect_ScrollDelta.hxx>
+#include <Bnd_Box.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <Graphic3d_DiagnosticInfo.hxx>
 #include <Graphic3d_TransformPers.hxx>
@@ -48,7 +49,9 @@ constexpr double axes_label_height = 12.0;
 // The camera and the ground, in millimetres.
 constexpr double field_of_view = 35.0;         // vertical, in degrees
 constexpr double initial_view_size = 12000.0; // the ground shown before a model is opened
-constexpr double grid_step = 1000.0;
+constexpr double default_grid_step = 1000.0; // before a model is opened
+constexpr double grid_squares = 5.0;          // at least this many squares across the diagonal of a model
+constexpr double min_grid_step = 0.01;
 constexpr double fit_margin = 0.1; // around the scene, relative to its size on screen
 
 // The instance under the pointer is tinted with the colour of the highlight, half transparent.
@@ -118,12 +121,20 @@ Graphic3d_TransModeFlags navigation_aid_persistence() {
 
 // The grid on the ground, drawn by a shader over the whole plane, with its X and Y axes in red and green: they cross at
 // the origin. Its lines are hidden by the objects in front of them.
-Aspect_GridParams ground_grid(const Quantity_Color& color) {
+Aspect_GridParams ground_grid(const Quantity_Color& color, double step) {
     Aspect_GridParams grid;
     grid.SetColor(color);
-    grid.SetScale(1.0 / grid_step); // squares per millimetre
+    grid.SetScale(1.0 / step); // squares per millimetre
     grid.SetIsDrawAxis(true);
     return grid;
+}
+
+// The step of the grid for a model of this diagonal: a power of ten, with some squares across the model.
+double grid_step_for(double diagonal) {
+    if (!std::isfinite(diagonal) || diagonal <= 0.0) {
+        return default_grid_step;
+    }
+    return std::max(std::pow(10.0, std::floor(std::log10(diagonal / grid_squares))), min_grid_step);
 }
 
 } // namespace
@@ -179,7 +190,7 @@ mtk::Viewer::Viewer(void* parent) {
     view_->Camera()->SetProjectionType(Graphic3d_Camera::Projection_Perspective);
     view_->Camera()->SetFOVy(field_of_view);
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
-    grid_ = ground_grid(Quantity_NOC_GRAY70);
+    grid_ = ground_grid(Quantity_NOC_GRAY70, grid_step_);
     view_->GridDisplay(grid_);
 
     // In the lower left corner, at a distance set by apply_scale().
@@ -245,7 +256,7 @@ void mtk::Viewer::view_exposed() noexcept {
 void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     view_->SetBgGradientColors(to_color(colors.background_top), to_color(colors.background_bottom),
                                Aspect_GradientFillMethod_Vertical);
-    grid_ = ground_grid(to_color(colors.grid));
+    grid_ = ground_grid(to_color(colors.grid), grid_step_);
     if (grid_visible_) {
         view_->GridDisplay(grid_);
     }
@@ -339,10 +350,28 @@ void mtk::Viewer::clear() {
     materials_.clear();
     textures_.clear();
     meshes_.clear();
+    set_grid_step(default_grid_step);
     view_->Invalidate();
 }
 
+void mtk::Viewer::set_grid_step(double step) {
+    grid_step_ = step;
+    grid_.SetScale(1.0 / step);
+    if (grid_visible_) {
+        view_->GridDisplay(grid_);
+    }
+}
+
 void mtk::Viewer::fit_all() {
+    // The grid follows the size of the scene, which is shown whole now.
+    Bnd_Box scene;
+    for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
+        Bnd_Box box;
+        instance->BoundingBox(box);
+        scene.Add(box);
+    }
+    set_grid_step(scene.IsVoid() ? default_grid_step : grid_step_for(std::sqrt(scene.SquareExtent())));
+
     // Without a window the view has no size: attach() fits it then.
     if (is_attached() && !instances_.empty()) {
         view_->FitAll(fit_margin, false);
