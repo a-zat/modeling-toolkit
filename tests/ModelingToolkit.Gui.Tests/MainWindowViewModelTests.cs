@@ -26,6 +26,16 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task TheSummaryCountsOneOfAKindInTheSingular()
+    {
+        MainWindowViewModel viewModel = Create();
+
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+
+        Assert.Equal("1 mesh (1 placed) · 12 triangles · 1 material · mm · Z up", viewModel.Summary);
+    }
+
+    [Fact]
     public async Task SelectingAMeshShowsItsProperties()
     {
         MainWindowViewModel viewModel = Create();
@@ -131,6 +141,7 @@ public sealed class MainWindowViewModelTests
         viewModel.ModelTree.SelectedNode = model;
 
         Assert.Contains(new PropertyRow("B-rep shapes", "2 (2 placed)"), viewModel.Properties.Rows);
+        Assert.DoesNotContain(viewModel.Properties.Rows, row => row.Name == "Meshes");
     }
 
     [Fact]

@@ -60,9 +60,15 @@ public sealed partial class PropertiesViewModel : ObservableObject
         [
             new("Blocks", Formatting.Count(statistics.Blocks)),
             new("Block references", Formatting.Count(statistics.BlockReferences)),
-            new("Meshes", $"{Formatting.Count(statistics.Meshes)} ({Formatting.Count(statistics.PlacedMeshes)} placed)"),
-            new("Triangles", $"{Formatting.Count(statistics.Triangles)} ({Formatting.Count(statistics.PlacedTriangles)} placed)"),
         ];
+        // A model made only of shapes has no meshes to count.
+        if (statistics.Meshes > 0 || statistics.BrepShapes == 0)
+        {
+            rows.Add(new("Meshes",
+                $"{Formatting.Count(statistics.Meshes)} ({Formatting.Count(statistics.PlacedMeshes)} placed)"));
+            rows.Add(new("Triangles",
+                $"{Formatting.Count(statistics.Triangles)} ({Formatting.Count(statistics.PlacedTriangles)} placed)"));
+        }
         if (statistics.BrepShapes > 0)
         {
             rows.Add(new("B-rep shapes",

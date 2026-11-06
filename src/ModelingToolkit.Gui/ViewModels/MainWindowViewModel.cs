@@ -265,16 +265,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         List<string> summary = [];
         if (!onlyShapes)
         {
-            summary.Add(
-                $"{Formatting.Count(statistics.Meshes)} meshes ({Formatting.Count(statistics.PlacedMeshes)} placed)");
-            summary.Add($"{Formatting.Count(statistics.PlacedTriangles)} triangles");
+            summary.Add($"{Formatting.Count(statistics.Meshes, "mesh", "meshes")} " +
+                $"({Formatting.Count(statistics.PlacedMeshes)} placed)");
+            summary.Add(Formatting.Count(statistics.PlacedTriangles, "triangle", "triangles"));
         }
         if (statistics.BrepShapes > 0)
         {
-            summary.Add($"{Formatting.Count(statistics.BrepShapes)} B-rep shapes " +
+            summary.Add($"{Formatting.Count(statistics.BrepShapes, "B-rep shape", "B-rep shapes")} " +
                 $"({Formatting.Count(statistics.PlacedBrepShapes)} placed)");
         }
-        summary.Add($"{Formatting.Count(statistics.Materials)} materials");
+        summary.Add(Formatting.Count(statistics.Materials, "material", "materials"));
         summary.Add("mm");
         summary.Add("Z up");
         Summary = string.Join(" · ", summary);

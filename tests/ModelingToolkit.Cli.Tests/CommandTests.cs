@@ -98,6 +98,7 @@ public sealed class CommandTests : IDisposable
         Assert.Equal("Made a box in box.mtk (Modeling Toolkit).", output.Trim());
         string[] statistics = StatisticsWithoutTitle(path);
         Assert.Contains("  B-rep shapes      1 (1 placed)", statistics);
+        Assert.DoesNotContain(statistics, line => line.TrimStart().StartsWith("Meshes", StringComparison.Ordinal));
         Assert.Contains("  Size (mm)         100.0 × 50.0 × 30.0", statistics);
         Assert.Equal("Box", Assert.IsType<BrepEntity>(Assert.Single(Read(path).Root.Entities)).Name);
     }

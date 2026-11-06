@@ -27,9 +27,13 @@ internal static class StatsCommand
             console.WriteLine($"{modelFile.Name} ({reader.FormatName})");
             Row(console, "Blocks", Count(statistics.Blocks));
             Row(console, "Block references", Count(statistics.BlockReferences));
-            Row(console, "Meshes", $"{Count(statistics.Meshes)} ({Count(statistics.PlacedMeshes)} placed)");
-            Row(console, "Vertices", Count(statistics.Vertices));
-            Row(console, "Triangles", $"{Count(statistics.Triangles)} ({Count(statistics.PlacedTriangles)} placed)");
+            // A model made only of shapes has no meshes to count.
+            if (statistics.Meshes > 0 || statistics.BrepShapes == 0)
+            {
+                Row(console, "Meshes", $"{Count(statistics.Meshes)} ({Count(statistics.PlacedMeshes)} placed)");
+                Row(console, "Vertices", Count(statistics.Vertices));
+                Row(console, "Triangles", $"{Count(statistics.Triangles)} ({Count(statistics.PlacedTriangles)} placed)");
+            }
             if (statistics.BrepShapes > 0)
             {
                 Row(console, "B-rep shapes",
