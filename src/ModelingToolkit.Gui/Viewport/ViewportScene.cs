@@ -68,6 +68,7 @@ internal sealed class ViewportScene
     public static ViewportScene Of(Document document)
     {
         var builder = new Builder();
+        builder.Tessellate(document.Root);
         builder.Visit(document.Root, Transform.Identity, inherited: null);
         return new ViewportScene(document.Root, builder);
     }
@@ -268,31 +269,67 @@ internal sealed class ViewportScene
         private void AddInstance(MeshEntity mesh, Material? material, Transform placement, Polylines? edges = null) =>
             Instances.Add(new ViewportInstance(IndexOf(mesh, edges), IndexOf(material ?? DefaultMaterial), placement));
 
-        // A shape that cannot be turned into triangles is left out, as a mesh that the viewer refuses.
-        private ShapeTessellation? TessellationOf(BrepEntity brep)
+        /// <summary>
+        /// Tessellates, in parallel, every shape that the model reaches, once each however often it is placed. The
+        /// warnings follow the order of the model, whatever the order in which the shapes are done.
+        /// </summary>
+        public void Tessellate(Block root)
         {
-            if (!Tessellations.TryGetValue(brep, out ShapeTessellation? mesh))
+            var shapes = new List<BrepEntity>();
+            var seenShapes = new HashSet<BrepEntity>(ReferenceEqualityComparer.Instance);
+            var seenBlocks = new HashSet<Block>(ReferenceEqualityComparer.Instance);
+            var pending = new Stack<Block>([root]);
+            while (pending.TryPop(out Block? block))
             {
-                try
+                if (!seenBlocks.Add(block))
                 {
-                    BoundingBox box = brep.GetBoundingBox();
-                    double diagonal = Math.Sqrt(
-                        Math.Pow(box.Max.X - box.Min.X, 2) + Math.Pow(box.Max.Y - box.Min.Y, 2) +
-                        Math.Pow(box.Max.Z - box.Min.Z, 2));
-                    double deflection = Math.Max(diagonal * RelativeDeflection, MinimumDeflection);
-                    mesh = brep.Kernel.Tessellate(brep.Shape, deflection);
+                    continue;
                 }
-                catch (Exception exception) when (exception is ArgumentException or GeometryKernelException)
+                foreach (Entity entity in block.Entities)
                 {
-                    mesh = null;
-                    string name = brep.Name ?? brep.Material?.Name ?? "A shape";
-                    Warnings.Add($"{name} cannot be shown: {exception.Message}");
+                    if (entity is BrepEntity brep && seenShapes.Add(brep))
+                    {
+                        shapes.Add(brep);
+                    }
+                    else if (entity is BlockReference reference)
+                    {
+                        pending.Push(reference.Block);
+                    }
                 }
-
-                Tessellations[brep] = mesh;
             }
 
-            return mesh;
+            var results = new (ShapeTessellation? Mesh, string? Warning)[shapes.Count];
+            Parallel.For(0, shapes.Count, index => results[index] = Tessellated(shapes[index]));
+            for (int index = 0; index < shapes.Count; index++)
+            {
+                Tessellations[shapes[index]] = results[index].Mesh;
+                if (results[index].Warning is { } warning)
+                {
+                    Warnings.Add(warning);
+                }
+            }
+        }
+
+        // The shapes were tessellated beforehand: those of the model, by Tessellate.
+        private ShapeTessellation? TessellationOf(BrepEntity brep) => Tessellations.GetValueOrDefault(brep);
+
+        // A shape that cannot be turned into triangles is left out, as a mesh that the viewer refuses, with a warning.
+        private static (ShapeTessellation? Mesh, string? Warning) Tessellated(BrepEntity brep)
+        {
+            try
+            {
+                BoundingBox box = brep.GetBoundingBox();
+                double diagonal = Math.Sqrt(
+                    Math.Pow(box.Max.X - box.Min.X, 2) + Math.Pow(box.Max.Y - box.Min.Y, 2) +
+                    Math.Pow(box.Max.Z - box.Min.Z, 2));
+                double deflection = Math.Max(diagonal * RelativeDeflection, MinimumDeflection);
+                return (brep.Kernel.Tessellate(brep.Shape, deflection), null);
+            }
+            catch (Exception exception) when (exception is ArgumentException or GeometryKernelException)
+            {
+                string name = brep.Name ?? brep.Material?.Name ?? "A shape";
+                return (null, $"{name} cannot be shown: {exception.Message}");
+            }
         }
 
         private int IndexOf(MeshEntity mesh, Polylines? edges)

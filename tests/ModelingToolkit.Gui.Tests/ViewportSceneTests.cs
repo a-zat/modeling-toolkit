@@ -1,3 +1,4 @@
+using System.Globalization;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
@@ -118,6 +119,33 @@ public sealed class ViewportSceneTests
 
         Assert.Single(scene.Instances);
         Assert.Equal([$"Broken cannot be shown: {FailingKernel.Reason}"], scene.Warnings);
+    }
+
+    [Fact]
+    public void ManyShapesAreTessellatedOnceEachWithTheWarningsInTheOrderOfTheModel()
+    {
+        var kernel = new OcctKernel();
+        var failing = new FailingKernel();
+        var shared = new BrepEntity(kernel, kernel.MakeSphere(10));
+        var block = new Block("Shared") { Entities = { shared } };
+        var document = new Document();
+        document.Blocks.Add(block);
+        for (int index = 0; index < 20; index++)
+        {
+            document.Root.Entities.Add(index % 5 == 0
+                ? new BrepEntity(failing, failing.MakeBox(1, 1, 1)) { Name = $"Broken {index}" }
+                : new BrepEntity(kernel, kernel.MakeCylinder(5 + index, 10)));
+        }
+        document.Root.Entities.Add(new BlockReference(block, Transform.Identity));
+        document.Root.Entities.Add(new BlockReference(block, Transform.Translation(100, 0, 0)));
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Equal(16 + 1, scene.Meshes.Count); // the sphere once, for its two placements
+        Assert.Equal(16 + 2, scene.Instances.Count);
+        Assert.Equal(
+            [0, 5, 10, 15],
+            scene.Warnings.Select(warning => int.Parse(warning.Split(' ')[1], CultureInfo.InvariantCulture)));
     }
 
     [Fact]
