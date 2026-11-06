@@ -1,6 +1,6 @@
 using Avalonia;
 using Avalonia.Headless;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ModelingToolkit.Gui.Tests;
 
@@ -21,14 +21,14 @@ namespace ModelingToolkit.Gui.Tests;
 /// </remarks>
 public sealed class HeadlessSession
 {
-    public static IHost Host { get; } = AppHost.Build();
+    public static ServiceProvider Services { get; } = AppHost.Build();
 
     public HeadlessUnitTestSession Session { get; } =
         HeadlessUnitTestSession.StartNew(typeof(HeadlessSession), AvaloniaTestIsolationLevel.PerAssembly);
 
     // Looked up by HeadlessUnitTestSession.StartNew.
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure(() => new App(Host.Services))
+        AppBuilder.Configure(() => new App(Services))
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .WithInterFont();

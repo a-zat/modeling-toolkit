@@ -68,7 +68,7 @@ its sources, as the LGPL requires. Its sources, and the patches applied to them,
 | MicroCom.Runtime, Tmds.DBus.Protocol | 0.11.6, 0.94.1 | MIT | Platform code of Avalonia |
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) | 8.4.2 | MIT | View models |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | 2.0.14 | MIT | Command line parsing |
-| Microsoft.Extensions.Hosting and its dependencies | 10.0.14 | MIT | Composition of the applications |
+| Microsoft.Extensions.DependencyInjection | 10.0.14 | MIT | Composition of the applications |
 
 Development only, not in the binaries: GoogleTest (BSD-3-Clause) and xUnit (Apache-2.0) for the tests,
 RolandUI.DevScope (MIT) in Debug builds, Avalonia.BuildServices (MIT) at build time.

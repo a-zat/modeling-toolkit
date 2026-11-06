@@ -20,7 +20,7 @@ public sealed class ScreenshotTests(HeadlessSession headless)
 
         int rendered = await headless.Session.Dispatch(async () =>
         {
-            var viewModel = HeadlessSession.Host.Services.GetRequiredService<MainWindowViewModel>();
+            var viewModel = HeadlessSession.Services.GetRequiredService<MainWindowViewModel>();
             await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
             // The whole tree open, with a mesh selected: references and meshes at a glance.
             ModelNodeViewModel[] nodes = [.. Flatten(viewModel.ModelTree.Roots[0])];

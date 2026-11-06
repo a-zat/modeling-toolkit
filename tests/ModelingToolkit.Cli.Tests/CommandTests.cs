@@ -1,6 +1,5 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
@@ -10,12 +9,12 @@ namespace ModelingToolkit.Cli.Tests;
 // Runs the commands in process, capturing what they write.
 public sealed class CommandTests : IDisposable
 {
-    private readonly IHost _host = CliHost.Build();
+    private readonly ServiceProvider _services = CliHost.Build();
     private readonly string _folder = Directory.CreateTempSubdirectory("mtk-cli-tests-").FullName;
 
     public void Dispose()
     {
-        _host.Dispose();
+        _services.Dispose();
         Directory.Delete(_folder, recursive: true);
     }
 
@@ -113,7 +112,7 @@ public sealed class CommandTests : IDisposable
             (["cone", "30", "10", "60"], Math.PI * 60 / 3 * (30 * 30 + 30 * 10 + 10 * 10)),
             (["torus", "50", "10"], 2 * Math.PI * Math.PI * 50 * 10 * 10),
         ];
-        var kernel = _host.Services.GetRequiredService<IGeometryKernel>();
+        var kernel = _services.GetRequiredService<IGeometryKernel>();
 
         foreach ((string[] args, double volume) in shapes)
         {
@@ -157,7 +156,7 @@ public sealed class CommandTests : IDisposable
         Assert.Equal(0, Run("combine", "union", box, drill, both).ExitCode);
         Assert.Equal(0, Run("combine", "intersect", box, drill, common).ExitCode);
 
-        var kernel = _host.Services.GetRequiredService<IGeometryKernel>();
+        var kernel = _services.GetRequiredService<IGeometryKernel>();
         double Volume(string path) => kernel.ComputeVolume(((BrepEntity)Read(path).Root.Entities[0]).Shape);
         double hole = Math.PI * 20 * 20 * 100;
         Assert.Equal(1e6 - hole, Volume(drilled), precision: 2);
@@ -206,14 +205,14 @@ public sealed class CommandTests : IDisposable
     {
         var output = new StringWriter();
         var error = new StringWriter();
-        int exitCode = CliHost.CreateRootCommand(_host.Services)
+        int exitCode = CliHost.CreateRootCommand(_services)
             .Parse(args)
             .Invoke(new InvocationConfiguration { Output = output, Error = error });
         return (exitCode, output.ToString(), error.ToString());
     }
 
     private Document Read(string path) =>
-        _host.Services.GetRequiredService<DocumentFormats>().ReaderFor(path).Read(path, []);
+        _services.GetRequiredService<DocumentFormats>().ReaderFor(path).Read(path, []);
 
     private string[] StatisticsWithoutTitle(string path)
     {

@@ -1,5 +1,5 @@
 using Avalonia;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ModelingToolkit.Gui;
 
@@ -9,12 +9,12 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        using IHost host = AppHost.Build();
-        return BuildAvaloniaApp(host.Services).StartWithClassicDesktopLifetime(args);
+        using ServiceProvider services = AppHost.Build();
+        return BuildAvaloniaApp(services).StartWithClassicDesktopLifetime(args);
     }
 
     // Used by the XAML previewer of the IDE.
-    public static AppBuilder BuildAvaloniaApp() => BuildAvaloniaApp(AppHost.Build().Services);
+    public static AppBuilder BuildAvaloniaApp() => BuildAvaloniaApp(AppHost.Build());
 
     private static AppBuilder BuildAvaloniaApp(IServiceProvider services) =>
         AppBuilder.Configure(() => new App(services))

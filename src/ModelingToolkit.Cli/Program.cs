@@ -1,5 +1,5 @@
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using ModelingToolkit.Cli;
 
-using IHost host = CliHost.Build();
-return CliHost.CreateRootCommand(host.Services).Parse(args).Invoke();
+using ServiceProvider services = CliHost.Build();
+return CliHost.CreateRootCommand(services).Parse(args).Invoke();
