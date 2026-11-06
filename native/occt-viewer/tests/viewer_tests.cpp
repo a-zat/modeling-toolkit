@@ -67,7 +67,7 @@ struct Square {
     std::array<int32_t, 6> triangles{0, 1, 2, 0, 2, 3};
 
     mtk_viewer_mesh mesh() const {
-        return {positions.data(), normals.data(), uvs.data(), 4, triangles.data(), 2};
+        return {positions.data(), normals.data(), uvs.data(), 4, triangles.data(), 2, nullptr, nullptr, 0};
     }
 };
 

@@ -31,7 +31,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     [RelayCommand]
     private void Select(IReadOnlyList<Entity>? path)
     {
-        ModelNodeViewModel? node = path is null ? null : Roots.FirstOrDefault();
+        ModelNodeViewModel? node = path is null || Roots.Count == 0 ? null : Roots[0];
         foreach (Entity entity in path ?? [])
         {
             if (node is null)

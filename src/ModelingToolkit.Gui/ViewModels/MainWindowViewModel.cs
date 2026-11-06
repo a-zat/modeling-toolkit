@@ -15,7 +15,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IAppearance _appearance;
     private readonly bool _initialized;
     private string? _path;
-    private CancellationTokenSource? _operation; // of the file being opened or saved
+    private Action? _cancelOperation; // of the file being opened or saved, whose method owns its source
     private bool _saving;
     private TaskCompletionSource _idle = Completed();
 
@@ -208,7 +208,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Stops the file being opened or saved.</summary>
     [RelayCommand(CanExecute = nameof(IsBusy))]
-    private void Cancel() => _operation?.Cancel();
+    private void Cancel() => _cancelOperation?.Invoke();
 
     /// <summary>
     /// Completes once no file is being opened or saved, so that the window can close: a file being opened is
@@ -218,24 +218,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (!_saving)
         {
-            _operation?.Cancel();
+            _cancelOperation?.Invoke();
         }
         return _idle.Task;
     }
 
     private CancellationTokenSource BeginOperation(bool saving)
     {
-        _operation = new CancellationTokenSource();
+        var operation = new CancellationTokenSource();
+        _cancelOperation = operation.Cancel;
         _saving = saving;
         _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         OperationProgress = 0;
         IsBusy = true;
-        return _operation;
+        return operation;
     }
 
     private void EndOperation()
     {
-        _operation = null;
+        _cancelOperation = null;
         IsBusy = false;
         _idle.TrySetResult();
     }

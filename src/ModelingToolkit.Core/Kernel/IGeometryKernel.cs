@@ -1,5 +1,4 @@
 using ModelingToolkit.Core.Geometry;
-using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Kernel;
 

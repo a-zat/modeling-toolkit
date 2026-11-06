@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Avalonia.Input;
-using Avalonia.Input.Raw;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Gui.Viewport;
 using ModelingToolkit.Gui.Viewport.Interop;

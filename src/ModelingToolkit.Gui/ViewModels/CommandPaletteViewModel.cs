@@ -85,6 +85,6 @@ public sealed partial class CommandPaletteViewModel : ObservableObject
     private void Filter()
     {
         Results = [.. _commands.Where(command => command.Name.Contains(Query, StringComparison.OrdinalIgnoreCase))];
-        SelectedResult = Results.FirstOrDefault();
+        SelectedResult = Results.Count > 0 ? Results[0] : null;
     }
 }

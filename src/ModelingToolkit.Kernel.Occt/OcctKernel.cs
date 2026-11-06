@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
-using ModelingToolkit.Core.Model;
 using ModelingToolkit.Kernel.Occt.Interop;
 
 namespace ModelingToolkit.Kernel.Occt;

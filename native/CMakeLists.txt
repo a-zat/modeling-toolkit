@@ -41,6 +41,10 @@ function(mtk_set_compile_options target)
     else()
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+    # As for the .NET code: warnings are tolerated while experimenting locally, but fail the CI build.
+    if("$ENV{CI}" STREQUAL "true")
+        set_target_properties(${target} PROPERTIES COMPILE_WARNING_AS_ERROR ON)
+    endif()
 endfunction()
 
 # Makes a shared library self-contained in the output folder, so the copy in the .NET output folder is too.

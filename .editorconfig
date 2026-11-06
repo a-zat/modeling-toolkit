@@ -42,3 +42,8 @@ dotnet_naming_style.pascal_case.capitalization = pascal_case
 # The kernel and the readers take an optional token for long operations; the tests call them on small inputs that
 # finish at once, so passing the token of the test to every call would add noise without making any test stoppable.
 dotnet_diagnostic.xUnit1051.severity = none
+# Test names are sentences, words joined by underscores in some projects; constant arrays in tests run once; xUnit
+# names its collection definitions *Collection.
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1711.severity = none

@@ -11,6 +11,10 @@
     <!-- Build outputs go to artifacts/ (bin, obj, packages) instead of each project folder. -->
     <UseArtifactsOutput>true</UseArtifactsOutput>
 
+    <!-- The recommended rules of the .NET analyzers, and the style of .editorconfig, checked when building. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
     <!-- Warnings are tolerated while experimenting locally, but fail the CI build. -->
     <TreatWarningsAsErrors Condition="'$(CI)' == 'true'">true</TreatWarningsAsErrors>
   </PropertyGroup>
