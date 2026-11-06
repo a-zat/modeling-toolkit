@@ -94,7 +94,7 @@ public sealed class ViewportSceneTests
     }
 
     [Fact]
-    public void AShapeIsDrawnWithItsOwnEdgesAndAMeshWithThoseOfItsTriangles()
+    public void AShapeIsDrawnWithItsOwnEdgesAndAMeshWithItsSharpOnes()
     {
         var kernel = new OcctKernel();
         var document = new Document();
@@ -104,8 +104,8 @@ public sealed class ViewportSceneTests
         var scene = ViewportScene.Of(document);
 
         Assert.Equal(2, scene.Meshes.Count);
-        Assert.Equal(12, scene.MeshEdges[0]?.Count);
-        Assert.Null(scene.MeshEdges[1]);
+        Assert.Equal(12, scene.MeshEdges[0].Count);
+        Assert.Equal(4, scene.MeshEdges[1].Count); // the border of the square, not its diagonal
     }
 
     [Fact]

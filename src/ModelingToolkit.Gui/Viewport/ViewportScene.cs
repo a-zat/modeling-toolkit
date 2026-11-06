@@ -48,10 +48,10 @@ internal sealed class ViewportScene
     public IReadOnlyList<MeshEntity> Meshes { get; }
 
     /// <summary>
-    /// For each mesh, the edges to draw in its place of those of its triangles: those of the shape it is the
-    /// tessellation of; null for the other meshes.
+    /// For each mesh, the edges to draw in place of those of its triangles: those of the shape it is the tessellation
+    /// of, or its sharp edges (<see cref="SharpEdges"/>).
     /// </summary>
-    public IReadOnlyList<Polylines?> MeshEdges { get; }
+    public IReadOnlyList<Polylines> MeshEdges { get; }
 
     public IReadOnlyList<Material> Materials { get; }
 
@@ -223,7 +223,7 @@ internal sealed class ViewportScene
 
         public List<MeshEntity> Meshes { get; } = [];
 
-        public List<Polylines?> MeshEdges { get; } = [];
+        public List<Polylines> MeshEdges { get; } = [];
 
         public List<Material> Materials { get; } = [];
 
@@ -343,7 +343,8 @@ internal sealed class ViewportScene
             {
                 index = _meshIndices[mesh] = Meshes.Count;
                 Meshes.Add(mesh);
-                MeshEdges.Add(edges);
+                // A mesh read from a file has no edges but those of its triangles: the sharp ones outline it.
+                MeshEdges.Add(edges ?? SharpEdges.Of(mesh.Vertices, mesh.Triangles));
             }
 
             return index;
