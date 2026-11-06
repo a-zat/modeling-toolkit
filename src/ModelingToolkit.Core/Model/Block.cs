@@ -15,9 +15,26 @@ public sealed class Block
         Entities = new EntityCollection(this);
     }
 
-    public string Name { get; set; }
+    public string Name
+    {
+        get;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (field != value)
+            {
+                field = value;
+                Raise(new PropertyChanged(this, nameof(Name)));
+            }
+        }
+    }
+
+    /// <summary>The document that lists the block, as its root or in its blocks; null for none.</summary>
+    public Document? Document { get; internal set; }
 
     public EntityCollection Entities { get; }
+
+    internal void Raise(DocumentChange change) => Document?.Raise(change);
 
     public BoundingBox GetBoundingBox() => ComputeBoundingBox(new Dictionary<Block, BoundingBox>());
 

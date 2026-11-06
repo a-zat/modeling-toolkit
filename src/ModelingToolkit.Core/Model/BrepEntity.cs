@@ -22,7 +22,26 @@ public sealed class BrepEntity : Entity
     /// <summary>The kernel that made the shape and operates on it.</summary>
     public IGeometryKernel Kernel { get; }
 
-    public IKernelShape Shape { get; }
+    /// <summary>
+    /// The shape, made by <see cref="Kernel"/>. Shapes are immutable: an edit replaces the shape with a new one.
+    /// </summary>
+    public IKernelShape Shape
+    {
+        get;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (!ReferenceEquals(field, value))
+            {
+                IKernelShape? old = field;
+                field = value;
+                if (old is not null)
+                {
+                    Raise(new ShapeReplaced(this, old, value));
+                }
+            }
+        }
+    }
 
     internal override BoundingBox ComputeBoundingBox(Dictionary<Block, BoundingBox> blockBoxes) =>
         Kernel.GetBoundingBox(Shape);

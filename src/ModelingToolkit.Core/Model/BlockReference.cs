@@ -23,7 +23,15 @@ public sealed class BlockReference : Entity
     public Transform Transform
     {
         get => _transform;
-        set => _transform = value ?? throw new ArgumentNullException(nameof(value));
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (!ReferenceEquals(_transform, value))
+            {
+                _transform = value;
+                Raise(new PropertyChanged(this, nameof(Transform)));
+            }
+        }
     }
 
     internal override BoundingBox ComputeBoundingBox(Dictionary<Block, BoundingBox> blockBoxes) =>

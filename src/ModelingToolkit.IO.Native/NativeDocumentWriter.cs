@@ -162,7 +162,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
             return new BrepEntry(brep.Name, material, path);
         }
 
-        private static Dictionary<T, int> IndexOf<T>(List<T> items)
+        private static Dictionary<T, int> IndexOf<T>(IList<T> items)
             where T : class
         {
             var indices = new Dictionary<T, int>(ReferenceEqualityComparer.Instance);

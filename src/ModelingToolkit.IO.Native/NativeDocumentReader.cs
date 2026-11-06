@@ -233,7 +233,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             return new BrepEntity(kernel, kernel.Deserialize(data.ToArray()));
         }
 
-        private static BlockReference ToBlockReference(BlockReferenceEntry entry, List<Block> blocks)
+        private static BlockReference ToBlockReference(BlockReferenceEntry entry, IList<Block> blocks)
         {
             double[] m = entry.Transform;
             if (m.Length != 12)
@@ -247,7 +247,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
         private ZipArchiveEntry Entry(string path) =>
             archive.GetEntry(path) ?? throw new InvalidDataException($"The archive has no '{path}' entry.");
 
-        private static T At<T>(List<T> items, int index, string kind) =>
+        private static T At<T>(IList<T> items, int index, string kind) =>
             (uint)index < (uint)items.Count
                 ? items[index]
                 : throw new InvalidDataException($"The manifest refers to {kind} {index}, which does not exist.");

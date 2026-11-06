@@ -51,4 +51,23 @@ public sealed class BrepEntityTests
         Assert.Throws<ArgumentNullException>(() => new BrepEntity(null!, box));
         Assert.Throws<ArgumentNullException>(() => new BrepEntity(_kernel, null!));
     }
+
+    [Fact]
+    public void Replacing_the_shape_keeps_the_entity_and_raises_a_change()
+    {
+        var document = new Document();
+        var entity = new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10));
+        document.Root.Entities.Add(entity);
+        var changes = new List<DocumentChange>();
+        document.Changed += (_, change) => changes.Add(change);
+        Core.Kernel.IKernelShape old = entity.Shape;
+        Core.Kernel.IKernelShape taller = _kernel.MakeBox(10, 10, 30);
+
+        entity.Shape = taller;
+        entity.Shape = taller;
+
+        Assert.Equal<DocumentChange>([new ShapeReplaced(entity, old, taller)], changes);
+        Assert.Same(entity, document.Root.Entities[0]);
+        Assert.Equal(30, entity.GetBoundingBox().Max.Z, tolerance: 1e-6);
+    }
 }
