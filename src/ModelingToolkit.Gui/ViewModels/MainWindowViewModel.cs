@@ -354,9 +354,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ShowPanel(SidePanel panel) => ActivePanel = ActivePanel == panel ? SidePanel.None : panel;
 
+    // The changes of the document are those that subscribed before, the model tree first, already know.
+    partial void OnDocumentChanged(Document? oldValue, Document? newValue)
+    {
+        if (oldValue is not null)
+        {
+            oldValue.Changed -= OnDocumentEdited;
+        }
+        if (newValue is not null)
+        {
+            newValue.Changed += OnDocumentEdited;
+        }
+    }
+
+    private void OnDocumentEdited(object? sender, DocumentChange change) => Properties.Refresh(ModelTree.SelectedNode);
+
     private void Show(Document document, DocumentStatistics statistics, string path)
     {
-        Document = document;
         _path = path;
         DocumentName = Path.GetFileName(path);
         Title = $"{DocumentName} — {ApplicationName}";
@@ -382,6 +396,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Properties.Know(document, statistics);
         ModelTree.Show(document);
         Materials.Show(document);
+        Document = document;
     }
 
     private async Task WriteAsync(string path)

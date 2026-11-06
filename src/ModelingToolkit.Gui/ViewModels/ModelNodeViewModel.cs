@@ -18,8 +18,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     private ModelNodeViewModel(
         string name, string? detail, Entity? entity, IReadOnlyList<Entity> path, Block? block, Document? document)
     {
-        Name = name;
-        Detail = detail;
+        _name = name;
+        _detail = detail;
         Entity = entity;
         Path = path;
         Document = document;
@@ -30,10 +30,21 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     /// The name of the entity; a block reference without one takes the name of its block, a mesh or a shape the name
     /// of its material.
     /// </summary>
-    public string Name { get; }
+    public string Name
+    {
+        get => _name;
+        private set => SetProperty(ref _name, value);
+    }
 
     /// <summary>Secondary text: the number of triangles of a mesh, or the block of a reference with its own name.</summary>
-    public string? Detail { get; }
+    public string? Detail
+    {
+        get => _detail;
+        private set => SetProperty(ref _detail, value);
+    }
+
+    private string _name;
+    private string? _detail;
 
     /// <summary>The entity of the node; null for the model.</summary>
     public Entity? Entity { get; }
@@ -64,23 +75,74 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     public static ModelNodeViewModel ForDocument(Document document) =>
         new(document.Root.Name, null, null, [], document.Root, document) { IsExpanded = true };
 
+    /// <summary>
+    /// Follows a change of the document in the part of the tree built so far: the children of the nodes of a block
+    /// that changed, reusing the nodes of the entities that remain, so that they stay open, and the names of the nodes
+    /// of an entity or a block that was renamed.
+    /// </summary>
+    internal void Apply(DocumentChange change)
+    {
+        Block? changed = change switch
+        {
+            EntityAdded added => added.Block,
+            EntityRemoved removed => removed.Block,
+            EntityReplaced replaced => replaced.Block,
+            _ => null,
+        };
+        if (changed is not null && ReferenceEquals(_block, changed) && _children is not null)
+        {
+            Dictionary<Entity, ModelNodeViewModel> kept = _children.ToDictionary(
+                child => child.Entity!, child => child, ReferenceEqualityComparer.Instance as IEqualityComparer<Entity>);
+            _children = [.. changed.Entities.Select(entity => kept.GetValueOrDefault(entity) ?? Child(entity))];
+            OnPropertyChanged(nameof(Children));
+        }
+        else if (change is Core.Model.PropertyChanged renamed && Entity is not null &&
+                 (ReferenceEquals(renamed.Target, Entity) || ReferenceEquals(renamed.Target, _block)))
+        {
+            (Name, Detail) = Label(Entity);
+        }
+
+        foreach (ModelNodeViewModel child in _children ?? [])
+        {
+            child.Apply(change);
+        }
+    }
+
+    /// <summary>Whether the node is still in the part of the tree built so far, given its path.</summary>
+    internal bool Contains(ModelNodeViewModel node)
+    {
+        ModelNodeViewModel current = this;
+        foreach (Entity entity in node.Path)
+        {
+            if (current._children?.FirstOrDefault(child => ReferenceEquals(child.Entity, entity)) is not { } next)
+            {
+                return false;
+            }
+            current = next;
+        }
+        return ReferenceEquals(current, node);
+    }
+
     private ModelNodeViewModel Child(Entity entity)
     {
-        Entity[] path = [.. Path, entity];
+        (string name, string? detail) = Label(entity);
+        return new(name, detail, entity, [.. Path, entity], (entity as BlockReference)?.Block, null);
+    }
+
+    private static (string Name, string? Detail) Label(Entity entity)
+    {
         switch (entity)
         {
             case BlockReference reference:
                 string name = entity.Name ?? reference.Block.Name;
-                string? block = name == reference.Block.Name ? null : reference.Block.Name;
-                return new(name, block, entity, path, reference.Block, null);
+                return (name, name == reference.Block.Name ? null : reference.Block.Name);
             case MeshEntity mesh:
                 // The meshes read from glTF files have no names: their materials tell them apart.
-                string label = entity.Name ?? entity.Material?.Name ?? "Mesh";
-                return new(label, $"{Formatting.Count(mesh.Triangles.Length)} triangles", entity, path, null, null);
+                return (entity.Name ?? entity.Material?.Name ?? "Mesh", $"{Formatting.Count(mesh.Triangles.Length)} triangles");
             case BrepEntity:
-                return new(entity.Name ?? entity.Material?.Name ?? "Shape", null, entity, path, null, null);
+                return (entity.Name ?? entity.Material?.Name ?? "Shape", null);
             default:
-                return new(entity.Name ?? entity.GetType().Name, null, entity, path, null, null);
+                return (entity.Name ?? entity.GetType().Name, null);
         }
     }
 }

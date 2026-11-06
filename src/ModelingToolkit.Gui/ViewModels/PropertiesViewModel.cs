@@ -38,6 +38,16 @@ public sealed partial class PropertiesViewModel : ObservableObject
     /// </summary>
     public void Know(Document document, DocumentStatistics statistics) => _known = (document, statistics);
 
+    /// <summary>
+    /// Shows the properties of a node again after a change of its document, which makes the statistics given by
+    /// <see cref="Know"/> out of date.
+    /// </summary>
+    public void Refresh(ModelNodeViewModel? node)
+    {
+        _known = null;
+        Show(node);
+    }
+
     public void Show(ModelNodeViewModel? node)
     {
         HasSelection = node is not null;
