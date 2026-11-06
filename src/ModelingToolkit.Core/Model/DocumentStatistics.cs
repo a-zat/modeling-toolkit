@@ -6,9 +6,11 @@ namespace ModelingToolkit.Core.Model;
 /// <param name="Blocks">Blocks reachable from the root, the root excluded.</param>
 /// <param name="Meshes">Meshes of the root and of those blocks, each counted once.</param>
 /// <param name="PlacedMeshes">Meshes as they appear in the model: a block placed twice counts its meshes twice.</param>
+/// <param name="BrepShapes">B-rep shapes of the root and of those blocks, each counted once.</param>
+/// <param name="PlacedBrepShapes">B-rep shapes as they appear in the model, as <paramref name="PlacedMeshes"/>.</param>
 /// <param name="BoundingBox">
 /// Box of the vertices as placed in the model: exact, unlike <see cref="Document.GetBoundingBox"/>, at the cost of
-/// visiting every placed vertex.
+/// visiting every placed vertex. A B-rep shape contributes the box of the shape, transformed as a whole.
 /// </param>
 public sealed record DocumentStatistics(
     int Blocks,
@@ -18,6 +20,8 @@ public sealed record DocumentStatistics(
     long Triangles,
     long PlacedMeshes,
     long PlacedTriangles,
+    int BrepShapes,
+    long PlacedBrepShapes,
     int Materials,
     int Textures,
     BoundingBox BoundingBox)
@@ -29,7 +33,8 @@ public sealed record DocumentStatistics(
         List<Block> blocks = ReachableBlocks(document.Root);
         List<Entity> entities = blocks.SelectMany(block => block.Entities).ToList();
         List<MeshEntity> meshes = entities.OfType<MeshEntity>().ToList();
-        (long placedMeshes, long placedTriangles) = Placed(document.Root, new Dictionary<Block, (long, long)>());
+        (long placedMeshes, long placedTriangles, long placedBrepShapes) =
+            Placed(document.Root, new Dictionary<Block, (long, long, long)>());
 
         return new DocumentStatistics(
             Blocks: blocks.Count - 1,
@@ -39,6 +44,8 @@ public sealed record DocumentStatistics(
             Triangles: meshes.Sum(mesh => (long)mesh.Triangles.Length),
             PlacedMeshes: placedMeshes,
             PlacedTriangles: placedTriangles,
+            BrepShapes: entities.OfType<BrepEntity>().Count(),
+            PlacedBrepShapes: placedBrepShapes,
             Materials: document.Materials.Count,
             Textures: document.Textures.Count,
             BoundingBox: PlacedBoundingBox(document.Root, Transform.Identity, BoundingBox.Empty));
@@ -54,6 +61,10 @@ public sealed record DocumentStatistics(
                 {
                     box = box.Include(transform.Apply(vertex));
                 }
+            }
+            else if (entity is BrepEntity brep)
+            {
+                box = box.Union(brep.GetBoundingBox().Transform(transform));
             }
             else if (entity is BlockReference reference)
             {
@@ -86,15 +97,17 @@ public sealed record DocumentStatistics(
     }
 
     // Totals of a block as placed in the model, computed once per block.
-    private static (long Meshes, long Triangles) Placed(Block block, Dictionary<Block, (long, long)> totals)
+    private static (long Meshes, long Triangles, long BrepShapes) Placed(
+        Block block, Dictionary<Block, (long, long, long)> totals)
     {
-        if (totals.TryGetValue(block, out (long, long) total))
+        if (totals.TryGetValue(block, out (long, long, long) total))
         {
             return total;
         }
 
         long meshes = 0;
         long triangles = 0;
+        long brepShapes = 0;
         foreach (Entity entity in block.Entities)
         {
             if (entity is MeshEntity mesh)
@@ -102,14 +115,20 @@ public sealed record DocumentStatistics(
                 meshes++;
                 triangles += mesh.Triangles.Length;
             }
+            else if (entity is BrepEntity)
+            {
+                brepShapes++;
+            }
             else if (entity is BlockReference reference)
             {
-                (long referencedMeshes, long referencedTriangles) = Placed(reference.Block, totals);
+                (long referencedMeshes, long referencedTriangles, long referencedBrepShapes) =
+                    Placed(reference.Block, totals);
                 meshes += referencedMeshes;
                 triangles += referencedTriangles;
+                brepShapes += referencedBrepShapes;
             }
         }
-        totals[block] = (meshes, triangles);
-        return (meshes, triangles);
+        totals[block] = (meshes, triangles, brepShapes);
+        return (meshes, triangles, brepShapes);
     }
 }

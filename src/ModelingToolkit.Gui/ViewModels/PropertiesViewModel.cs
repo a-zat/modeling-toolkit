@@ -40,6 +40,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
             { IsModel: true } => "Model",
             { IsReference: true } => "Block reference",
             { IsMesh: true } => "Mesh",
+            { IsBrep: true } => "B-rep shape",
             _ => "Entity",
         };
         Rows = node switch
@@ -47,6 +48,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
             { Document: { } document } => ModelRows(document),
             { Entity: BlockReference reference } => ReferenceRows(reference),
             { Entity: MeshEntity mesh } => MeshRows(mesh),
+            { Entity: BrepEntity brep } => BrepRows(brep),
             _ => [],
         };
     }
@@ -54,16 +56,22 @@ public sealed partial class PropertiesViewModel : ObservableObject
     private static List<PropertyRow> ModelRows(Document document)
     {
         DocumentStatistics statistics = DocumentStatistics.Of(document);
-        return
+        List<PropertyRow> rows =
         [
             new("Blocks", Formatting.Count(statistics.Blocks)),
             new("Block references", Formatting.Count(statistics.BlockReferences)),
             new("Meshes", $"{Formatting.Count(statistics.Meshes)} ({Formatting.Count(statistics.PlacedMeshes)} placed)"),
             new("Triangles", $"{Formatting.Count(statistics.Triangles)} ({Formatting.Count(statistics.PlacedTriangles)} placed)"),
-            new("Materials", Formatting.Count(statistics.Materials)),
-            new("Textures", Formatting.Count(statistics.Textures)),
-            new("Size", Formatting.Size(statistics.BoundingBox)),
         ];
+        if (statistics.BrepShapes > 0)
+        {
+            rows.Add(new("B-rep shapes",
+                $"{Formatting.Count(statistics.BrepShapes)} ({Formatting.Count(statistics.PlacedBrepShapes)} placed)"));
+        }
+        rows.Add(new("Materials", Formatting.Count(statistics.Materials)));
+        rows.Add(new("Textures", Formatting.Count(statistics.Textures)));
+        rows.Add(new("Size", Formatting.Size(statistics.BoundingBox)));
+        return rows;
     }
 
     private static List<PropertyRow> ReferenceRows(BlockReference reference)
@@ -87,6 +95,13 @@ public sealed partial class PropertiesViewModel : ObservableObject
         new("Texture coordinates", mesh.TextureCoordinates is null ? "No" : "Yes"),
         new("Material", MaterialName(mesh.Material)),
         new("Size", Formatting.Size(mesh.GetBoundingBox())),
+    ];
+
+    private static List<PropertyRow> BrepRows(BrepEntity brep) =>
+    [
+        new("Volume", Formatting.Volume(brep.Kernel.ComputeVolume(brep.Shape))),
+        new("Material", MaterialName(brep.Material)),
+        new("Size", Formatting.Size(brep.GetBoundingBox())),
     ];
 
     private static string MaterialName(Material? material) => material?.Name ?? "By block";

@@ -30,6 +30,11 @@ internal static class StatsCommand
             Row(console, "Meshes", $"{Count(statistics.Meshes)} ({Count(statistics.PlacedMeshes)} placed)");
             Row(console, "Vertices", Count(statistics.Vertices));
             Row(console, "Triangles", $"{Count(statistics.Triangles)} ({Count(statistics.PlacedTriangles)} placed)");
+            if (statistics.BrepShapes > 0)
+            {
+                Row(console, "B-rep shapes",
+                    $"{Count(statistics.BrepShapes)} ({Count(statistics.PlacedBrepShapes)} placed)");
+            }
             Row(console, "Materials", Count(statistics.Materials));
             Row(console, "Textures", Count(statistics.Textures));
             BoundingBox box = statistics.BoundingBox;

@@ -3,6 +3,7 @@ using ModelingToolkit.Gui.Viewport;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.IO.Native;
+using ModelingToolkit.Kernel.Occt;
 using ModelingToolkit.Kernel.Occt.IO;
 
 namespace ModelingToolkit.Gui.Tests;
@@ -99,6 +100,37 @@ public sealed class MainWindowViewModelTests
 
         Assert.Null(viewModel.ModelTree.SelectedNode);
         Assert.False(viewModel.Properties.HasSelection);
+    }
+
+    [Fact]
+    public void SelectingAShapeShowsItsVolumeMaterialAndSize()
+    {
+        MainWindowViewModel viewModel = Create();
+        var kernel = new OcctKernel();
+        var document = new Document();
+        var steel = new Material("Steel");
+        document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(100, 200, 300)) { Material = steel });
+        document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(10, 10, 10)) { Name = "Cube" });
+        viewModel.ModelTree.Show(document);
+
+        ModelNodeViewModel model = Assert.Single(viewModel.ModelTree.Roots);
+        Assert.Equal(["Steel", "Cube"], model.Children.Select(node => node.Name));
+        Assert.All(model.Children, node => Assert.True(node.IsBrep));
+
+        viewModel.ModelTree.SelectedNode = model.Children[0];
+
+        Assert.Equal("B-rep shape", viewModel.Properties.Kind);
+        Assert.Equal(
+            [
+                new PropertyRow("Volume", "6,000.00 cm³"),
+                new PropertyRow("Material", "Steel"),
+                new PropertyRow("Size", "100.0 × 200.0 × 300.0 mm"),
+            ],
+            viewModel.Properties.Rows);
+
+        viewModel.ModelTree.SelectedNode = model;
+
+        Assert.Contains(new PropertyRow("B-rep shapes", "2 (2 placed)"), viewModel.Properties.Rows);
     }
 
     [Fact]

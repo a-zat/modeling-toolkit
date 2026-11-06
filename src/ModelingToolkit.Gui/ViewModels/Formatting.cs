@@ -10,6 +10,13 @@ internal static class Formatting
 
     public static string Length(double value) => value.ToString("N1", CultureInfo.InvariantCulture);
 
+    public static string Volume(double cubicMillimetres) => cubicMillimetres switch
+    {
+        >= 1e9 => $"{(cubicMillimetres / 1e9).ToString("N2", CultureInfo.InvariantCulture)} m³",
+        >= 1e3 => $"{(cubicMillimetres / 1e3).ToString("N2", CultureInfo.InvariantCulture)} cm³",
+        _ => $"{cubicMillimetres.ToString("N2", CultureInfo.InvariantCulture)} mm³",
+    };
+
     public static string Point(double x, double y, double z) => $"({Length(x)}, {Length(y)}, {Length(z)}) mm";
 
     public static string Size(BoundingBox box) => box.IsEmpty

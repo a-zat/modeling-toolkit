@@ -18,6 +18,7 @@
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Document}" IsVisible="{Binding IsModel}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.CubeLink}" IsVisible="{Binding IsReference}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsMesh}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsBrep}" />
             </Panel>
             <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
             <TextBlock Text="{Binding Detail}" Classes="secondary" VerticalAlignment="Center" />

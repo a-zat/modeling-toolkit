@@ -3,7 +3,9 @@ using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.ViewModels;
 
-/// <summary>A node of the model tree: the model itself, a block reference or a mesh, as placed in the model.</summary>
+/// <summary>
+/// A node of the model tree: the model itself, a block reference, a mesh or a B-rep shape, as placed in the model.
+/// </summary>
 /// <remarks>
 /// A block placed twice appears twice. The children of a node are created when the tree first asks for them, so that
 /// only the expanded part of a large model is built.
@@ -25,8 +27,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The name of the entity; a block reference without one takes the name of its block, a mesh the name of its
-    /// material.
+    /// The name of the entity; a block reference without one takes the name of its block, a mesh or a shape the name
+    /// of its material.
     /// </summary>
     public string Name { get; }
 
@@ -51,6 +53,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
 
     public bool IsMesh => Entity is MeshEntity;
 
+    public bool IsBrep => Entity is BrepEntity;
+
     [ObservableProperty]
     public partial bool IsExpanded { get; set; }
 
@@ -73,6 +77,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
                 // The meshes read from glTF files have no names: their materials tell them apart.
                 string label = entity.Name ?? entity.Material?.Name ?? "Mesh";
                 return new(label, $"{Formatting.Count(mesh.Triangles.Length)} triangles", entity, path, null, null);
+            case BrepEntity:
+                return new(entity.Name ?? entity.Material?.Name ?? "Shape", null, entity, path, null, null);
             default:
                 return new(entity.Name ?? entity.GetType().Name, null, entity, path, null, null);
         }

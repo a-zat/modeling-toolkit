@@ -1,6 +1,7 @@
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
+using ModelingToolkit.Kernel.Occt;
 using ModelingToolkit.Kernel.Occt.IO;
 
 namespace ModelingToolkit.Gui.Tests;
@@ -20,6 +21,74 @@ public sealed class ViewportSceneTests
         Assert.Equal(statistics.PlacedMeshes, scene.Instances.Count);
         Assert.True(scene.Instances.Count > scene.Meshes.Count);
         Assert.NotEmpty(scene.Textures);
+    }
+
+    [Fact]
+    public void AShapeIsShownAsItsTessellationMadeOnceWhateverTheNumberOfPlacements()
+    {
+        var kernel = new OcctKernel();
+        var box = new BrepEntity(kernel, kernel.MakeBox(100, 100, 100));
+        var pin = new BrepEntity(kernel, kernel.MakeCylinder(5, 50));
+        var pinBlock = new Block("Pin") { Entities = { pin } };
+        var first = new BlockReference(pinBlock, Transform.Translation(200, 0, 0));
+        var second = new BlockReference(pinBlock, Transform.Translation(300, 0, 0));
+        var document = new Document();
+        document.Root.Entities.Add(box);
+        document.Root.Entities.Add(first);
+        document.Root.Entities.Add(second);
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Equal(2, scene.Meshes.Count);
+        Assert.All(scene.Meshes, mesh => Assert.NotEmpty(mesh.Triangles));
+        Assert.Equal([0, 1, 1], scene.Instances.Select(instance => instance.Mesh));
+        Assert.Equal(
+            [Transform.Identity, Transform.Translation(200, 0, 0), Transform.Translation(300, 0, 0)],
+            scene.Instances.Select(instance => instance.Placement));
+        Assert.All(
+            scene.Instances,
+            instance => Assert.Same(ViewportScene.DefaultMaterial, scene.Materials[instance.Material]));
+        Assert.Equal(new Entity[] { box }, scene.PathOf(0)!.ToArray());
+        Assert.Equal(new Entity[] { second, pin }, scene.PathOf(2)!.ToArray());
+        Assert.Equal(2..3, scene.InstancesOf([second]));
+    }
+
+    [Fact]
+    public void AShapeTakesTheMaterialOfItsReferenceLikeAMesh()
+    {
+        var kernel = new OcctKernel();
+        var red = new Material("Red");
+        var own = new Material("Own");
+        var inner = new Block("Inner")
+        {
+            Entities =
+            {
+                new BrepEntity(kernel, kernel.MakeBox(1, 1, 1)),
+                new BrepEntity(kernel, kernel.MakeSphere(1)) { Material = own },
+            },
+        };
+        var document = new Document();
+        document.Root.Entities.Add(new BlockReference(inner, Transform.Identity) { Material = red });
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Equal([red, own], scene.Instances.Select(instance => scene.Materials[instance.Material]));
+    }
+
+    [Fact]
+    public void AShapeIsTessellatedInProportionToItsSize()
+    {
+        var kernel = new OcctKernel();
+        var small = new Document();
+        small.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeSphere(20)));
+        var large = new Document();
+        large.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeSphere(2000)));
+
+        int smallTriangles = ViewportScene.Of(small).Meshes.Single().Triangles.Length;
+        int largeTriangles = ViewportScene.Of(large).Meshes.Single().Triangles.Length;
+
+        Assert.True(smallTriangles > 100);
+        Assert.Equal(smallTriangles, largeTriangles);
     }
 
     [Fact]

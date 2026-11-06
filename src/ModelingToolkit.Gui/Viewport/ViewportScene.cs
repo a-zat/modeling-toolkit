@@ -1,4 +1,5 @@
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.Viewport;
@@ -10,12 +11,14 @@ internal readonly record struct ViewportInstance(int Mesh, int Material, Transfo
 /// What the 3D view shows of a document: each mesh, material and texture once, and an instance for each placement of a
 /// mesh, through the block references that reach it from the model space. A mesh without a material takes the one of
 /// the closest reference that has one, "by block", or <see cref="DefaultMaterial"/>. The instances follow the order of
-/// the model tree, so that those of a node are consecutive.
+/// the model tree, so that those of a node are consecutive. A B-rep shape is shown as its tessellation, made once, for
+/// a deflection that is a fraction of the size of the shape.
 /// </summary>
 internal sealed class ViewportScene
 {
     private readonly Block _root;
     private readonly Dictionary<Block, int> _instanceCounts;
+    private readonly Dictionary<BrepEntity, MeshEntity?> _tessellations;
 
     // The index of each instance in the viewer that shows the scene, or -1 for those it could not show.
     private int[] _shownInstances = [];
@@ -24,6 +27,7 @@ internal sealed class ViewportScene
     {
         _root = root;
         _instanceCounts = builder.InstanceCounts;
+        _tessellations = builder.Tessellations;
         Meshes = builder.Meshes;
         Materials = builder.Materials;
         MaterialTextures = builder.MaterialTextures;
@@ -38,7 +42,7 @@ internal sealed class ViewportScene
         Roughness = 0.7f,
     };
 
-    /// <summary>The meshes with triangles; meshes without any show nothing.</summary>
+    /// <summary>The meshes with triangles, those of the shapes included; meshes without any show nothing.</summary>
     public IReadOnlyList<MeshEntity> Meshes { get; }
 
     public IReadOnlyList<Material> Materials { get; }
@@ -190,12 +194,17 @@ internal sealed class ViewportScene
     private int InstanceCount(Entity entity) => entity switch
     {
         MeshEntity mesh => mesh.Triangles.Length > 0 ? 1 : 0,
+        BrepEntity brep => _tessellations.GetValueOrDefault(brep) is null ? 0 : 1,
         BlockReference reference => InstanceCount(reference.Block),
         _ => 0,
     };
 
     private sealed class Builder
     {
+        // The deflection of a shape is this part of its diagonal, but not less than the minimum, in millimetres.
+        private const double RelativeDeflection = 0.001;
+        private const double MinimumDeflection = 0.001;
+
         private readonly Dictionary<MeshEntity, int> _meshIndices = new(ReferenceEqualityComparer.Instance);
         private readonly Dictionary<Material, int> _materialIndices = new(ReferenceEqualityComparer.Instance);
         private readonly Dictionary<Texture, int> _textureIndices = new(ReferenceEqualityComparer.Instance);
@@ -210,6 +219,9 @@ internal sealed class ViewportScene
 
         public List<ViewportInstance> Instances { get; } = [];
 
+        /// <summary>The mesh of each B-rep shape visited, null when it could not be tessellated.</summary>
+        public Dictionary<BrepEntity, MeshEntity?> Tessellations { get; } = new(ReferenceEqualityComparer.Instance);
+
         /// <summary>The number of instances that a reference to each block places.</summary>
         public Dictionary<Block, int> InstanceCounts { get; } = new(ReferenceEqualityComparer.Instance);
 
@@ -223,8 +235,10 @@ internal sealed class ViewportScene
                 switch (entity)
                 {
                     case MeshEntity mesh when mesh.Triangles.Length > 0:
-                        Material material = mesh.Material ?? inherited ?? DefaultMaterial;
-                        Instances.Add(new ViewportInstance(IndexOf(mesh), IndexOf(material), placement));
+                        AddInstance(mesh, entity.Material ?? inherited, placement);
+                        break;
+                    case BrepEntity brep when TessellationOf(brep) is { } tessellation:
+                        AddInstance(tessellation, entity.Material ?? inherited, placement);
                         break;
                     case BlockReference reference:
                         Visit(reference.Block, placement * reference.Transform, reference.Material ?? inherited);
@@ -233,6 +247,34 @@ internal sealed class ViewportScene
             }
 
             InstanceCounts[block] = Instances.Count - first;
+        }
+
+        private void AddInstance(MeshEntity mesh, Material? material, Transform placement) =>
+            Instances.Add(new ViewportInstance(IndexOf(mesh), IndexOf(material ?? DefaultMaterial), placement));
+
+        // A shape that cannot be turned into triangles is left out, as a mesh that the viewer refuses.
+        private MeshEntity? TessellationOf(BrepEntity brep)
+        {
+            if (!Tessellations.TryGetValue(brep, out MeshEntity? mesh))
+            {
+                try
+                {
+                    BoundingBox box = brep.GetBoundingBox();
+                    double diagonal = Math.Sqrt(
+                        Math.Pow(box.Max.X - box.Min.X, 2) + Math.Pow(box.Max.Y - box.Min.Y, 2) +
+                        Math.Pow(box.Max.Z - box.Min.Z, 2));
+                    double deflection = Math.Max(diagonal * RelativeDeflection, MinimumDeflection);
+                    mesh = brep.Kernel.Tessellate(brep.Shape, deflection);
+                }
+                catch (Exception exception) when (exception is ArgumentException or GeometryKernelException)
+                {
+                    mesh = null;
+                }
+
+                Tessellations[brep] = mesh;
+            }
+
+            return mesh;
         }
 
         private int IndexOf(MeshEntity mesh)

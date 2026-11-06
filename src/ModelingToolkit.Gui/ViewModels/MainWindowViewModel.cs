@@ -256,9 +256,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Title = $"{DocumentName} — {ApplicationName}";
 
         DocumentStatistics statistics = DocumentStatistics.Of(document);
-        Summary = $"{Formatting.Count(statistics.Meshes)} meshes ({Formatting.Count(statistics.PlacedMeshes)} placed) · " +
-            $"{Formatting.Count(statistics.PlacedTriangles)} triangles · {Formatting.Count(statistics.Materials)} materials · " +
-            "mm · Z up";
+        bool onlyShapes = statistics.BrepShapes > 0 && statistics.Meshes == 0;
+        List<string> summary = [];
+        if (!onlyShapes)
+        {
+            summary.Add(
+                $"{Formatting.Count(statistics.Meshes)} meshes ({Formatting.Count(statistics.PlacedMeshes)} placed)");
+            summary.Add($"{Formatting.Count(statistics.PlacedTriangles)} triangles");
+        }
+        if (statistics.BrepShapes > 0)
+        {
+            summary.Add($"{Formatting.Count(statistics.BrepShapes)} B-rep shapes " +
+                $"({Formatting.Count(statistics.PlacedBrepShapes)} placed)");
+        }
+        summary.Add($"{Formatting.Count(statistics.Materials)} materials");
+        summary.Add("mm");
+        summary.Add("Z up");
+        Summary = string.Join(" · ", summary);
 
         ModelTree.Show(document);
         Materials.Show(document);
