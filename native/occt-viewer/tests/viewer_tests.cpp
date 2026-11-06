@@ -240,6 +240,64 @@ TEST(Viewer, PlacesInstancesWithAnyInvertibleTransform) {
     }
 }
 
+// The square with edges of its own: its outline, without the diagonal between its triangles.
+struct OutlinedSquare : Square {
+    std::array<double, 15> edge_points{0, 0, 0, 1000, 0, 0, 1000, 1000, 0, 0, 1000, 0, 0, 0, 0};
+    std::array<int32_t, 2> edge_first_points{0, 5};
+
+    mtk_viewer_mesh mesh() const {
+        mtk_viewer_mesh result = Square::mesh();
+        result.edge_points = edge_points.data();
+        result.edge_first_points = edge_first_points.data();
+        result.edge_count = 1;
+        return result;
+    }
+};
+
+TEST(Viewer, ShowsMeshesWithEdgesOfTheirOwnInEveryDisplayMode) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t outlined = add_mesh(viewer.get(), OutlinedSquare().mesh());
+    mtk_viewer_mesh without_edges = Square().mesh();
+    const int32_t none = 0;
+    without_edges.edge_first_points = &none; // edges of its own, but none: not those of the triangles either
+    const int32_t bare = add_mesh(viewer.get(), without_edges);
+    const int32_t material = add_material(viewer.get(), grey());
+    const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    const int32_t first = add_instance(viewer.get(), outlined, material, identity);
+    add_instance(viewer.get(), outlined, material, stretched);
+    add_instance(viewer.get(), bare, material, identity);
+
+    for (int32_t mode : {MTK_VIEWER_DISPLAY_WIREFRAME, MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES,
+                         MTK_VIEWER_DISPLAY_SHADED}) {
+        EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), mode), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+        EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), &first, 1), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    }
+}
+
+TEST(Viewer, RejectsEdgesItCannotShow) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    int32_t index = -1;
+
+    OutlinedSquare not_from_zero;
+    not_from_zero.edge_first_points = {1, 5};
+    OutlinedSquare one_point;
+    one_point.edge_first_points = {0, 1};
+    OutlinedSquare infinite;
+    infinite.edge_points[7] = std::numeric_limits<double>::infinity();
+    mtk_viewer_mesh without_points = OutlinedSquare().mesh();
+    without_points.edge_points = nullptr;
+    mtk_viewer_mesh negative = OutlinedSquare().mesh();
+    negative.edge_count = -1;
+
+    for (const mtk_viewer_mesh& mesh :
+         {not_from_zero.mesh(), one_point.mesh(), infinite.mesh(), without_points, negative}) {
+        EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), &mesh, &index), MTK_STATUS_INVALID_ARGUMENT);
+        EXPECT_STRNE(mtk_viewer_last_error_message(), "");
+    }
+}
+
 TEST(Viewer, SelectsAnyOfItsInstances) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);

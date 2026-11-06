@@ -112,7 +112,7 @@ public sealed class OcctKernelTests
     {
         using IKernelShape box = _kernel.MakeBox(10, 20, 30);
 
-        MeshEntity mesh = _kernel.Tessellate(box, linearDeflection: 1);
+        MeshEntity mesh = _kernel.Tessellate(box, linearDeflection: 1).Mesh;
         Measures measures = Measure(mesh);
 
         Assert.Equal(24, mesh.Vertices.Length); // each face has its own vertices
@@ -144,7 +144,7 @@ public sealed class OcctKernelTests
         {
             using (shape)
             {
-                Measures measures = Measure(_kernel.Tessellate(shape, linearDeflection: 0.01, angularDeflection: 0.2));
+                Measures measures = Measure(_kernel.Tessellate(shape, linearDeflection: 0.01, angularDeflection: 0.2).Mesh);
 
                 Assert.True(Math.Abs(measures.Area - area) < 0.005 * area, $"{name}: area {measures.Area} of {area}");
                 Assert.True(
@@ -162,9 +162,9 @@ public sealed class OcctKernelTests
         using IKernelShape sphere = _kernel.MakeSphere(25);
         using IKernelShape fresh = _kernel.MakeSphere(25);
 
-        int coarse = _kernel.Tessellate(fresh, 1).Triangles.Length;
-        int fine = _kernel.Tessellate(sphere, 0.01).Triangles.Length;
-        int coarseAgain = _kernel.Tessellate(sphere, 1).Triangles.Length;
+        int coarse = _kernel.Tessellate(fresh, 1).Mesh.Triangles.Length;
+        int fine = _kernel.Tessellate(sphere, 0.01).Mesh.Triangles.Length;
+        int coarseAgain = _kernel.Tessellate(sphere, 1).Mesh.Triangles.Length;
 
         Assert.True(fine > 10 * coarse);
         Assert.Equal(coarse, coarseAgain);
@@ -176,7 +176,7 @@ public sealed class OcctKernelTests
         using IKernelShape box = _kernel.MakeBox(10, 20, 30);
         using IKernelShape placed = _kernel.Place(box, new Transform(0, -1, 0, 100, 1, 0, 0, 200, 0, 0, 1, 300));
 
-        MeshEntity mesh = _kernel.Tessellate(placed, 1);
+        MeshEntity mesh = _kernel.Tessellate(placed, 1).Mesh;
 
         BoundingBox box3 = mesh.Vertices.Aggregate(BoundingBox.Empty, (box, vertex) => box.Include(vertex));
         AssertBox(new Point3d(80, 200, 300), new Point3d(100, 210, 330), box3);
@@ -243,12 +243,35 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void Tessellation_gives_the_triangles_of_each_face_and_the_edges()
+    {
+        using IKernelShape box = _kernel.MakeBox(100, 100, 100);
+        using IKernelShape drill = _kernel.Place(_kernel.MakeCylinder(20, 120), Transform.Translation(50, 50, -10));
+        using IKernelShape drilled = _kernel.Subtract(box, drill);
+
+        ShapeTessellation tessellation = _kernel.Tessellate(drilled, 0.1);
+
+        Assert.Equal(7, tessellation.FaceCount); // the six sides of the box and the hole
+        Assert.Equal(0, tessellation.TrianglesOf(0).Start.Value);
+        Assert.Equal(tessellation.Mesh.Triangles.Length, tessellation.TrianglesOf(6).End.Value);
+        Assert.Equal(14, tessellation.Edges.Count); // those of the box and the two circles of the hole
+        for (int edge = 0; edge < tessellation.Edges.Count; edge++)
+        {
+            foreach (Point3d point in tessellation.Edges[edge])
+            {
+                Assert.InRange(point.X, -1e-9, 100 + 1e-9);
+                Assert.InRange(point.Z, -1e-9, 100 + 1e-9);
+            }
+        }
+    }
+
+    [Fact]
     public void Shapes_can_be_used_from_several_threads_at_the_same_time()
     {
         using IKernelShape box = _kernel.MakeBox(100, 100, 100);
         using IKernelShape drill = _kernel.Place(_kernel.MakeCylinder(20, 120), Transform.Translation(50, 50, -10));
         using IKernelShape drilled = _kernel.Subtract(box, drill);
-        int triangles = _kernel.Tessellate(drilled, 0.1).Triangles.Length;
+        int triangles = _kernel.Tessellate(drilled, 0.1).Mesh.Triangles.Length;
         double volume = _kernel.ComputeVolume(drilled);
 
         // The same shape tessellated, measured, written and cut on many threads at once.
@@ -257,7 +280,7 @@ public sealed class OcctKernelTests
         {
             using IKernelShape cut = _kernel.Subtract(box, drill);
             Assert.NotEmpty(_kernel.Serialize(drilled));
-            results.Add((_kernel.Tessellate(drilled, 0.1).Triangles.Length, _kernel.ComputeVolume(drilled),
+            results.Add((_kernel.Tessellate(drilled, 0.1).Mesh.Triangles.Length, _kernel.ComputeVolume(drilled),
                 _kernel.ComputeVolume(cut)));
         });
 

@@ -18,7 +18,7 @@ internal sealed class ViewportScene
 {
     private readonly Block _root;
     private readonly Dictionary<Block, int> _instanceCounts;
-    private readonly Dictionary<BrepEntity, MeshEntity?> _tessellations;
+    private readonly Dictionary<BrepEntity, ShapeTessellation?> _tessellations;
 
     // The index of each instance in the viewer that shows the scene, or -1 for those it could not show.
     private int[] _shownInstances = [];
@@ -29,6 +29,7 @@ internal sealed class ViewportScene
         _instanceCounts = builder.InstanceCounts;
         _tessellations = builder.Tessellations;
         Meshes = builder.Meshes;
+        MeshEdges = builder.MeshEdges;
         Materials = builder.Materials;
         MaterialTextures = builder.MaterialTextures;
         Textures = builder.Textures;
@@ -44,6 +45,12 @@ internal sealed class ViewportScene
 
     /// <summary>The meshes with triangles, those of the shapes included; meshes without any show nothing.</summary>
     public IReadOnlyList<MeshEntity> Meshes { get; }
+
+    /// <summary>
+    /// For each mesh, the edges to draw in its place of those of its triangles: those of the shape it is the
+    /// tessellation of; null for the other meshes.
+    /// </summary>
+    public IReadOnlyList<Polylines?> MeshEdges { get; }
 
     public IReadOnlyList<Material> Materials { get; }
 
@@ -101,11 +108,11 @@ internal sealed class ViewportScene
 
         // A mesh or a placement that the viewer refuses, with positions that are not finite or a placement that
         // flattens the mesh, is left out, rather than the whole document.
-        int[] meshes = Meshes.Select(mesh =>
+        int[] meshes = Meshes.Select((mesh, index) =>
         {
             try
             {
-                return viewer.AddMesh(mesh);
+                return viewer.AddMesh(mesh, MeshEdges[index]);
             }
             catch (ArgumentException)
             {
@@ -211,6 +218,8 @@ internal sealed class ViewportScene
 
         public List<MeshEntity> Meshes { get; } = [];
 
+        public List<Polylines?> MeshEdges { get; } = [];
+
         public List<Material> Materials { get; } = [];
 
         public List<int> MaterialTextures { get; } = [];
@@ -220,7 +229,8 @@ internal sealed class ViewportScene
         public List<ViewportInstance> Instances { get; } = [];
 
         /// <summary>The mesh of each B-rep shape visited, null when it could not be tessellated.</summary>
-        public Dictionary<BrepEntity, MeshEntity?> Tessellations { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<BrepEntity, ShapeTessellation?> Tessellations { get; } =
+            new(ReferenceEqualityComparer.Instance);
 
         /// <summary>The number of instances that a reference to each block places.</summary>
         public Dictionary<Block, int> InstanceCounts { get; } = new(ReferenceEqualityComparer.Instance);
@@ -238,7 +248,7 @@ internal sealed class ViewportScene
                         AddInstance(mesh, entity.Material ?? inherited, placement);
                         break;
                     case BrepEntity brep when TessellationOf(brep) is { } tessellation:
-                        AddInstance(tessellation, entity.Material ?? inherited, placement);
+                        AddInstance(tessellation.Mesh, entity.Material ?? inherited, placement, tessellation.Edges);
                         break;
                     case BlockReference reference:
                         Visit(reference.Block, placement * reference.Transform, reference.Material ?? inherited);
@@ -249,13 +259,13 @@ internal sealed class ViewportScene
             InstanceCounts[block] = Instances.Count - first;
         }
 
-        private void AddInstance(MeshEntity mesh, Material? material, Transform placement) =>
-            Instances.Add(new ViewportInstance(IndexOf(mesh), IndexOf(material ?? DefaultMaterial), placement));
+        private void AddInstance(MeshEntity mesh, Material? material, Transform placement, Polylines? edges = null) =>
+            Instances.Add(new ViewportInstance(IndexOf(mesh, edges), IndexOf(material ?? DefaultMaterial), placement));
 
         // A shape that cannot be turned into triangles is left out, as a mesh that the viewer refuses.
-        private MeshEntity? TessellationOf(BrepEntity brep)
+        private ShapeTessellation? TessellationOf(BrepEntity brep)
         {
-            if (!Tessellations.TryGetValue(brep, out MeshEntity? mesh))
+            if (!Tessellations.TryGetValue(brep, out ShapeTessellation? mesh))
             {
                 try
                 {
@@ -277,12 +287,13 @@ internal sealed class ViewportScene
             return mesh;
         }
 
-        private int IndexOf(MeshEntity mesh)
+        private int IndexOf(MeshEntity mesh, Polylines? edges)
         {
             if (!_meshIndices.TryGetValue(mesh, out int index))
             {
                 index = _meshIndices[mesh] = Meshes.Count;
                 Meshes.Add(mesh);
+                MeshEdges.Add(edges);
             }
 
             return index;

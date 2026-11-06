@@ -50,6 +50,9 @@ internal unsafe struct NativeMesh
     public int VertexCount;
     public int* Triangles;
     public int TriangleCount;
+    public double* EdgePoints;
+    public int* EdgeFirstPoints;
+    public int EdgeCount;
 }
 
 /// <summary>A material of the metallic-roughness model of glTF.</summary>

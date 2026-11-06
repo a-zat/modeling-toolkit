@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
@@ -112,14 +113,24 @@ public sealed class OcctKernel : IGeometryKernel
         return new OcctShape(handle);
     }
 
-    public MeshEntity Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5)
+    public unsafe ShapeTessellation Tessellate(
+        IKernelShape shape, double linearDeflection, double angularDeflection = 0.5)
     {
         NativeMethods.ShapeTessellate(Unwrap(shape), linearDeflection, angularDeflection, out TessellationHandle handle)
             .ThrowIfFailed();
         using (handle)
         {
             NativeMethods.TessellationGetMesh(handle, out MeshInfo mesh).ThrowIfFailed();
-            return mesh.ToMeshEntity();
+            NativeMethods.TessellationGetFaces(handle, out int* firstTriangles, out int faceCount).ThrowIfFailed();
+            NativeMethods.TessellationGetEdges(handle, out double* points, out int* firstPoints, out int edgeCount)
+                .ThrowIfFailed();
+
+            int pointCount = firstPoints[edgeCount];
+            var edges = new Polylines(
+                MemoryMarshal.Cast<double, Point3d>(new ReadOnlySpan<double>(points, 3 * pointCount)).ToArray(),
+                new ReadOnlySpan<int>(firstPoints, edgeCount + 1).ToArray());
+            return new ShapeTessellation(
+                mesh.ToMeshEntity(), new ReadOnlySpan<int>(firstTriangles, faceCount + 1).ToArray(), edges);
         }
     }
 

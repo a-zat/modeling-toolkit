@@ -34,7 +34,7 @@ struct mtk_viewer : mtk::Viewer {
 // The managed side declares the same layouts: these sizes must match the ones it checks in its tests.
 static_assert(sizeof(mtk_viewer_colors) == 132);
 static_assert(sizeof(mtk_viewer_material) == 28);
-static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 48);
+static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 72);
 
 namespace {
 
@@ -284,7 +284,7 @@ void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
 }
 
 int mtk::Viewer::add_mesh(const mtk_viewer_mesh& mesh) {
-    meshes_.push_back(make_triangles(mesh));
+    meshes_.push_back(make_mesh(mesh));
     return mesh_count() - 1;
 }
 
@@ -307,14 +307,14 @@ int mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
     if (const std::optional<gp_Trsf> placement = to_placement(transform)) {
         occ::handle<MeshObject>& shared = shared_meshes_[{mesh, material}];
         if (shared.IsNull()) {
-            shared = new MeshObject(meshes_[mesh], materials_[material]);
+            shared = new MeshObject(meshes_[mesh], materials_[material], edge_aspects_);
         }
         occ::handle<AIS_ConnectedInteractive> connected = new AIS_ConnectedInteractive();
         connected->Connect(shared, *placement);
         instance = connected;
     } else {
         // Stretched or sheared: a copy of the triangles of its own.
-        instance = new MeshObject(transform_triangles(meshes_[mesh], transform), materials_[material]);
+        instance = new MeshObject(transform_mesh(meshes_[mesh], transform), materials_[material], edge_aspects_);
     }
     context_->Display(instance, MeshObject::shaded_mode, 0, false); // shown, and picked as a whole
     instances_.push_back(instance);
@@ -408,6 +408,7 @@ void mtk::Viewer::set_display_mode(mtk_viewer_display_mode mode) {
     for (MaterialAspects& aspects : materials_) {
         apply_display_mode(aspects, mode, edge_color_);
     }
+    apply_display_mode(edge_aspects_, mode, edge_color_);
     // The instances placed by a transformation show the presentations of the shared meshes.
     for (const auto& [key, mesh] : shared_meshes_) {
         mesh->SynchronizeAspects();
@@ -625,6 +626,28 @@ mtk_status check_mesh(const mtk_viewer_mesh& mesh) {
     for (int32_t i = 0; i < 3 * mesh.triangle_count; ++i) {
         if (mesh.triangles[i] < 0 || mesh.triangles[i] >= mesh.vertex_count) {
             return mtk::invalid_argument("A triangle refers to a vertex that the mesh does not have.");
+        }
+    }
+
+    if (mesh.edge_first_points == nullptr) {
+        return MTK_STATUS_OK;
+    }
+    if (mesh.edge_count < 0 || mesh.edge_count > max_mesh_size || mesh.edge_first_points[0] != 0) {
+        return mtk::invalid_argument("The edges of a mesh must be from 0 to 715827882, their points counted from 0.");
+    }
+    for (int32_t edge = 0; edge < mesh.edge_count; ++edge) {
+        const int64_t first = mesh.edge_first_points[edge], next = mesh.edge_first_points[edge + 1];
+        if (next - first < 2 || next > max_mesh_size) {
+            return mtk::invalid_argument("Each edge of a mesh needs two points or more, and 715827882 points at most.");
+        }
+    }
+    const int32_t point_count = mesh.edge_first_points[mesh.edge_count];
+    if (point_count > 0 && mesh.edge_points == nullptr) {
+        return mtk::invalid_argument("The points of the edges of a mesh must not be null.");
+    }
+    for (int64_t i = 0; i < 3 * static_cast<int64_t>(point_count); ++i) {
+        if (!std::isfinite(mesh.edge_points[i])) {
+            return mtk::invalid_argument("The points of the edges of a mesh must be finite.");
         }
     }
     return MTK_STATUS_OK;

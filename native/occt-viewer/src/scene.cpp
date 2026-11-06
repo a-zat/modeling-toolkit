@@ -74,7 +74,7 @@ occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& m
 }
 
 void apply_display_mode_to(Graphic3d_AspectFillArea3d& aspect, mtk_viewer_display_mode mode,
-                           const Quantity_ColorRGBA& edges) {
+                           const Quantity_ColorRGBA& edges, bool triangle_edges) {
     const bool wireframe = mode == MTK_VIEWER_DISPLAY_WIREFRAME;
     aspect.SetInteriorStyle(wireframe ? Aspect_IS_EMPTY : Aspect_IS_SOLID);
     // Without faces the edges take the colour of the material, lit and textured: in a single colour they stand out
@@ -82,7 +82,7 @@ void apply_display_mode_to(Graphic3d_AspectFillArea3d& aspect, mtk_viewer_displa
     aspect.SetTextureMapOn(!wireframe && !aspect.TextureSet().IsNull());
     aspect.SetShadingModel(wireframe ? Graphic3d_TypeOfShadingModel_Unlit : Graphic3d_TypeOfShadingModel_DEFAULT);
     aspect.SetInteriorColor(edges);
-    aspect.SetDrawEdges(mode != MTK_VIEWER_DISPLAY_SHADED);
+    aspect.SetDrawEdges(triangle_edges && mode != MTK_VIEWER_DISPLAY_SHADED);
     aspect.SetEdgeColor(edges);
     aspect.SetEdgeWidth(1.0);
 }
@@ -90,21 +90,52 @@ void apply_display_mode_to(Graphic3d_AspectFillArea3d& aspect, mtk_viewer_displa
 } // namespace
 
 void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges) {
-    apply_display_mode_to(*aspects.shaded, mode, Quantity_ColorRGBA(edges, 1.0f));
-    apply_display_mode_to(*aspects.faded, mode, Quantity_ColorRGBA(edges, faded_opacity));
+    const Quantity_ColorRGBA shaded(edges, 1.0f), faded(edges, faded_opacity);
+    apply_display_mode_to(*aspects.shaded, mode, shaded, true);
+    apply_display_mode_to(*aspects.faded, mode, faded, true);
+    apply_display_mode_to(*aspects.shaded_faces, mode, shaded, false);
+    apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
 }
 
-mtk::MeshObject::MeshObject(const occ::handle<Graphic3d_ArrayOfTriangles>& triangles, const MaterialAspects& aspects)
-    : triangles_(triangles), aspects_(aspects) {}
+mtk::EdgeAspects mtk::make_edge_aspects() {
+    EdgeAspects aspects{new Graphic3d_AspectLine3d(), new Graphic3d_AspectLine3d()};
+    aspects.faded->SetAlphaMode(Graphic3d_AlphaMode_Blend);
+    return aspects;
+}
+
+void mtk::apply_display_mode(EdgeAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges) {
+    // An empty line type draws nothing: the same presentations serve all the display modes.
+    const Aspect_TypeOfLine type = mode == MTK_VIEWER_DISPLAY_SHADED ? Aspect_TOL_EMPTY : Aspect_TOL_SOLID;
+    for (const occ::handle<Graphic3d_AspectLine3d>& aspect : {aspects.shaded, aspects.faded}) {
+        aspect->SetLineType(type);
+        aspect->SetLineWidth(1.0f);
+    }
+    aspects.shaded->SetInteriorColor(Quantity_ColorRGBA(edges, 1.0f));
+    aspects.faded->SetInteriorColor(Quantity_ColorRGBA(edges, faded_opacity));
+}
+
+mtk::MeshObject::MeshObject(const Mesh& mesh, const MaterialAspects& aspects, const EdgeAspects& edge_aspects)
+    : mesh_(mesh), aspects_(aspects), edge_aspects_(edge_aspects) {}
 
 void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
                               const occ::handle<Prs3d_Presentation>& presentation, const int mode) {
     if (!AcceptDisplayMode(mode)) {
         return;
     }
-    const occ::handle<Graphic3d_Group> group = presentation->NewGroup();
-    group->SetGroupPrimitivesAspect(mode == faded_mode ? aspects_.faded : aspects_.shaded);
-    group->AddPrimitiveArray(triangles_);
+    const bool faded = mode == faded_mode;
+    const occ::handle<Graphic3d_Group> faces = presentation->NewGroup();
+    if (mesh_.has_own_edges) {
+        faces->SetGroupPrimitivesAspect(faded ? aspects_.faded_faces : aspects_.shaded_faces);
+    } else {
+        faces->SetGroupPrimitivesAspect(faded ? aspects_.faded : aspects_.shaded);
+    }
+    faces->AddPrimitiveArray(mesh_.triangles);
+
+    if (!mesh_.edges.IsNull()) {
+        const occ::handle<Graphic3d_Group> edges = presentation->NewGroup();
+        edges->SetGroupPrimitivesAspect(faded ? edge_aspects_.faded : edge_aspects_.shaded);
+        edges->AddPrimitiveArray(mesh_.edges);
+    }
 }
 
 void mtk::MeshObject::ComputeSelection(const occ::handle<SelectMgr_Selection>& selection, const int mode) {
@@ -113,11 +144,13 @@ void mtk::MeshObject::ComputeSelection(const occ::handle<SelectMgr_Selection>& s
     }
     const occ::handle<Select3D_SensitivePrimitiveArray> sensitive =
         new Select3D_SensitivePrimitiveArray(new SelectMgr_EntityOwner(this));
-    sensitive->InitTriangulation(triangles_->Attributes(), triangles_->Indices(), TopLoc_Location());
+    sensitive->InitTriangulation(mesh_.triangles->Attributes(), mesh_.triangles->Indices(), TopLoc_Location());
     selection->Add(sensitive);
 }
 
-occ::handle<Graphic3d_ArrayOfTriangles> mtk::make_triangles(const mtk_viewer_mesh& mesh) {
+namespace {
+
+occ::handle<Graphic3d_ArrayOfTriangles> make_triangles(const mtk_viewer_mesh& mesh) {
     const bool has_uvs = mesh.uvs != nullptr;
     const auto position = [&](int vertex) {
         return gp_Pnt(mesh.positions[3 * vertex], mesh.positions[3 * vertex + 1], mesh.positions[3 * vertex + 2]);
@@ -161,8 +194,47 @@ occ::handle<Graphic3d_ArrayOfTriangles> mtk::make_triangles(const mtk_viewer_mes
     return triangles;
 }
 
-occ::handle<Graphic3d_ArrayOfTriangles> mtk::transform_triangles(
-    const occ::handle<Graphic3d_ArrayOfTriangles>& triangles, const double* matrix) {
+// The polylines of the edges of its own of a checked mesh, null when it has none.
+occ::handle<Graphic3d_ArrayOfPolylines> make_edges(const mtk_viewer_mesh& mesh) {
+    if (mesh.edge_first_points == nullptr || mesh.edge_count == 0) {
+        return nullptr;
+    }
+    const int32_t point_count = mesh.edge_first_points[mesh.edge_count];
+    occ::handle<Graphic3d_ArrayOfPolylines> edges = new Graphic3d_ArrayOfPolylines(point_count, mesh.edge_count);
+    for (int32_t edge = 0; edge < mesh.edge_count; ++edge) {
+        const int32_t first = mesh.edge_first_points[edge], next = mesh.edge_first_points[edge + 1];
+        edges->AddBound(next - first);
+        for (int32_t point = first; point < next; ++point) {
+            const double* xyz = mesh.edge_points + 3 * point;
+            edges->AddVertex(gp_Pnt(xyz[0], xyz[1], xyz[2]));
+        }
+    }
+    return edges;
+}
+
+occ::handle<Graphic3d_ArrayOfPolylines> transform_edges(const occ::handle<Graphic3d_ArrayOfPolylines>& edges,
+                                                        const double* matrix) {
+    if (edges.IsNull()) {
+        return nullptr;
+    }
+    const gp_Mat linear = linear_part(matrix);
+    const gp_XYZ translation(matrix[3], matrix[7], matrix[11]);
+    occ::handle<Graphic3d_ArrayOfPolylines> result =
+        new Graphic3d_ArrayOfPolylines(edges->VertexNumber(), edges->BoundNumber());
+    int vertex = 1;
+    for (int bound = 1; bound <= edges->BoundNumber(); ++bound) {
+        result->AddBound(edges->Bound(bound));
+        for (int point = 0; point < edges->Bound(bound); ++point, ++vertex) {
+            double x = 0.0, y = 0.0, z = 0.0;
+            edges->Vertice(vertex, x, y, z);
+            result->AddVertex(gp_Pnt(gp_XYZ(x, y, z).Multiplied(linear) + translation));
+        }
+    }
+    return result;
+}
+
+occ::handle<Graphic3d_ArrayOfTriangles> transform_triangles(const occ::handle<Graphic3d_ArrayOfTriangles>& triangles,
+                                                            const double* matrix) {
     const gp_Mat linear = linear_part(matrix);
     const gp_XYZ translation(matrix[3], matrix[7], matrix[11]);
     // Normals follow the inverse of the transpose; a reflection turns the triangles over, so their corners are
@@ -212,6 +284,16 @@ occ::handle<Graphic3d_ArrayOfTriangles> mtk::transform_triangles(
     return result;
 }
 
+} // namespace
+
+mtk::Mesh mtk::make_mesh(const mtk_viewer_mesh& mesh) {
+    return Mesh{make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh)};
+}
+
+mtk::Mesh mtk::transform_mesh(const Mesh& mesh, const double* matrix) {
+    return Mesh{transform_triangles(mesh.triangles, matrix), mesh.has_own_edges, transform_edges(mesh.edges, matrix)};
+}
+
 occ::handle<Graphic3d_Texture2D> mtk::make_texture(const uint8_t* pixels, int width, int height) {
     occ::handle<Image_PixMap> image = new Image_PixMap();
     if (!image->InitTrash(Image_Format_RGBA, width, height)) {
@@ -240,8 +322,10 @@ mtk::MaterialAspects mtk::make_aspects(const mtk_viewer_material& material,
     // Faded, only the fronts of the triangles are drawn, so that what is behind shows through fewer layers.
     mtk_viewer_material faded = material;
     faded.base_color[3] *= faded_opacity;
-    MaterialAspects aspects{make_aspect(material, texture), make_aspect(faded, texture)};
+    MaterialAspects aspects{make_aspect(material, texture), make_aspect(faded, texture), make_aspect(material, texture),
+                            make_aspect(faded, texture)};
     aspects.faded->SetFaceCulling(Graphic3d_TypeOfBackfacingModel_BackCulled);
+    aspects.faded_faces->SetFaceCulling(Graphic3d_TypeOfBackfacingModel_BackCulled);
     return aspects;
 }
 

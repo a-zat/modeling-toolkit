@@ -70,6 +70,34 @@ mtk_mesh_info mesh_of(const TessellationPtr& tessellation) {
     return mesh;
 }
 
+// The triangles of each face, as ranges [first, next first).
+std::vector<int32_t> faces_of(const TessellationPtr& tessellation) {
+    const int32_t* first_triangles = nullptr;
+    int32_t count = -1;
+    EXPECT_EQ(mtk_tessellation_get_faces(tessellation.get(), &first_triangles, &count), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    return std::vector<int32_t>(first_triangles, first_triangles + count + 1);
+}
+
+using Polyline = std::vector<std::array<double, 3>>;
+
+std::vector<Polyline> edges_of(const TessellationPtr& tessellation) {
+    const double* points = nullptr;
+    const int32_t* first_points = nullptr;
+    int32_t count = -1;
+    EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, &first_points, &count), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    std::vector<Polyline> edges;
+    for (int32_t edge = 0; edge < count; ++edge) {
+        Polyline polyline;
+        for (int32_t point = first_points[edge]; point < first_points[edge + 1]; ++point) {
+            polyline.push_back({points[3 * point], points[3 * point + 1], points[3 * point + 2]});
+        }
+        edges.push_back(polyline);
+    }
+    return edges;
+}
+
 // What a mesh encloses and how large its surface is, from its triangles, and whether the front of every triangle, from
 // where its vertices run counter-clockwise, is on the side of the normals of its vertices (leaving out triangles of
 // no area).
@@ -485,6 +513,88 @@ TEST(Tessellation, KeepsTheShapeAsItWasAndItsPlacement) {
     EXPECT_EQ(measures.triangles_against_their_normals, 0);
     EXPECT_NEAR(volume_of(placed), 6000.0, 1e-6);
     EXPECT_EQ(mesh_of(tessellate(box, 1.0)).triangle_count, 12);
+}
+
+TEST(Tessellation, GivesTheTrianglesOfEachFace) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(5.0, 10.0, &made), MTK_STATUS_OK);
+    ShapePtr cylinder(made);
+
+    EXPECT_EQ(faces_of(tessellate(box, 1.0)), (std::vector<int32_t>{0, 2, 4, 6, 8, 10, 12}));
+
+    TessellationPtr tessellation = tessellate(cylinder, 0.1);
+    const std::vector<int32_t> faces = faces_of(tessellation);
+    ASSERT_EQ(faces.size(), 4u); // the side, the top and the bottom
+    EXPECT_EQ(faces.front(), 0);
+    EXPECT_EQ(faces.back(), mesh_of(tessellation).triangle_count);
+    EXPECT_TRUE(std::is_sorted(faces.begin(), faces.end()));
+}
+
+TEST(Tessellation, GivesEachEdgeOnceWithoutSeamsOrPoles) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+    const std::vector<Polyline> box_edges = edges_of(tessellate(box, 1.0));
+    ASSERT_EQ(box_edges.size(), 12u);
+    for (const Polyline& edge : box_edges) {
+        ASSERT_EQ(edge.size(), 2u); // straight
+        for (const std::array<double, 3>& point : edge) {
+            EXPECT_TRUE(point[0] == 0.0 || point[0] == 10.0);
+            EXPECT_TRUE(point[1] == 0.0 || point[1] == 20.0);
+            EXPECT_TRUE(point[2] == 0.0 || point[2] == 30.0);
+        }
+    }
+
+    // The two circles of a cylinder, closed, on its radius; not the seam of its side.
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(5.0, 10.0, &made), MTK_STATUS_OK);
+    ShapePtr cylinder(made);
+    const std::vector<Polyline> circles = edges_of(tessellate(cylinder, 0.01));
+    ASSERT_EQ(circles.size(), 2u);
+    for (const Polyline& circle : circles) {
+        EXPECT_GT(circle.size(), 16u);
+        EXPECT_EQ(circle.front(), circle.back());
+        for (const std::array<double, 3>& point : circle) {
+            EXPECT_NEAR(std::hypot(point[0], point[1]), 5.0, 1e-9);
+            EXPECT_TRUE(point[2] == 0.0 || point[2] == 10.0);
+        }
+    }
+
+    ASSERT_EQ(mtk_shape_make_sphere(5.0, &made), MTK_STATUS_OK);
+    ShapePtr sphere(made);
+    EXPECT_TRUE(edges_of(tessellate(sphere, 0.1)).empty());
+}
+
+TEST(Tessellation, GivesTheEdgesOfABooleanResultWherePlaced) {
+    ShapePtr box = make_box(100.0, 100.0, 100.0);
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(20.0, 120.0, &made), MTK_STATUS_OK);
+    ShapePtr drill = place(ShapePtr(made), {1, 0, 0, 50, 0, 1, 0, 50, 0, 0, 1, -10});
+    ASSERT_EQ(mtk_shape_boolean(box.get(), drill.get(), MTK_BOOLEAN_DIFFERENCE, &made), MTK_STATUS_OK);
+    ShapePtr drilled = place(ShapePtr(made), {1, 0, 0, 1000, 0, 1, 0, 0, 0, 0, 1, 0});
+
+    const std::vector<Polyline> edges = edges_of(tessellate(drilled, 0.1));
+
+    ASSERT_EQ(edges.size(), 14u); // those of the box and the two circles of the hole
+    for (const Polyline& edge : edges) {
+        for (const std::array<double, 3>& point : edge) {
+            EXPECT_GE(point[0], 1000.0 - 1e-9);
+            EXPECT_LE(point[0], 1100.0 + 1e-9);
+        }
+    }
+}
+
+TEST(Tessellation, RejectsNullArgumentsForFacesAndEdges) {
+    TessellationPtr tessellation = tessellate(make_box(1.0, 1.0, 1.0), 1.0);
+    const int32_t* indices = nullptr;
+    const double* points = nullptr;
+    int32_t count = 0;
+    EXPECT_EQ(mtk_tessellation_get_faces(nullptr, &indices, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_faces(tessellation.get(), nullptr, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_faces(tessellation.get(), &indices, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_edges(nullptr, &points, &indices, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), nullptr, &indices, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, nullptr, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, &indices, nullptr), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(Concurrency, CallsOnSharedShapesFromManyThreadsAtOnceGiveTheResultsOfOneThread) {

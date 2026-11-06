@@ -94,14 +94,20 @@ internal sealed class OcctViewer : IDisposable
     // The scene: each method that adds returns the index of what it added, from 0 until Clear. After changing the scene,
     // Redraw should be called on the next frame.
 
+    /// <param name="edges">
+    /// The edges that the display modes with edges draw, such as those of the shape the mesh is the tessellation of;
+    /// null for the edges of the triangles.
+    /// </param>
     /// <exception cref="ArgumentException">The mesh has no triangles, or positions that are not finite.</exception>
-    public unsafe int AddMesh(MeshEntity mesh)
+    public unsafe int AddMesh(MeshEntity mesh, Polylines? edges = null)
     {
         // The arrays of the mesh are passed as they are: their elements are made of doubles, floats and ints.
         fixed (Point3d* positions = mesh.Vertices)
         fixed (Vector3* normals = mesh.Normals)
         fixed (Vector2* uvs = mesh.TextureCoordinates)
         fixed (Triangle* triangles = mesh.Triangles)
+        fixed (Point3d* edgePoints = edges is null ? default : edges.Points)
+        fixed (int* edgeFirstPoints = edges is null ? default : edges.FirstPoints)
         {
             var native = new NativeMesh
             {
@@ -111,6 +117,11 @@ internal sealed class OcctViewer : IDisposable
                 VertexCount = mesh.Vertices.Length,
                 Triangles = (int*)triangles,
                 TriangleCount = mesh.Triangles.Length,
+                // Edges of its own, even none, take the place of those of the triangles: the first points of the edges
+                // hold at least one value, so their pointer is null only without edges of its own.
+                EdgePoints = (double*)edgePoints,
+                EdgeFirstPoints = edgeFirstPoints,
+                EdgeCount = edges?.Count ?? 0,
             };
             NativeMethods.AddMesh(_handle, in native, out int index).ThrowIfFailed();
             return index;

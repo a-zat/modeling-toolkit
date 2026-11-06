@@ -86,9 +86,10 @@ public interface IGeometryKernel
     IKernelShape Deserialize(ReadOnlySpan<byte> data);
 
     /// <summary>
-    /// Turns the faces of a shape into one triangle mesh, in the coordinates of the shape. Each face has its own
-    /// vertices, with the normals of its surface, so that the edges between faces look sharp; the front of the
-    /// triangles is on the outside of a solid. The shape is not changed.
+    /// Turns the faces of a shape into one triangle mesh, in the coordinates of the shape, and its edges into
+    /// polylines that lie on the triangles. Each face has its own vertices, with the normals of its surface, so that
+    /// the edges between faces look sharp; the front of the triangles is on the outside of a solid. The shape is not
+    /// changed.
     /// </summary>
     /// <param name="linearDeflection">The largest distance, in millimetres, between a triangle and its surface.</param>
     /// <param name="angularDeflection">
@@ -98,7 +99,7 @@ public interface IGeometryKernel
     /// <exception cref="ArgumentException">
     /// A deflection is not valid, or the shape has no faces, or too many triangles for the deflection.
     /// </exception>
-    MeshEntity Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5);
+    ShapeTessellation Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5);
 
     /// <summary>The smallest box with its sides along the axes that contains the shape.</summary>
     BoundingBox GetBoundingBox(IKernelShape shape);

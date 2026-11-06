@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 8
+#define MTK_OCCT_VIEWER_ABI_VERSION 9
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -71,7 +71,7 @@ typedef struct mtk_viewer_colors {
     float cube_edge[3]; /* its bevelled edges and corners */
     float cube_text[3];
     float highlight[3]; /* the part of the ViewCube under the pointer */
-    float edges[3];     /* the edges of the triangles, in the display modes that draw them */
+    float edges[3];     /* the edges, in the display modes that draw them */
 } mtk_viewer_colors;
 
 /* The views of the faces of the ViewCube, and the view from its front right top corner, the initial one. */
@@ -88,8 +88,8 @@ typedef enum mtk_viewer_view {
 /* How the meshes are drawn. */
 typedef enum mtk_viewer_display_mode {
     MTK_VIEWER_DISPLAY_SHADED = 0,
-    MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES = 1, /* with the edges of the triangles */
-    MTK_VIEWER_DISPLAY_WIREFRAME = 2          /* only the edges of the triangles */
+    MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES = 1, /* with the edges of the meshes */
+    MTK_VIEWER_DISPLAY_WIREFRAME = 2          /* only the edges of the meshes */
 } mtk_viewer_display_mode;
 
 /*
@@ -114,7 +114,10 @@ MTK_VIEWER_API mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_vi
  * the view must be drawn again with mtk_viewer_redraw. Arrays are read during the call only.
  */
 
-/* A triangle mesh. */
+/*
+ * A triangle mesh, and the edges that the display modes with edges draw: those of its triangles, or polylines of its
+ * own, such as the edges of the solid it is the tessellation of.
+ */
 typedef struct mtk_viewer_mesh {
     const double* positions; /* 3 per vertex, in millimetres */
     const float* normals;    /* 3 per vertex, of unit length; null for flat shading */
@@ -122,6 +125,12 @@ typedef struct mtk_viewer_mesh {
     int32_t vertex_count;
     const int32_t* triangles; /* 3 indices of vertices per triangle, counter-clockwise seen from its front */
     int32_t triangle_count;
+    /* Edges of its own: null edge_first_points draws the edges of the triangles. Otherwise edge_first_points has
+     * edge_count + 1 values, and edge i the points from edge_first_points[i] to edge_first_points[i + 1] - 1, two or
+     * more, of edge_points (3 values per point, in millimetres), which may be null when there are no edges. */
+    const double* edge_points;
+    const int32_t* edge_first_points;
+    int32_t edge_count;
 } mtk_viewer_mesh;
 
 /* A material of the metallic-roughness model of glTF. */

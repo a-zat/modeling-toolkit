@@ -92,6 +92,21 @@ public sealed class ViewportSceneTests
     }
 
     [Fact]
+    public void AShapeIsDrawnWithItsOwnEdgesAndAMeshWithThoseOfItsTriangles()
+    {
+        var kernel = new OcctKernel();
+        var document = new Document();
+        document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(10, 20, 30)));
+        document.Root.Entities.Add(Square());
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Equal(2, scene.Meshes.Count);
+        Assert.Equal(12, scene.MeshEdges[0]?.Count);
+        Assert.Null(scene.MeshEdges[1]);
+    }
+
+    [Fact]
     public void PlacementsComposeTheTransformsOfNestedReferences()
     {
         var wheel = new Block("Wheel") { Entities = { Square() } };

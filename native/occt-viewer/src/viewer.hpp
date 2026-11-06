@@ -132,7 +132,8 @@ private:
     mtk_viewer_display_mode display_mode_ = MTK_VIEWER_DISPLAY_SHADED;
     Quantity_Color edge_color_ = Quantity_NOC_GRAY30;
     occ::handle<Aspect_NeutralWindow> window_;
-    std::vector<occ::handle<Graphic3d_ArrayOfTriangles>> meshes_;
+    std::vector<Mesh> meshes_;
+    EdgeAspects edge_aspects_ = make_edge_aspects();
     std::vector<occ::handle<Graphic3d_Texture2D>> textures_;
     std::vector<MaterialAspects> materials_;
     std::map<std::pair<int, int>, occ::handle<MeshObject>> shared_meshes_; // by mesh and material
