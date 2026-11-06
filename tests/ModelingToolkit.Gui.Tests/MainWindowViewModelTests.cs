@@ -42,47 +42,74 @@ public sealed class MainWindowViewModelTests
     [Fact]
     public async Task OpeningAFileKeepsTheFileCommandsWaitingAndCanBeCancelled()
     {
-        MainWindowViewModel viewModel = Create();
+        using var gated = new GatedFormat();
+        MainWindowViewModel viewModel = Create(gated);
 
-        Task opening = viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        Task opening = viewModel.LoadAsync("model.gated");
 
         Assert.True(viewModel.IsBusy);
         Assert.False(viewModel.OpenCommand.CanExecute(null));
         Assert.True(viewModel.CancelCommand.CanExecute(null));
+        gated.Release();
         await opening;
         Assert.False(viewModel.IsBusy);
         Assert.True(viewModel.OpenCommand.CanExecute(null));
         Assert.True(viewModel.SaveCommand.CanExecute(null));
         Assert.False(viewModel.CancelCommand.CanExecute(null));
 
-        Task again = viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        Task again = viewModel.LoadAsync("model.gated");
         viewModel.CancelCommand.Execute(null);
         await again;
-        Assert.Equal("Opening CesiumMilkTruck.glb was cancelled.", viewModel.StatusMessage);
+        Assert.Equal("Opening model.gated was cancelled.", viewModel.StatusMessage);
         Assert.False(viewModel.IsBusy);
     }
 
     [Fact]
     public async Task WaitingToCloseCancelsAFileBeingOpenedButNotOneBeingSaved()
     {
-        MainWindowViewModel viewModel = Create();
+        using var gated = new GatedFormat();
+        MainWindowViewModel viewModel = Create(gated);
         await viewModel.WhenIdleAsync();
 
-        Task opening = viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        Task opening = viewModel.LoadAsync("model.gated");
         await viewModel.WhenIdleAsync();
         await opening;
-        Assert.Equal("Opening CesiumMilkTruck.glb was cancelled.", viewModel.StatusMessage);
+        Assert.Equal("Opening model.gated was cancelled.", viewModel.StatusMessage);
 
-        await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
-        string path = Path.Combine(Directory.CreateTempSubdirectory("mtk-tests-").FullName, "truck.mtk");
+        gated.Release();
+        await viewModel.LoadAsync("model.gated");
+        string path = Path.Combine(Directory.CreateTempSubdirectory("mtk-tests-").FullName, "model.mtk");
         viewModel.FileDialogs = new FixedFileDialogs(path);
         Task saving = viewModel.SaveAsCommand.ExecuteAsync(null);
         await viewModel.WhenIdleAsync();
         Assert.False(viewModel.IsBusy);
         await saving;
-        Assert.Equal("Saved truck.mtk (Modeling Toolkit).", viewModel.StatusMessage);
+        Assert.Equal("Saved model.mtk (Modeling Toolkit).", viewModel.StatusMessage);
         Assert.True(File.Exists(path));
         Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+    }
+
+    // A format whose reading lasts until the test lets it end, or until it is cancelled: the tests have no
+    // synchronization context, so a reading that ends by itself could end between two of their checks.
+    private sealed class GatedFormat : IDocumentReader, IDisposable
+    {
+        private readonly SemaphoreSlim _gate = new(0);
+
+        public string FormatName => "Gated";
+
+        public IReadOnlyList<string> Extensions { get; } = [".gated"];
+
+        /// <summary>Lets one reading end.</summary>
+        public void Release() => _gate.Release();
+
+        public void Dispose() => _gate.Dispose();
+
+        public Document Read(string path, ICollection<string> warnings, IProgress<double>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            _gate.Wait(cancellationToken);
+            return new Document();
+        }
     }
 
     [Fact]
@@ -317,9 +344,9 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(["Shaded", "Shaded with Edges"], palette.Results.Select(command => command.Name));
     }
 
-    private static MainWindowViewModel Create() => new(
+    private static MainWindowViewModel Create(params IDocumentReader[] readers) => new(
         new DocumentFormats(
-            [new GltfReader(), new NativeDocumentReader(new OcctKernel())],
+            [new GltfReader(), new NativeDocumentReader(new OcctKernel()), .. readers],
             [new NativeDocumentWriter()]),
         new RecordingAppearance());
 
