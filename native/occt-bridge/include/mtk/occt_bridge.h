@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 3
+#define MTK_OCCT_BRIDGE_ABI_VERSION 4
 
 /* Opaque handle to an OpenCASCADE shape. */
 typedef struct mtk_shape mtk_shape;
@@ -141,6 +141,25 @@ MTK_API mtk_status mtk_scene_get_texture(const mtk_scene* scene, int32_t index, 
 
 /* Messages about data that could not be read and was skipped. */
 MTK_API mtk_status mtk_scene_get_warning(const mtk_scene* scene, int32_t index, const char** out_message);
+
+/* The triangles of a shape: one mesh for all its faces, owned by the tessellation. */
+typedef struct mtk_tessellation mtk_tessellation;
+
+/*
+ * Turns the faces of a shape into triangles. linear_deflection, in millimetres, is the largest distance allowed between
+ * a triangle and the surface it stands for; angular_deflection, in radians, from 0 to pi, the largest angle between
+ * the normals of neighbouring triangles. The shape is left as it was. A shape without faces is rejected.
+ */
+MTK_API mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection, double angular_deflection,
+                                        mtk_tessellation** out_tessellation);
+
+/*
+ * The mesh, as for a scene, without a material or texture coordinates: the faces have their own vertices, with the
+ * normals of their surfaces, so that edges between faces look sharp. The front of the triangles is on the outside of
+ * the solid. The arrays are valid until mtk_tessellation_release.
+ */
+MTK_API mtk_status mtk_tessellation_get_mesh(const mtk_tessellation* tessellation, mtk_mesh_info* out_mesh);
+MTK_API void mtk_tessellation_release(mtk_tessellation* tessellation);
 
 #ifdef __cplusplus
 }

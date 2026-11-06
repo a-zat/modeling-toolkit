@@ -1,4 +1,3 @@
-using System.Numerics;
 using System.Runtime.InteropServices;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
@@ -87,18 +86,9 @@ internal sealed unsafe class SceneConverter(SceneHandle scene)
     private MeshEntity ReadMesh(int index, List<Material> materials)
     {
         NativeMethods.SceneGetMesh(scene, index, out MeshInfo mesh).ThrowIfFailed();
-        int vertexCount = mesh.VertexCount;
-
-        // The native arrays are flat (x, y, z, x, y, z...): reinterpreted as structs, they are copied in one go.
-        Point3d[] vertices = Copy<double, Point3d>(mesh.Vertices, 3 * vertexCount)!;
-        Triangle[] triangles = Copy<int, Triangle>(mesh.Triangles, 3 * mesh.TriangleCount)!;
-        Vector3[]? normals = Copy<float, Vector3>(mesh.Normals, 3 * vertexCount);
-        Vector2[]? textureCoordinates = Copy<float, Vector2>(mesh.TextureCoordinates, 2 * vertexCount);
-
-        return new MeshEntity(vertices, triangles, normals, textureCoordinates)
-        {
-            Material = mesh.Material >= 0 ? materials[mesh.Material] : null,
-        };
+        MeshEntity entity = mesh.ToMeshEntity();
+        entity.Material = mesh.Material >= 0 ? materials[mesh.Material] : null;
+        return entity;
     }
 
     private BlockReference ReadReference(int index, Block[] blocks)
@@ -112,10 +102,4 @@ internal sealed unsafe class SceneConverter(SceneHandle scene)
         string name = NativeMethods.ToManagedString(reference.Name);
         return new BlockReference(blocks[reference.Block], transform) { Name = name.Length > 0 ? name : null };
     }
-
-    /// <summary>Copies <paramref name="count"/> native values as an array of structs; null when the data is absent.</summary>
-    private static TResult[]? Copy<TValue, TResult>(TValue* values, int count)
-        where TValue : unmanaged
-        where TResult : unmanaged =>
-        values == null ? null : MemoryMarshal.Cast<TValue, TResult>(new ReadOnlySpan<TValue>(values, count)).ToArray();
 }

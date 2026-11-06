@@ -6,7 +6,7 @@ namespace ModelingToolkit.Kernel.Occt.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_BRIDGE_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 3;
+    public const int AbiVersion = 4;
 
     private const string LibraryName = "mtk_occt_bridge";
 
@@ -41,6 +41,16 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_release")]
     public static partial void ShapeRelease(nint shape);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_tessellate")]
+    public static partial NativeStatus ShapeTessellate(
+        ShapeHandle shape, double linearDeflection, double angularDeflection, out TessellationHandle tessellation);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_tessellation_get_mesh")]
+    public static partial NativeStatus TessellationGetMesh(TessellationHandle tessellation, out MeshInfo mesh);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_tessellation_release")]
+    public static partial void TessellationRelease(nint tessellation);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_scene_read_gltf", StringMarshalling = StringMarshalling.Utf8)]
     public static partial NativeStatus SceneReadGltf(string path, out SceneHandle scene);

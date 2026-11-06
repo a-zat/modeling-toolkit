@@ -1,7 +1,8 @@
 add_library(mtk_occt_bridge SHARED
     src/bridge.cpp
     src/scene.cpp
-    src/shape.cpp)
+    src/shape.cpp
+    src/tessellation.cpp)
 
 target_include_directories(mtk_occt_bridge PUBLIC include)
 target_include_directories(mtk_occt_bridge SYSTEM PRIVATE ${OpenCASCADE_INCLUDE_DIR})
@@ -10,7 +11,7 @@ target_link_libraries(mtk_occt_bridge PUBLIC mtk_status)
 target_link_libraries(mtk_occt_bridge PRIVATE
     mtk_errors
     # Geometry and topology
-    TKernel TKMath TKBRep TKGeomBase TKPrim TKTopAlgo
+    TKernel TKMath TKBRep TKGeomBase TKPrim TKTopAlgo TKMesh
     # XDE documents (assemblies, names, materials) and the glTF reader
     TKLCAF TKCAF TKXCAF TKService TKRWMesh TKDEGLTF)
 mtk_set_compile_options(mtk_occt_bridge)

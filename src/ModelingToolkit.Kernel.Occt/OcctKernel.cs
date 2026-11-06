@@ -1,5 +1,6 @@
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
+using ModelingToolkit.Core.Model;
 using ModelingToolkit.Kernel.Occt.Interop;
 
 namespace ModelingToolkit.Kernel.Occt;
@@ -69,6 +70,17 @@ public sealed class OcctKernel : IGeometryKernel
     {
         NativeMethods.ShapeVolume(Unwrap(shape), out double volume).ThrowIfFailed();
         return volume;
+    }
+
+    public MeshEntity Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5)
+    {
+        NativeMethods.ShapeTessellate(Unwrap(shape), linearDeflection, angularDeflection, out TessellationHandle handle)
+            .ThrowIfFailed();
+        using (handle)
+        {
+            NativeMethods.TessellationGetMesh(handle, out MeshInfo mesh).ThrowIfFailed();
+            return mesh.ToMeshEntity();
+        }
     }
 
     public BoundingBox GetBoundingBox(IKernelShape shape)

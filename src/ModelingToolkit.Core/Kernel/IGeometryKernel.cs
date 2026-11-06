@@ -1,4 +1,5 @@
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Kernel;
 
@@ -51,6 +52,21 @@ public interface IGeometryKernel
     IKernelShape Place(IKernelShape shape, Transform placement);
 
     double ComputeVolume(IKernelShape shape);
+
+    /// <summary>
+    /// Turns the faces of a shape into one triangle mesh, in the coordinates of the shape. Each face has its own
+    /// vertices, with the normals of its surface, so that the edges between faces look sharp; the front of the
+    /// triangles is on the outside of a solid. The shape is not changed.
+    /// </summary>
+    /// <param name="linearDeflection">The largest distance, in millimetres, between a triangle and its surface.</param>
+    /// <param name="angularDeflection">
+    /// The largest angle, in radians, between the normals of neighbouring triangles: greater than 0 and not greater
+    /// than π.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// A deflection is not valid, or the shape has no faces, or too many triangles for the deflection.
+    /// </exception>
+    MeshEntity Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5);
 
     /// <summary>The smallest box with its sides along the axes that contains the shape.</summary>
     BoundingBox GetBoundingBox(IKernelShape shape);

@@ -1,5 +1,7 @@
+using System.Numerics;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
+using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Kernel.Occt.Tests;
 
@@ -106,6 +108,98 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void A_box_is_tessellated_into_twelve_triangles_facing_outwards()
+    {
+        using IKernelShape box = _kernel.MakeBox(10, 20, 30);
+
+        MeshEntity mesh = _kernel.Tessellate(box, linearDeflection: 1);
+        Measures measures = Measure(mesh);
+
+        Assert.Equal(24, mesh.Vertices.Length); // each face has its own vertices
+        Assert.Equal(12, mesh.Triangles.Length);
+        Assert.Equal(2200, measures.Area, precision: 6);
+        Assert.Equal(6000, measures.Volume, precision: 6);
+        Assert.Equal(0, measures.TrianglesAgainstTheirNormals);
+        Assert.All(mesh.Normals!, normal => Assert.Equal(1f, normal.Length(), precision: 4));
+        Assert.Null(mesh.TextureCoordinates);
+        Assert.Null(mesh.Material);
+    }
+
+    [Fact]
+    public void Curved_solids_are_tessellated_close_to_their_surfaces_from_the_inside()
+    {
+        (string Name, IKernelShape Shape, double Area, double Volume)[] cases =
+        [
+            ("cylinder", _kernel.MakeCylinder(10, 40), 2 * Math.PI * 10 * (10 + 40), Math.PI * 10 * 10 * 40),
+            ("sphere", _kernel.MakeSphere(25), 4 * Math.PI * 25 * 25, 4.0 / 3 * Math.PI * 25 * 25 * 25),
+            (
+                "cone",
+                _kernel.MakeCone(30, 10, 60),
+                Math.PI * (30 + 10) * Math.Sqrt(60 * 60 + 20 * 20) + Math.PI * (30 * 30 + 10 * 10),
+                Math.PI * 60 / 3 * (30 * 30 + 30 * 10 + 10 * 10)),
+            ("torus", _kernel.MakeTorus(50, 10), 4 * Math.PI * Math.PI * 50 * 10, 2 * Math.PI * Math.PI * 50 * 10 * 10),
+        ];
+
+        foreach ((string name, IKernelShape shape, double area, double volume) in cases)
+        {
+            using (shape)
+            {
+                Measures measures = Measure(_kernel.Tessellate(shape, linearDeflection: 0.01, angularDeflection: 0.2));
+
+                Assert.True(Math.Abs(measures.Area - area) < 0.005 * area, $"{name}: area {measures.Area} of {area}");
+                Assert.True(
+                    Math.Abs(measures.Volume - volume) < 0.005 * volume,
+                    $"{name}: volume {measures.Volume} of {volume}");
+                Assert.True(measures.Volume < volume, $"{name}: the triangles stay inside the surface");
+                Assert.Equal(0, measures.TrianglesAgainstTheirNormals);
+            }
+        }
+    }
+
+    [Fact]
+    public void A_finer_deflection_gives_more_triangles_whatever_was_tessellated_before()
+    {
+        using IKernelShape sphere = _kernel.MakeSphere(25);
+        using IKernelShape fresh = _kernel.MakeSphere(25);
+
+        int coarse = _kernel.Tessellate(fresh, 1).Triangles.Length;
+        int fine = _kernel.Tessellate(sphere, 0.01).Triangles.Length;
+        int coarseAgain = _kernel.Tessellate(sphere, 1).Triangles.Length;
+
+        Assert.True(fine > 10 * coarse);
+        Assert.Equal(coarse, coarseAgain);
+    }
+
+    [Fact]
+    public void A_placed_shape_is_tessellated_where_it_stands()
+    {
+        using IKernelShape box = _kernel.MakeBox(10, 20, 30);
+        using IKernelShape placed = _kernel.Place(box, new Transform(0, -1, 0, 100, 1, 0, 0, 200, 0, 0, 1, 300));
+
+        MeshEntity mesh = _kernel.Tessellate(placed, 1);
+
+        BoundingBox box3 = mesh.Vertices.Aggregate(BoundingBox.Empty, (box, vertex) => box.Include(vertex));
+        AssertBox(new Point3d(80, 200, 300), new Point3d(100, 210, 330), box3);
+        Assert.Equal(6000, Measure(mesh).Volume, precision: 6);
+    }
+
+    [Theory]
+    [InlineData(0, 0.5)]
+    [InlineData(-1, 0.5)]
+    [InlineData(double.NaN, 0.5)]
+    [InlineData(1, 0)]
+    [InlineData(1, 3.2)]
+    [InlineData(1, double.NaN)]
+    public void Tessellation_rejects_invalid_deflections(double linear, double angular)
+    {
+        using IKernelShape box = _kernel.MakeBox(1, 1, 1);
+
+        var exception = Assert.Throws<ArgumentException>(() => _kernel.Tessellate(box, linear, angular));
+
+        Assert.Contains("deflection", exception.Message);
+    }
+
+    [Fact]
     public void A_disposed_shape_cannot_be_used()
     {
         IKernelShape box = _kernel.MakeBox(1, 1, 1);
@@ -114,7 +208,52 @@ public sealed class OcctKernelTests
         Assert.Throws<ObjectDisposedException>(() => _kernel.ComputeVolume(box));
         Assert.Throws<ObjectDisposedException>(() => _kernel.GetBoundingBox(box));
         Assert.Throws<ObjectDisposedException>(() => _kernel.Place(box, Transform.Identity));
+        Assert.Throws<ObjectDisposedException>(() => _kernel.Tessellate(box, 1));
     }
+
+    private readonly record struct Measures(double Area, double Volume, int TrianglesAgainstTheirNormals);
+
+    // The area of the surface and the volume the triangles enclose (negative when they face inwards), and how many
+    // have their front, from where the vertices run counter-clockwise, opposite to the normals of their vertices.
+    private static Measures Measure(MeshEntity mesh)
+    {
+        double area = 0;
+        double volume = 0;
+        int against = 0;
+        foreach (Triangle triangle in mesh.Triangles)
+        {
+            Point3d a = mesh.Vertices[triangle.A];
+            Point3d b = mesh.Vertices[triangle.B];
+            Point3d c = mesh.Vertices[triangle.C];
+            (double X, double Y, double Z) facing = Cross(Minus(b, a), Minus(c, a));
+            double triangleArea = 0.5 * Math.Sqrt(Dot(facing, facing));
+            area += triangleArea;
+            volume += Dot((a.X, a.Y, a.Z), Cross((b.X, b.Y, b.Z), (c.X, c.Y, c.Z))) / 6.0;
+
+            double alongNormals = 0;
+            foreach (int vertex in (ReadOnlySpan<int>)[triangle.A, triangle.B, triangle.C])
+            {
+                Vector3 normal = mesh.Normals![vertex];
+                alongNormals += Dot(facing, (normal.X, normal.Y, normal.Z));
+            }
+
+            // The poles of a sphere leave triangles of no area, whose front is not defined.
+            if (triangleArea > 1e-9 && alongNormals <= 0)
+            {
+                against++;
+            }
+        }
+        return new Measures(area, volume, against);
+    }
+
+    private static (double X, double Y, double Z) Minus(Point3d a, Point3d b) => (a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+
+    private static double Dot((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+        a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+
+    private static (double X, double Y, double Z) Cross(
+        (double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+        (a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
 
     private static void AssertBox(Point3d min, Point3d max, BoundingBox actual)
     {

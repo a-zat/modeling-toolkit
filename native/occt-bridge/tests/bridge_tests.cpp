@@ -2,10 +2,12 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <vector>
 
 namespace {
 
@@ -14,6 +16,12 @@ struct ShapeDeleter {
 };
 
 using ShapePtr = std::unique_ptr<mtk_shape, ShapeDeleter>;
+
+struct TessellationDeleter {
+    void operator()(mtk_tessellation* tessellation) const noexcept { mtk_tessellation_release(tessellation); }
+};
+
+using TessellationPtr = std::unique_ptr<mtk_tessellation, TessellationDeleter>;
 
 ShapePtr make_box(double dx, double dy, double dz) {
     mtk_shape* shape = nullptr;
@@ -39,6 +47,83 @@ ShapePtr place(const ShapePtr& shape, const std::array<double, 12>& placement) {
     mtk_shape* placed = nullptr;
     EXPECT_EQ(mtk_shape_place(shape.get(), placement.data(), &placed), MTK_STATUS_OK) << mtk_last_error_message();
     return ShapePtr(placed);
+}
+
+TessellationPtr tessellate(const ShapePtr& shape, double linear_deflection, double angular_deflection = 0.5) {
+    mtk_tessellation* tessellation = nullptr;
+    EXPECT_EQ(mtk_shape_tessellate(shape.get(), linear_deflection, angular_deflection, &tessellation), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    return TessellationPtr(tessellation);
+}
+
+mtk_mesh_info mesh_of(const TessellationPtr& tessellation) {
+    mtk_mesh_info mesh{};
+    EXPECT_EQ(mtk_tessellation_get_mesh(tessellation.get(), &mesh), MTK_STATUS_OK) << mtk_last_error_message();
+    return mesh;
+}
+
+// What a mesh encloses and how large its surface is, from its triangles, and whether the front of every triangle, from
+// where its vertices run counter-clockwise, is on the side of the normals of its vertices (leaving out triangles of
+// no area).
+struct MeshMeasures {
+    double area = 0.0;
+    double volume = 0.0; // negative when the triangles face inwards
+    int triangles_against_their_normals = 0;
+    int vertices_with_normals_of_any_other_length = 0;
+    std::array<double, 6> bounds{};
+};
+
+MeshMeasures measure(const mtk_mesh_info& mesh) {
+    MeshMeasures measures;
+    measures.bounds = {1e300, 1e300, 1e300, -1e300, -1e300, -1e300};
+    const auto vertex = [&](int index) {
+        return std::array<double, 3>{mesh.vertices[3 * index], mesh.vertices[3 * index + 1],
+                                     mesh.vertices[3 * index + 2]};
+    };
+    const auto cross = [](const std::array<double, 3>& a, const std::array<double, 3>& b) {
+        return std::array<double, 3>{a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
+    };
+    const auto dot = [](const std::array<double, 3>& a, const std::array<double, 3>& b) {
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    };
+
+    for (int index = 0; index < mesh.vertex_count; ++index) {
+        const std::array<double, 3> point = vertex(index);
+        for (int axis = 0; axis < 3; ++axis) {
+            measures.bounds[axis] = std::min(measures.bounds[axis], point[axis]);
+            measures.bounds[3 + axis] = std::max(measures.bounds[3 + axis], point[axis]);
+        }
+        const double length = std::hypot(mesh.normals[3 * index], mesh.normals[3 * index + 1],
+                                         mesh.normals[3 * index + 2]);
+        if (std::abs(length - 1.0) > 1e-4) {
+            ++measures.vertices_with_normals_of_any_other_length;
+        }
+    }
+    for (int triangle = 0; triangle < mesh.triangle_count; ++triangle) {
+        const int a = mesh.triangles[3 * triangle];
+        const int b = mesh.triangles[3 * triangle + 1];
+        const int c = mesh.triangles[3 * triangle + 2];
+        const std::array<double, 3> pa = vertex(a);
+        const std::array<double, 3> pb = vertex(b);
+        const std::array<double, 3> pc = vertex(c);
+        const std::array<double, 3> ab = {pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]};
+        const std::array<double, 3> ac = {pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]};
+        const std::array<double, 3> facing = cross(ab, ac);
+        measures.area += 0.5 * std::sqrt(dot(facing, facing));
+        measures.volume += dot(pa, cross(pb, pc)) / 6.0;
+
+        double along_normals = 0.0;
+        for (const int index : {a, b, c}) {
+            along_normals += facing[0] * mesh.normals[3 * index] + facing[1] * mesh.normals[3 * index + 1] +
+                             facing[2] * mesh.normals[3 * index + 2];
+        }
+        // The poles of a sphere leave triangles of no area, whose front is not defined.
+        constexpr double degenerate_area = 1e-9;
+        if (along_normals <= 0.0 && 0.5 * std::sqrt(dot(facing, facing)) > degenerate_area) {
+            ++measures.triangles_against_their_normals;
+        }
+    }
+    return measures;
 }
 
 constexpr double pi = 3.14159265358979323846;
@@ -159,6 +244,108 @@ TEST(Shape, PrimitivesRejectInvalidDimensions) {
     EXPECT_EQ(mtk_shape_make_torus(2.0, 2.0, &shape), MTK_STATUS_INVALID_ARGUMENT) << "equal radii";
     EXPECT_EQ(mtk_shape_make_torus(2.0, 3.0, &shape), MTK_STATUS_INVALID_ARGUMENT) << "minor radius too large";
     EXPECT_STRNE(mtk_last_error_message(), "");
+}
+
+TEST(Tessellation, TurnsABoxIntoTwelveTrianglesFacingOutwards) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+
+    TessellationPtr tessellation = tessellate(box, 1.0);
+    const mtk_mesh_info mesh = mesh_of(tessellation);
+    const MeshMeasures measures = measure(mesh);
+
+    EXPECT_EQ(mesh.material, -1);
+    EXPECT_EQ(mesh.texture_coordinates, nullptr);
+    EXPECT_EQ(mesh.vertex_count, 24) << "each face has its own vertices";
+    EXPECT_EQ(mesh.triangle_count, 12);
+    EXPECT_NEAR(measures.area, 2200.0, 1e-6);
+    EXPECT_NEAR(measures.volume, 6000.0, 1e-6);
+    EXPECT_EQ(measures.triangles_against_their_normals, 0);
+    EXPECT_EQ(measures.vertices_with_normals_of_any_other_length, 0);
+}
+
+TEST(Tessellation, ApproachesTheAreaAndVolumeOfCurvedSolidsFromTheInside) {
+    struct Case {
+        const char* name;
+        ShapePtr shape;
+        double area;
+        double volume;
+    };
+    std::vector<Case> cases;
+    mtk_shape* shape = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(10.0, 40.0, &shape), MTK_STATUS_OK);
+    cases.push_back({"cylinder", ShapePtr(shape), 2.0 * pi * 10.0 * (10.0 + 40.0), pi * 10.0 * 10.0 * 40.0});
+    ASSERT_EQ(mtk_shape_make_sphere(25.0, &shape), MTK_STATUS_OK);
+    cases.push_back({"sphere", ShapePtr(shape), 4.0 * pi * 25.0 * 25.0, 4.0 / 3.0 * pi * 25.0 * 25.0 * 25.0});
+    ASSERT_EQ(mtk_shape_make_cone(30.0, 10.0, 60.0, &shape), MTK_STATUS_OK);
+    cases.push_back({"cone", ShapePtr(shape),
+                     pi * (30.0 + 10.0) * std::hypot(60.0, 20.0) + pi * (30.0 * 30.0 + 10.0 * 10.0),
+                     pi * 60.0 / 3.0 * (30.0 * 30.0 + 30.0 * 10.0 + 10.0 * 10.0)});
+    ASSERT_EQ(mtk_shape_make_torus(50.0, 10.0, &shape), MTK_STATUS_OK);
+    cases.push_back({"torus", ShapePtr(shape), 4.0 * pi * pi * 50.0 * 10.0, 2.0 * pi * pi * 50.0 * 10.0 * 10.0});
+
+    for (const Case& test : cases) {
+        const MeshMeasures measures = measure(mesh_of(tessellate(test.shape, 0.01, 0.2)));
+
+        EXPECT_NEAR(measures.area, test.area, 0.005 * test.area) << test.name;
+        EXPECT_NEAR(measures.volume, test.volume, 0.005 * test.volume) << test.name;
+        EXPECT_LT(measures.volume, test.volume) << test.name << ": the triangles stay inside the surface";
+        EXPECT_EQ(measures.triangles_against_their_normals, 0) << test.name;
+        EXPECT_EQ(measures.vertices_with_normals_of_any_other_length, 0) << test.name;
+    }
+}
+
+TEST(Tessellation, DependsOnlyOnTheDeflectionAsked) {
+    mtk_shape* shape = nullptr;
+    ASSERT_EQ(mtk_shape_make_sphere(25.0, &shape), MTK_STATUS_OK);
+    ShapePtr sphere(shape);
+    ASSERT_EQ(mtk_shape_make_sphere(25.0, &shape), MTK_STATUS_OK);
+    ShapePtr fresh(shape);
+
+    const int coarse = mesh_of(tessellate(fresh, 1.0)).triangle_count;
+    const int fine = mesh_of(tessellate(sphere, 0.01)).triangle_count;
+    const int coarse_again = mesh_of(tessellate(sphere, 1.0)).triangle_count;
+
+    EXPECT_GT(fine, 10 * coarse);
+    EXPECT_EQ(coarse_again, coarse) << "a finer mesh of the same shape is not reused";
+}
+
+TEST(Tessellation, KeepsTheShapeAsItWasAndItsPlacement) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+    ShapePtr placed = place(box, {0, -1, 0, 100, 1, 0, 0, 200, 0, 0, 1, 300});
+
+    const MeshMeasures measures = measure(mesh_of(tessellate(placed, 1.0)));
+
+    const std::array<double, 6> expected = {80, 200, 300, 100, 210, 330};
+    for (size_t i = 0; i < 6; ++i) {
+        EXPECT_NEAR(measures.bounds[i], expected[i], 1e-6) << "value " << i;
+    }
+    EXPECT_NEAR(measures.volume, 6000.0, 1e-6);
+    EXPECT_EQ(measures.triangles_against_their_normals, 0);
+    EXPECT_NEAR(volume_of(placed), 6000.0, 1e-6);
+    EXPECT_EQ(mesh_of(tessellate(box, 1.0)).triangle_count, 12);
+}
+
+TEST(Tessellation, RejectsInvalidArguments) {
+    ShapePtr box = make_box(1.0, 1.0, 1.0);
+    mtk_tessellation* tessellation = nullptr;
+
+    for (double deflection : {0.0, -1.0, nan, infinity}) {
+        EXPECT_EQ(mtk_shape_tessellate(box.get(), deflection, 0.5, &tessellation), MTK_STATUS_INVALID_ARGUMENT)
+            << deflection;
+    }
+    for (double angle : {0.0, -0.5, 3.2, nan, infinity}) {
+        EXPECT_EQ(mtk_shape_tessellate(box.get(), 0.1, angle, &tessellation), MTK_STATUS_INVALID_ARGUMENT) << angle;
+    }
+    EXPECT_EQ(tessellation, nullptr);
+    EXPECT_STRNE(mtk_last_error_message(), "");
+
+    mtk_mesh_info mesh{};
+    EXPECT_EQ(mtk_shape_tessellate(nullptr, 0.1, 0.5, &tessellation), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_tessellate(box.get(), 0.1, 0.5, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_mesh(nullptr, &mesh), MTK_STATUS_INVALID_ARGUMENT);
+    TessellationPtr valid = tessellate(box, 0.1);
+    EXPECT_EQ(mtk_tessellation_get_mesh(valid.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    mtk_tessellation_release(nullptr);
 }
 
 TEST(Shape, SuccessfulCallClearsTheLastError) {
