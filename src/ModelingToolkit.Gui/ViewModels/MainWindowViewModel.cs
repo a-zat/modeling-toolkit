@@ -171,6 +171,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnStatusMessageChanged(string value) => StatusDetails = null;
 
+    /// <summary>
+    /// Adds to the status bar what the 3D view leaves out of the document, such as shapes that cannot be turned into
+    /// triangles; the details list it all.
+    /// </summary>
+    [RelayCommand]
+    private void ReportViewWarnings(IReadOnlyList<string> warnings)
+    {
+        if (warnings.Count == 0)
+        {
+            return;
+        }
+
+        string? details = StatusDetails;
+        StatusMessage = warnings.Count == 1
+            ? $"{StatusMessage} The view leaves something out: {warnings[0]}"
+            : $"{StatusMessage} The view leaves out {warnings.Count} things: {warnings[0]}";
+        StatusDetails = string.Join(Environment.NewLine, details is null ? warnings : [details, .. warnings]);
+    }
+
     // The initial value is applied by the application, once Avalonia is ready.
     partial void OnIsDarkChanged(bool value)
     {

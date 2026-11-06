@@ -26,6 +26,20 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task WhatTheViewLeavesOutIsAddedToTheStatusBar()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        string opened = viewModel.StatusMessage;
+
+        viewModel.ReportViewWarningsCommand.Execute(new[] { "Broken cannot be shown: no faces.", "Other: no faces." });
+
+        Assert.Equal($"{opened} The view leaves out 2 things: Broken cannot be shown: no faces.",
+            viewModel.StatusMessage);
+        Assert.Equal($"Broken cannot be shown: no faces.{Environment.NewLine}Other: no faces.", viewModel.StatusDetails);
+    }
+
+    [Fact]
     public async Task TheSummaryCountsOneOfAKindInTheSingular()
     {
         MainWindowViewModel viewModel = Create();

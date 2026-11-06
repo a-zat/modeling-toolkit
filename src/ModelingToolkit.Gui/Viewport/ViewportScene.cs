@@ -30,6 +30,7 @@ internal sealed class ViewportScene
         _tessellations = builder.Tessellations;
         Meshes = builder.Meshes;
         MeshEdges = builder.MeshEdges;
+        Warnings = builder.Warnings;
         Materials = builder.Materials;
         MaterialTextures = builder.MaterialTextures;
         Textures = builder.Textures;
@@ -60,6 +61,9 @@ internal sealed class ViewportScene
     public IReadOnlyList<Texture> Textures { get; }
 
     public IReadOnlyList<ViewportInstance> Instances { get; }
+
+    /// <summary>What the scene leaves out: the shapes that could not be turned into triangles, and why.</summary>
+    public IReadOnlyList<string> Warnings { get; }
 
     public static ViewportScene Of(Document document)
     {
@@ -228,6 +232,8 @@ internal sealed class ViewportScene
 
         public List<ViewportInstance> Instances { get; } = [];
 
+        public List<string> Warnings { get; } = [];
+
         /// <summary>The mesh of each B-rep shape visited, null when it could not be tessellated.</summary>
         public Dictionary<BrepEntity, ShapeTessellation?> Tessellations { get; } =
             new(ReferenceEqualityComparer.Instance);
@@ -279,6 +285,8 @@ internal sealed class ViewportScene
                 catch (Exception exception) when (exception is ArgumentException or GeometryKernelException)
                 {
                     mesh = null;
+                    string name = brep.Name ?? brep.Material?.Name ?? "A shape";
+                    Warnings.Add($"{name} cannot be shown: {exception.Message}");
                 }
 
                 Tessellations[brep] = mesh;

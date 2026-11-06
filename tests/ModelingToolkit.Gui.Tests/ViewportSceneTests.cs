@@ -107,6 +107,20 @@ public sealed class ViewportSceneTests
     }
 
     [Fact]
+    public void AShapeThatCannotBeTessellatedIsLeftOutWithAWarning()
+    {
+        var kernel = new FailingKernel();
+        var document = new Document();
+        document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(1, 1, 1)) { Name = "Broken" });
+        document.Root.Entities.Add(Square());
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Single(scene.Instances);
+        Assert.Equal([$"Broken cannot be shown: {FailingKernel.Reason}"], scene.Warnings);
+    }
+
+    [Fact]
     public void PlacementsComposeTheTransformsOfNestedReferences()
     {
         var wheel = new Block("Wheel") { Entities = { Square() } };

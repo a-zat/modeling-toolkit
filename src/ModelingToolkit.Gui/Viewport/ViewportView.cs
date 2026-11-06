@@ -32,6 +32,9 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<ICommand?> PickCommandProperty =
         AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(PickCommand));
 
+    public static readonly StyledProperty<ICommand?> WarningsCommandProperty =
+        AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(WarningsCommand));
+
     public static readonly StyledProperty<DisplayMode> DisplayModeProperty =
         AvaloniaProperty.Register<ViewportView, DisplayMode>(nameof(DisplayMode));
 
@@ -103,6 +106,16 @@ public sealed class ViewportView : Border, IViewCamera
     {
         get => GetValue(PickCommandProperty);
         set => SetValue(PickCommandProperty, value);
+    }
+
+    /// <summary>
+    /// Executed once the scene of a document is ready, with what it leaves out (see <see cref="ViewportScene.Warnings"/>),
+    /// when it leaves out anything.
+    /// </summary>
+    public ICommand? WarningsCommand
+    {
+        get => GetValue(WarningsCommandProperty);
+        set => SetValue(WarningsCommandProperty, value);
     }
 
     public DisplayMode DisplayMode
@@ -309,6 +322,11 @@ public sealed class ViewportView : Border, IViewCamera
         }
 
         _shownScene = prepared?.Scene;
+        if (prepared is { Scene.Warnings: { Count: > 0 } warnings } && WarningsCommand is { } command &&
+            command.CanExecute(warnings))
+        {
+            command.Execute(warnings);
+        }
         Send(viewer =>
         {
             if (prepared is { } ready)
