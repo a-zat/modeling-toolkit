@@ -31,6 +31,10 @@ mtk_status run(const TopoDS_Shape& first, const TopoDS_Shape& second, mtk_shape*
         throw mtk::kernel_error("The boolean operation failed" + (text.empty() ? std::string(".") : ": " + text));
     }
 
+    // The faces and edges that the operation split but that lie on the same surface or curve become one again, such
+    // as the top of two boxes side by side.
+    operation.SimplifyResult();
+
     // Shapes that do not meet leave nothing in common, and a shape cut by itself nothing at all.
     const TopoDS_Shape& result = operation.Shape();
     if (result.IsNull() || !TopExp_Explorer(result, TopAbs_FACE).More()) {

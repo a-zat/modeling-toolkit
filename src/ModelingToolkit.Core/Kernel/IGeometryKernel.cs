@@ -55,7 +55,8 @@ public interface IGeometryKernel
     /// <exception cref="ArgumentException">The placement is not a rotation and a translation.</exception>
     IKernelShape Place(IKernelShape shape, Transform placement);
 
-    // The boolean operations make a new shape and leave their operands as they are.
+    // The boolean operations make a new shape and leave their operands as they are. The faces and edges of the result
+    // that lie on the same surface or curve are merged: two boxes side by side unite into a box of six faces.
 
     /// <summary>What is in either shape.</summary>
     /// <exception cref="GeometryKernelException">The operation fails, for example on invalid shapes.</exception>

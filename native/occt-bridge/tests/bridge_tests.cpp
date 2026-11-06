@@ -346,6 +346,21 @@ TEST(Boolean, UnitesShapesThatDoNotMeet) {
     expect_bounds(both, {0, 0, 0, 110, 10, 10});
 }
 
+TEST(Boolean, MergesTheFacesAndEdgesThatTheOperationSplits) {
+    // Two boxes side by side make one box, of six faces and twelve edges.
+    ShapePtr left = make_box(10.0, 10.0, 10.0);
+    ShapePtr right = place(make_box(10.0, 10.0, 10.0), {1, 0, 0, 10, 0, 1, 0, 0, 0, 0, 1, 0});
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_boolean(left.get(), right.get(), MTK_BOOLEAN_UNION, &made), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    ShapePtr united(made);
+
+    TessellationPtr tessellation = tessellate(united, 1.0);
+    EXPECT_EQ(faces_of(tessellation).size(), 7u);
+    EXPECT_EQ(edges_of(tessellation).size(), 12u);
+    EXPECT_NEAR(volume_of(united), 2000.0, 1e-6);
+}
+
 TEST(Boolean, ReportsAnEmptyResultAsAnError) {
     ShapePtr a = make_box(10.0, 10.0, 10.0);
     ShapePtr far = place(make_box(10.0, 10.0, 10.0), {1, 0, 0, 100, 0, 1, 0, 0, 0, 0, 1, 0});
