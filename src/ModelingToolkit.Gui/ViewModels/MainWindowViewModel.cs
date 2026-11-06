@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModelingToolkit.Core.Editing;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
@@ -33,11 +34,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsPerspective = true;
         IsGridVisible = true;
 
+        Properties.Edit = Edit;
         ModelTree.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ModelTreeViewModel.SelectedNode))
             {
                 Properties.Show(ModelTree.SelectedNode);
+                OnEditingChanged();
             }
         };
         Palette.Commands =
@@ -45,6 +48,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Open…", OpenCommand, Gesture: Shortcut("O")),
             new("Save", SaveCommand, Gesture: Shortcut("S")),
             new("Save As…", SaveAsCommand, Gesture: Shortcut("S", shift: true)),
+            new("Undo", UndoCommand, Gesture: Shortcut("Z")),
+            new("Redo", RedoCommand, Gesture: OperatingSystem.IsMacOS() ? Shortcut("Z", shift: true) : Shortcut("Y")),
+            new("Delete", DeleteCommand),
             new("Fit All", FitAllCommand),
             new("Top View", ShowViewCommand, StandardView.Top),
             new("Bottom View", ShowViewCommand, StandardView.Bottom),
@@ -70,6 +76,83 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public MaterialsViewModel Materials { get; } = new();
 
     public CommandPaletteViewModel Palette { get; } = new();
+
+    /// <summary>Runs the commands that change the open document, and undoes them; null without a document.</summary>
+    public EditSession? Session { get; private set; }
+
+    public bool CanUndo => Session?.CanUndo == true && !IsBusy;
+
+    public bool CanRedo => Session?.CanRedo == true && !IsBusy;
+
+    /// <summary>The tooltip of the undo button, with the name of the command it undoes.</summary>
+    public string UndoTip => $"Undo{(CanUndo ? " " + Session!.UndoName : "")} ({Shortcut("Z")})";
+
+    public string RedoTip =>
+        $"Redo{(CanRedo ? " " + Session!.RedoName : "")} ({(OperatingSystem.IsMacOS() ? Shortcut("Z", shift: true) : Shortcut("Y"))})";
+
+    /// <summary>Whether the selected node is an entity, which can be deleted.</summary>
+    public bool CanDelete => Session is not null && !IsBusy && ModelTree.SelectedNode?.Entity is not null;
+
+    /// <summary>
+    /// Runs a command on the open document; a command that refuses its change reports why in the status bar. Nothing
+    /// is changed while a file is being opened or saved, which reads the document on another thread.
+    /// </summary>
+    public bool Edit(IEditCommand command)
+    {
+        if (Session is null || IsBusy)
+        {
+            return false;
+        }
+
+        try
+        {
+            Session.Execute(command);
+            return true;
+        }
+        catch (EditRefusedException exception)
+        {
+            StatusMessage = exception.Message;
+            return false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanUndo))]
+    private void Undo() => Session!.Undo();
+
+    [RelayCommand(CanExecute = nameof(CanRedo))]
+    private void Redo()
+    {
+        try
+        {
+            Session!.Redo();
+        }
+        catch (EditRefusedException exception)
+        {
+            StatusMessage = exception.Message;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDelete))]
+    private void Delete() => Edit(new DeleteCommand(ModelTree.SelectedNode!.Entity!));
+
+    // What can be edited, undone and redone follows the session, the selection and the file operations.
+    private void OnEditingChanged()
+    {
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(UndoTip));
+        OnPropertyChanged(nameof(RedoTip));
+        OnPropertyChanged(nameof(CanDelete));
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
+        DeleteCommand.NotifyCanExecuteChanged();
+        if (Session is not null)
+        {
+            Title = $"{(Session.IsModified ? "• " : "")}{DocumentName} — {ApplicationName}";
+        }
+    }
+
+    partial void OnIsBusyChanged(bool value) => OnEditingChanged();
 
     /// <summary>A shortcut as the platform writes it: ⇧⌘S on macOS, Ctrl+Shift+S elsewhere.</summary>
     internal static string Shortcut(string key, bool shift = false) => OperatingSystem.IsMacOS()
@@ -393,11 +476,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
         summary.Add("Z up");
         Summary = string.Join(" · ", summary);
 
+        if (Session is not null)
+        {
+            Session.Changed -= OnSessionChanged;
+        }
+        Session = new EditSession(document);
+        Session.Changed += OnSessionChanged;
+
         Properties.Know(document, statistics);
         ModelTree.Show(document);
         Materials.Show(document);
         Document = document;
+        OnEditingChanged();
     }
+
+    private void OnSessionChanged(object? sender, EventArgs e) => OnEditingChanged();
 
     private async Task WriteAsync(string path)
     {
@@ -413,6 +506,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             _path = path;
             DocumentName = name;
             Title = $"{name} — {ApplicationName}";
+            Session?.MarkSaved();
             StatusMessage = $"Saved {name} ({writer.FormatName}).";
         }
         catch (OperationCanceledException)

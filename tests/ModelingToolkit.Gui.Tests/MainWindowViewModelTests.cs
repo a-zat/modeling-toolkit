@@ -220,10 +220,10 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(
             [
                 new PropertyRow("Volume", "6,000.00 cm³"),
-                new PropertyRow("Material", "Steel"),
                 new PropertyRow("Size", "100.0 × 200.0 × 300.0 mm"),
             ],
             viewModel.Properties.Rows);
+        Assert.Same(steel, viewModel.Properties.SelectedMaterial?.Material);
 
         viewModel.ModelTree.SelectedNode = model;
 

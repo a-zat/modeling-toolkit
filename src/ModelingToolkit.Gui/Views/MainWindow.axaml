@@ -15,6 +15,12 @@
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+S, macOS=Cmd+S}" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+Shift+S, macOS=Cmd+Shift+S}" Command="{Binding SaveAsCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+K, macOS=Cmd+K}" Command="{Binding Palette.OpenCommand}" />
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+Z, macOS=Cmd+Z}" Command="{Binding UndoCommand}" />
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+Y, macOS=Cmd+Shift+Z}" Command="{Binding RedoCommand}" />
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+Shift+Z, macOS=Cmd+Y}" Command="{Binding RedoCommand}" />
+    <!-- The fields that take text handle these keys first. -->
+    <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
+    <KeyBinding Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" Command="{Binding DeleteCommand}" />
   </Window.KeyBindings>
 
   <!-- The menu goes to the menu bar of macOS; on the other platforms the layout shows it with a NativeMenuBar. -->
@@ -28,6 +34,17 @@
                           Gesture="{OnPlatform Default=Ctrl+S, macOS=Cmd+S}" />
           <NativeMenuItem Header="Save As…" Command="{Binding SaveAsCommand}"
                           Gesture="{OnPlatform Default=Ctrl+Shift+S, macOS=Cmd+Shift+S}" />
+        </NativeMenu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Edit">
+        <NativeMenu>
+          <NativeMenuItem Header="Undo" Command="{Binding UndoCommand}"
+                          Gesture="{OnPlatform Default=Ctrl+Z, macOS=Cmd+Z}" />
+          <NativeMenuItem Header="Redo" Command="{Binding RedoCommand}"
+                          Gesture="{OnPlatform Default=Ctrl+Y, macOS=Cmd+Shift+Z}" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Delete" Command="{Binding DeleteCommand}"
+                          Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" />
         </NativeMenu>
       </NativeMenuItem>
       <NativeMenuItem Header="View">

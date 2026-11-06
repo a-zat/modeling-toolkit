@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using ModelingToolkit.Core.Editing;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
 
@@ -6,6 +7,12 @@ namespace ModelingToolkit.Gui.ViewModels;
 
 /// <summary>A row of the properties panel.</summary>
 public sealed record PropertyRow(string Name, string Value);
+
+/// <summary>A material that an entity can take, or "By block" for none.</summary>
+public sealed record MaterialChoice(string Name, Material? Material)
+{
+    public static MaterialChoice ByBlock { get; } = new("By block", null);
+}
 
 /// <summary>The properties of the selected node of the model tree.</summary>
 public sealed partial class PropertiesViewModel : ObservableObject
@@ -30,13 +37,60 @@ public sealed partial class PropertiesViewModel : ObservableObject
     [ObservableProperty]
     public partial bool HasSelection { get; private set; }
 
+    /// <summary>Runs the commands that the panel makes, as the edits of its fields; null when nothing can be edited.</summary>
+    public Func<IEditCommand, bool>? Edit { get; set; }
+
+    /// <summary>Whether the selection is an entity, whose name and material can be changed.</summary>
+    [ObservableProperty]
+    public partial bool IsEditable { get; private set; }
+
+    /// <summary>The name of the entity, as typed: setting it renames the entity, or takes its name away when empty.</summary>
+    public string EditedName
+    {
+        get => _node?.Entity?.Name ?? string.Empty;
+        set
+        {
+            string? name = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (_node?.Entity is { } entity && name != entity.Name)
+            {
+                Edit?.Invoke(new RenameCommand(entity, name));
+            }
+            OnPropertyChanged(); // the name the entity has, if the edit was refused or trimmed
+        }
+    }
+
+    /// <summary>The materials of the document, after "By block".</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<MaterialChoice> MaterialChoices { get; private set; } = [];
+
+    /// <summary>The material of the entity: choosing another one changes it.</summary>
+    public MaterialChoice? SelectedMaterial
+    {
+        get => _node?.Entity is { } entity ? MaterialChoices.FirstOrDefault(c => ReferenceEquals(c.Material, entity.Material)) : null;
+        set
+        {
+            // The list clears its selection when its items change: that is not a choice.
+            if (value is not null && _node?.Entity is { } entity && !ReferenceEquals(value.Material, entity.Material))
+            {
+                Edit?.Invoke(new SetMaterialCommand(entity, value.Material));
+            }
+            OnPropertyChanged();
+        }
+    }
+
+    private ModelNodeViewModel? _node;
+    private Document? _document;
     private (Document Document, DocumentStatistics Statistics)? _known;
 
     /// <summary>
     /// Gives the statistics of a document, counted when it was read, as they take long on large models: the model node
     /// of that document shows them without counting again.
     /// </summary>
-    public void Know(Document document, DocumentStatistics statistics) => _known = (document, statistics);
+    public void Know(Document document, DocumentStatistics statistics)
+    {
+        _known = (document, statistics);
+        _document = document;
+    }
 
     /// <summary>
     /// Shows the properties of a node again after a change of its document, which makes the statistics given by
@@ -50,6 +104,21 @@ public sealed partial class PropertiesViewModel : ObservableObject
 
     public void Show(ModelNodeViewModel? node)
     {
+        _node = node;
+        IsEditable = node?.Entity is not null;
+        List<MaterialChoice> choices = [MaterialChoice.ByBlock];
+        if (node?.Entity is { } entity)
+        {
+            IEnumerable<Material> materials = _document?.Materials ?? [];
+            if (entity.Material is { } own && !materials.Contains(own))
+            {
+                materials = materials.Append(own);
+            }
+            choices.AddRange(materials.Select(material => new MaterialChoice(material.Name, material)));
+        }
+        MaterialChoices = choices;
+        OnPropertyChanged(nameof(EditedName));
+        OnPropertyChanged(nameof(SelectedMaterial));
         HasSelection = node is not null;
         Title = node?.Name ?? string.Empty;
         Kind = node switch
@@ -106,7 +175,6 @@ public sealed partial class PropertiesViewModel : ObservableObject
             new("Block", reference.Block.Name),
             new("Position", Formatting.Point(transform.M03, transform.M13, transform.M23)),
             new("Entities", Formatting.Count(reference.Block.Entities.Count)),
-            new("Material", MaterialName(reference.Material)),
             new("Size", Formatting.Size(reference.GetBoundingBox())),
         ];
     }
@@ -117,16 +185,13 @@ public sealed partial class PropertiesViewModel : ObservableObject
         new("Triangles", Formatting.Count(mesh.Triangles.Length)),
         new("Normals", mesh.Normals is null ? "No" : "Yes"),
         new("Texture coordinates", mesh.TextureCoordinates is null ? "No" : "Yes"),
-        new("Material", MaterialName(mesh.Material)),
         new("Size", Formatting.Size(mesh.GetBoundingBox())),
     ];
 
     private static List<PropertyRow> BrepRows(BrepEntity brep) =>
     [
         new("Volume", Formatting.Volume(brep.Kernel.ComputeVolume(brep.Shape))),
-        new("Material", MaterialName(brep.Material)),
         new("Size", Formatting.Size(brep.GetBoundingBox())),
     ];
 
-    private static string MaterialName(Material? material) => material?.Name ?? "By block";
 }

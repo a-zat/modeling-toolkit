@@ -35,6 +35,18 @@
           </Border>
           <Border Classes="group">
             <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button Classes="tool" Command="{Binding UndoCommand}" ToolTip.Tip="{Binding UndoTip}"
+                      ToolTip.ShowOnDisabled="True">
+                <PathIcon Data="{StaticResource Icon.ArrowUndo}" />
+              </Button>
+              <Button Classes="tool" Command="{Binding RedoCommand}" ToolTip.Tip="{Binding RedoTip}"
+                      ToolTip.ShowOnDisabled="True">
+                <PathIcon Data="{StaticResource Icon.ArrowRedo}" />
+              </Button>
+            </StackPanel>
+          </Border>
+          <Border Classes="group">
+            <StackPanel Orientation="Horizontal" Spacing="2">
               <Button Classes="tool" Command="{Binding FitAllCommand}" ToolTip.Tip="Fit all">
                 <PathIcon Data="{StaticResource Icon.ZoomFit}" />
               </Button>
