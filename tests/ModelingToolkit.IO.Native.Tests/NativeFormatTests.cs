@@ -286,6 +286,107 @@ public sealed class NativeFormatTests : IDisposable
         Assert.Throws<DirectoryNotFoundException>(() => _writer.Write(SampleDocument(), path));
     }
 
+    [Fact]
+    public void An_empty_document_survives_a_round_trip()
+    {
+        string path = PathOf("empty.mtk");
+
+        _writer.Write(new Document(), path);
+        Document copy = _reader.Read(path, []);
+
+        Assert.Equal("Model", copy.Root.Name);
+        Assert.Empty(copy.Root.Entities);
+        Assert.Empty(copy.Blocks);
+        Assert.Empty(copy.Materials);
+        Assert.Empty(copy.Textures);
+    }
+
+    [Theory]
+    [InlineData(0.5)]
+    [InlineData(0.9)]
+    [InlineData(0.999)]
+    public void A_truncated_file_is_invalid(double kept)
+    {
+        string path = PathOf("truncated.mtk");
+        _writer.Write(SampleDocument(), path);
+        using (FileStream stream = File.Open(path, FileMode.Open))
+        {
+            stream.SetLength((long)(stream.Length * kept));
+        }
+
+        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+    }
+
+    [Theory]
+    [InlineData("manifest.json")]
+    [InlineData("meshes/0.bin")]
+    [InlineData("shapes/0.brep")]
+    public void A_file_with_a_corrupted_entry_is_invalid(string entry)
+    {
+        Document document = SampleDocument();
+        document.Root.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(1, 2, 3)));
+        string path = PathOf("corrupted.mtk");
+        _writer.Write(document, path);
+        long offset;
+        using (ZipArchive archive = ZipFile.OpenRead(path))
+        {
+            offset = DataOffsetOf(path, archive.GetEntry(entry)!);
+        }
+        using (FileStream stream = File.Open(path, FileMode.Open))
+        {
+            // Bytes in the middle of the compressed data of the entry turned into others.
+            stream.Position = offset + 8;
+            Span<byte> bytes = stackalloc byte[8];
+            stream.ReadExactly(bytes);
+            for (int index = 0; index < bytes.Length; index++)
+            {
+                bytes[index] ^= 0x5A;
+            }
+            stream.Position = offset + 8;
+            stream.Write(bytes);
+        }
+
+        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+    }
+
+    [Theory]
+    [InlineData("{ this is not json")]
+    [InlineData("""{"root": {"name": "Model", "entities": [{"type": "nurbs"}]}}""")]
+    [InlineData("""{"root": {"name": "Model", "entities": [{"type": "brep", "path": "shapes/9.brep"}]}}""")]
+    [InlineData("""{"root": {"name": "Model", "entities": [{"type": "blockReference", "block": 0, "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}]}}""")]
+    [InlineData("""{"root": {"name": "Model", "entities": [{"type": "blockReference", "block": 0, "transform": [1, 0, 0]}]}, "blocks": [{"name": "b", "entities": []}]}""")]
+    [InlineData("""{"root": {"name": "Model", "entities": [{"type": "blockReference", "block": 0, "material": 0, "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}]}, "blocks": [{"name": "b", "entities": []}]}""")]
+    [InlineData("""{"materials": [{"name": "m", "baseColor": [1, 1, 1, 1], "metallic": 0, "roughness": 1, "baseColorTexture": 0}]}""")]
+    [InlineData("""{"materials": [{"name": "m", "baseColor": [1, 1, 1], "metallic": 0, "roughness": 1}]}""")]
+    [InlineData("""{"blocks": [{"name": "b", "entities": [{"type": "blockReference", "block": 0, "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}]}]}""")]
+    [InlineData("""{"format": "another-format"}""")]
+    [InlineData("""{"units": "inch"}""")]
+    public void A_manifest_that_does_not_hold_together_makes_the_file_invalid(string changes)
+    {
+        string path = Archive("invalid.mtk", changes.StartsWith('{') && changes.EndsWith('}') ? Manifest(changes) : changes);
+
+        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+    }
+
+    // Where the data of an entry starts in the file: after its local header, of 30 bytes, its name and its extra field.
+    private static long DataOffsetOf(string path, ZipArchiveEntry entry)
+    {
+        using FileStream stream = File.OpenRead(path);
+        byte[] file = new byte[stream.Length];
+        stream.ReadExactly(file);
+        byte[] name = System.Text.Encoding.UTF8.GetBytes(entry.FullName);
+        for (int start = 0; start + 30 + name.Length <= file.Length; start++)
+        {
+            if (file[start] == 0x50 && file[start + 1] == 0x4B && file[start + 2] == 3 && file[start + 3] == 4 &&
+                file.AsSpan(start + 30, name.Length).SequenceEqual(name))
+            {
+                int extra = BitConverter.ToUInt16(file, start + 28);
+                return start + 30 + name.Length + extra;
+            }
+        }
+        throw new InvalidOperationException($"No local header for {entry.FullName}.");
+    }
+
     // A valid manifest of an empty document, with the properties of changes replacing its own.
     private static string Manifest(string changes)
     {
