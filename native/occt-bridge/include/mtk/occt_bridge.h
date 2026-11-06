@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 9
+#define MTK_OCCT_BRIDGE_ABI_VERSION 10
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -80,6 +80,12 @@ MTK_API mtk_status mtk_shape_make_torus(double major_radius, double minor_radius
 MTK_API mtk_status mtk_shape_place(const mtk_shape* shape, const double* placement, mtk_shape** out_shape);
 
 MTK_API mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume);
+
+/*
+ * Whether the shape is valid, as OpenCASCADE checks it (BRepCheck_Analyzer): 1 when its geometry and topology are
+ * consistent, so that further operations can rely on them, 0 otherwise.
+ */
+MTK_API mtk_status mtk_shape_is_valid(const mtk_shape* shape, int32_t* out_valid);
 
 typedef enum mtk_boolean_operation {
     MTK_BOOLEAN_UNION = 0,        /* what is in either shape */

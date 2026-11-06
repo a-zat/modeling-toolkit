@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -178,6 +179,39 @@ TEST(Shape, BoxVolumeIsTheProductOfItsDimensions) {
 
     ASSERT_EQ(mtk_shape_volume(box.get(), &volume), MTK_STATUS_OK) << mtk_last_error_message();
     EXPECT_NEAR(volume, 6000.0, 1e-6);
+}
+
+int32_t is_valid(const mtk_shape* shape) {
+    int32_t valid = -1;
+    EXPECT_EQ(mtk_shape_is_valid(shape, &valid), MTK_STATUS_OK) << mtk_last_error_message();
+    return valid;
+}
+
+TEST(Shape, TellsAValidShapeFromAnInvalidOne) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+    EXPECT_EQ(is_valid(box.get()), 1);
+
+    // The same box with a corner moved away from the edges that end there.
+    mtk_bytes* bytes = nullptr;
+    ASSERT_EQ(mtk_shape_write(box.get(), &bytes), MTK_STATUS_OK) << mtk_last_error_message();
+    const uint8_t* data = nullptr;
+    int64_t size = 0;
+    ASSERT_EQ(mtk_bytes_get(bytes, &data, &size), MTK_STATUS_OK);
+    std::string text(reinterpret_cast<const char*>(data), static_cast<size_t>(size));
+    mtk_bytes_release(bytes);
+    const size_t vertex = text.find("\nVe\n");
+    ASSERT_NE(vertex, std::string::npos);
+    const size_t point = text.find('\n', vertex + 4) + 1; // after the tolerance
+    text.replace(point, text.find('\n', point) - point, "5 5 5");
+    mtk_shape* moved = nullptr;
+    ASSERT_EQ(mtk_shape_read(reinterpret_cast<const uint8_t*>(text.data()), static_cast<int64_t>(text.size()), &moved),
+              MTK_STATUS_OK)
+        << mtk_last_error_message();
+    EXPECT_EQ(is_valid(ShapePtr(moved).get()), 0);
+
+    int32_t valid = 0;
+    EXPECT_EQ(mtk_shape_is_valid(nullptr, &valid), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_is_valid(box.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(Shape, MakeBoxRejectsInvalidDimensions) {

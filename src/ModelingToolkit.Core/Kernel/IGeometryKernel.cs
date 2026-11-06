@@ -83,6 +83,12 @@ public interface IGeometryKernel
     double ComputeVolume(IKernelShape shape);
 
     /// <summary>
+    /// Whether the geometry and the topology of the shape are consistent, so that further operations can rely on them.
+    /// An edit whose result is not valid is refused.
+    /// </summary>
+    bool IsValid(IKernelShape shape);
+
+    /// <summary>
     /// The shape as bytes in a format of the kernel, that only the same kind of kernel reads back with
     /// <see cref="Deserialize"/>. The geometry, the placements and the topology are kept; triangles are not.
     /// </summary>

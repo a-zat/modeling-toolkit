@@ -104,6 +104,12 @@ public sealed class OcctKernel : IGeometryKernel
         return volume;
     }
 
+    public bool IsValid(IKernelShape shape)
+    {
+        NativeMethods.ShapeIsValid(Unwrap(shape), out int valid).ThrowIfFailed();
+        return valid != 0;
+    }
+
     public unsafe byte[] Serialize(IKernelShape shape)
     {
         NativeMethods.ShapeWrite(Unwrap(shape), out BytesHandle bytes).ThrowIfFailed();

@@ -38,6 +38,22 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void A_shape_is_valid_unless_its_geometry_and_topology_disagree()
+    {
+        using IKernelShape box = _kernel.MakeBox(10, 20, 30);
+        Assert.True(_kernel.IsValid(box));
+
+        // The same box with a corner moved away from the edges that end there.
+        string text = System.Text.Encoding.ASCII.GetString(_kernel.Serialize(box));
+        int vertex = text.IndexOf("\nVe\n", StringComparison.Ordinal);
+        int point = text.IndexOf('\n', vertex + 4) + 1;
+        text = string.Concat(text.AsSpan(0, point), "5 5 5", text.AsSpan(text.IndexOf('\n', point)));
+        using IKernelShape moved = _kernel.Deserialize(System.Text.Encoding.ASCII.GetBytes(text));
+
+        Assert.False(_kernel.IsValid(moved));
+    }
+
+    [Fact]
     public void Primitives_have_the_volumes_of_their_formulas()
     {
         using IKernelShape cylinder = _kernel.MakeCylinder(10, 40);

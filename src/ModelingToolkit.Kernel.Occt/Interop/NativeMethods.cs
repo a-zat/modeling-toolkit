@@ -6,7 +6,7 @@ namespace ModelingToolkit.Kernel.Occt.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_BRIDGE_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 9;
+    public const int AbiVersion = 10;
 
     private const string LibraryName = "mtk_occt_bridge";
 
@@ -39,6 +39,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_volume")]
     public static partial NativeStatus ShapeVolume(ShapeHandle shape, out double volume);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_is_valid")]
+    public static partial NativeStatus ShapeIsValid(ShapeHandle shape, out int valid);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_bounds")]
     public static partial NativeStatus ShapeBounds(ShapeHandle shape, Span<double> bounds);

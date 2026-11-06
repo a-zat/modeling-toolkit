@@ -1,5 +1,6 @@
 #include "internal.hpp"
 
+#include <BRepCheck_Analyzer.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -197,6 +198,18 @@ mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume) {
         GProp_GProps properties;
         BRepGProp::VolumeProperties(shape->value, properties);
         *out_volume = properties.Mass();
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_shape_is_valid(const mtk_shape* shape, int32_t* out_valid) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_valid);
+        if (shape == nullptr || out_valid == nullptr) {
+            return mtk::invalid_argument("shape and out_valid must not be null.");
+        }
+
+        *out_valid = BRepCheck_Analyzer(shape->value).IsValid() ? 1 : 0;
         return MTK_STATUS_OK;
     });
 }

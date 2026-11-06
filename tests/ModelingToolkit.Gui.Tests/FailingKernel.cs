@@ -40,6 +40,8 @@ internal sealed class FailingKernel : IGeometryKernel
 
     public double ComputeVolume(IKernelShape shape) => throw new NotSupportedException();
 
+    public bool IsValid(IKernelShape shape) => throw new NotSupportedException();
+
     public byte[] Serialize(IKernelShape shape) => throw new NotSupportedException();
 
     public IKernelShape Deserialize(ReadOnlySpan<byte> data) => throw new NotSupportedException();
