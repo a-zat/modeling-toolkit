@@ -15,4 +15,6 @@ public partial class MainWindow : Window
             viewModel.FileDialogs = new StorageProviderFileDialogs(this);
         }
     }
+
+    private void OnPaletteOpened(object? sender, EventArgs e) => Palette.TakeKeyboard();
 }

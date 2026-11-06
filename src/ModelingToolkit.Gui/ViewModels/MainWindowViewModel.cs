@@ -40,9 +40,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         };
         Palette.Commands =
         [
-            new("Open…", OpenCommand, Gesture: "Ctrl+O"),
-            new("Save", SaveCommand, Gesture: "Ctrl+S"),
-            new("Save As…", SaveAsCommand, Gesture: "Ctrl+Shift+S"),
+            new("Open…", OpenCommand, Gesture: Shortcut("O")),
+            new("Save", SaveCommand, Gesture: Shortcut("S")),
+            new("Save As…", SaveAsCommand, Gesture: Shortcut("S", shift: true)),
             new("Fit All", FitAllCommand),
             new("Top View", ShowViewCommand, StandardView.Top),
             new("Bottom View", ShowViewCommand, StandardView.Bottom),
@@ -68,6 +68,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public MaterialsViewModel Materials { get; } = new();
 
     public CommandPaletteViewModel Palette { get; } = new();
+
+    /// <summary>A shortcut as the platform writes it: ⇧⌘S on macOS, Ctrl+Shift+S elsewhere.</summary>
+    internal static string Shortcut(string key, bool shift = false) => OperatingSystem.IsMacOS()
+        ? $"{(shift ? "⇧" : "")}⌘{key}"
+        : $"Ctrl+{(shift ? "Shift+" : "")}{key}";
 
     /// <summary>The open and save dialogs, provided by the window.</summary>
     public IFileDialogs? FileDialogs { get; set; }

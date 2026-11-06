@@ -90,9 +90,9 @@
     <views:CompactLayoutView />
 
     <!-- The command palette opens near the top of the window. -->
-    <Popup IsOpen="{Binding Palette.IsOpen, Mode=TwoWay}" IsLightDismissEnabled="True"
+    <Popup IsOpen="{Binding Palette.IsOpen, Mode=TwoWay}" IsLightDismissEnabled="True" Opened="OnPaletteOpened"
            Placement="AnchorAndGravity" PlacementAnchor="Top" PlacementGravity="Bottom" VerticalOffset="72">
-      <views:CommandPaletteView DataContext="{Binding Palette}" />
+      <views:CommandPaletteView x:Name="Palette" DataContext="{Binding Palette}" />
     </Popup>
   </Panel>
 

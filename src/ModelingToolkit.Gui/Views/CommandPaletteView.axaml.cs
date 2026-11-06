@@ -1,5 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using ModelingToolkit.Gui.ViewModels;
 
 namespace ModelingToolkit.Gui.Views;
@@ -12,10 +12,13 @@ public partial class CommandPaletteView : UserControl
         ResultList.Tapped += (_, _) => (DataContext as CommandPaletteViewModel)?.RunCommand.Execute(null);
     }
 
-    // The palette lives in a popup, attached when it opens: the search box takes the focus right away.
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    /// <summary>
+    /// Gives the keyboard to the search box, once the popup of the palette is shown. On macOS the popup is a window of
+    /// its own, which does not take the keyboard by itself: it is activated first.
+    /// </summary>
+    public void TakeKeyboard() => Dispatcher.UIThread.Post(() =>
     {
-        base.OnAttachedToVisualTree(e);
+        (TopLevel.GetTopLevel(this) as WindowBase)?.Activate();
         SearchBox.Focus();
-    }
+    }, DispatcherPriority.Background);
 }
