@@ -57,7 +57,9 @@ internal static class StatsCommand
 
     private static string Count(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
 
-    private static string Length(double value) => value.ToString("N1", CultureInfo.InvariantCulture);
+    // Adding zero turns a negative zero, which a tiny negative number rounds to, into zero.
+    private static string Length(double value) =>
+        (Math.Round(value, 1) + 0.0).ToString("N1", CultureInfo.InvariantCulture);
 
     private static string Point(Point3d point) => $"({Length(point.X)}, {Length(point.Y)}, {Length(point.Z)})";
 }

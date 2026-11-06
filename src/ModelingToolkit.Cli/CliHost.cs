@@ -32,6 +32,8 @@ internal static class CliHost
         rootCommand.Subcommands.Add(InfoCommand.Create(services));
         rootCommand.Subcommands.Add(ConvertCommand.Create(services));
         rootCommand.Subcommands.Add(StatsCommand.Create(services));
+        rootCommand.Subcommands.Add(MakeCommand.Create(services));
+        rootCommand.Subcommands.Add(CombineCommand.Create(services));
         return rootCommand;
     }
 }

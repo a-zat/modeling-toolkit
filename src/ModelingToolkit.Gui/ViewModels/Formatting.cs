@@ -8,7 +8,9 @@ internal static class Formatting
 {
     public static string Count(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
 
-    public static string Length(double value) => value.ToString("N1", CultureInfo.InvariantCulture);
+    // Adding zero turns a negative zero, which a tiny negative number rounds to, into zero.
+    public static string Length(double value) =>
+        (Math.Round(value, 1) + 0.0).ToString("N1", CultureInfo.InvariantCulture);
 
     public static string Volume(double cubicMillimetres) => cubicMillimetres switch
     {

@@ -54,7 +54,7 @@ public interface IGeometryKernel
     // The boolean operations make a new shape and leave their operands as they are.
 
     /// <summary>What is in either shape.</summary>
-    /// <exception cref="GeometryKernelException">The operation fails, on shapes that are not valid for example.</exception>
+    /// <exception cref="GeometryKernelException">The operation fails, for example on invalid shapes.</exception>
     IKernelShape Union(IKernelShape first, IKernelShape second);
 
     /// <summary>What is in <paramref name="shape"/> and not in <paramref name="tool"/>.</summary>

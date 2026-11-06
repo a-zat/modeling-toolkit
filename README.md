@@ -6,8 +6,9 @@ It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primi
 
 > **Status:** early development. The `mtk` command line tool reads glTF models (`.gltf`, `.glb`, with meshes
 > compressed by Draco and textures in WebP too) and writes them in the native `.mtk` format, keeping shared geometry,
-> hierarchy, materials and textures. The desktop application opens and saves models, shows them in its 3D view, drawn
-> by OpenCASCADE, and shows their structure, materials and properties.
+> hierarchy, materials and textures. It also builds shapes of exact geometry, with their boolean combinations. The
+> desktop application opens and saves models, shows them in its 3D view, drawn by OpenCASCADE, and shows their
+> structure, materials and properties.
 
 ## Requirements
 
@@ -47,6 +48,15 @@ After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
 ```sh
 mtk convert model.glb model.mtk   # the output extension chooses the format
 mtk stats model.mtk               # blocks, meshes, triangles, materials, bounds in millimetres
+```
+
+Shapes of exact geometry, which the native format keeps as they are, are built with `mtk make` and combined with
+`mtk combine`; the application shows their triangles:
+
+```sh
+mtk make box 100 100 100 box.mtk                           # also cylinder, sphere, cone and torus
+mtk make cylinder 20 120 drill.mtk --at 50,50,-10          # --at puts the shape where it is wanted
+mtk combine subtract box.mtk drill.mtk drilled.mtk         # also union and intersect
 ```
 
 The first build compiles OpenCASCADE through vcpkg (about 7 minutes on an Apple M2); later builds reuse its cache.
