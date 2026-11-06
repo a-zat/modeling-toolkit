@@ -28,7 +28,15 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow { DataContext = viewModel };
+            var window = new MainWindow { DataContext = viewModel };
+            desktop.MainWindow = window;
+
+            // A model given on the command line opens once the window is shown, as with File > Open. Options, such as
+            // those that macOS may add, are not models.
+            if (desktop.Args?.FirstOrDefault(argument => !argument.StartsWith('-')) is { } path)
+            {
+                window.Opened += async (_, _) => await viewModel.LoadAsync(Path.GetFullPath(path));
+            }
 #if DEBUG
             // F12 opens the inspector of the visual tree and of the styles.
             _devTools = this.AttachDevTools();
