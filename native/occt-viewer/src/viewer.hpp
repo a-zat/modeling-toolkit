@@ -108,6 +108,8 @@ public:
 private:
     void OnSelectionChanged(const occ::handle<AIS_InteractiveContext>& context,
                             const occ::handle<V3d_View>& view) override;
+    void handleViewRedraw(const occ::handle<AIS_InteractiveContext>& context,
+                          const occ::handle<V3d_View>& view) override;
 
     bool is_attached() const { return !window_.IsNull(); }
     void attach();
@@ -135,6 +137,7 @@ private:
     std::vector<occ::handle<AIS_InteractiveObject>> instances_;
     Graphic3d_ZLayerId faded_layer_ = Graphic3d_ZLayerId_UNKNOWN;
     std::optional<int> pick_; // the instance clicked, -1 for none, not yet taken
+    bool needs_next_frame_ = false; // whether the last redraw asked for another frame, see handleViewRedraw()
     double scale_ = 0.0;
     std::string failure_;
     std::string diagnostics_;

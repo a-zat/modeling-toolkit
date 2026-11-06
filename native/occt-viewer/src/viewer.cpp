@@ -469,8 +469,17 @@ bool mtk::Viewer::redraw() {
     if (!is_attached()) {
         return false;
     }
+    needs_next_frame_ = false;
     FlushViewEvents(context_, view_, true);
-    return toAskNextFrame();
+    return needs_next_frame_;
+}
+
+// FlushViewEvents() clears the request for another frame before it returns, having passed it to the window, which
+// cannot do anything with it here: the request is kept for redraw() to return.
+void mtk::Viewer::handleViewRedraw(const occ::handle<AIS_InteractiveContext>& context,
+                                   const occ::handle<V3d_View>& view) {
+    AIS_ViewController::handleViewRedraw(context, view);
+    needs_next_frame_ = needs_next_frame_ || toAskNextFrame();
 }
 
 const std::string& mtk::Viewer::diagnostics() {
