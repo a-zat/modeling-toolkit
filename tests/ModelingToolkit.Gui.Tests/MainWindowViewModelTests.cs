@@ -1,4 +1,5 @@
 using ModelingToolkit.Gui.ViewModels;
+using ModelingToolkit.Gui.Viewport;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.IO.Native;
@@ -177,10 +178,42 @@ public sealed class MainWindowViewModelTests
     private static IEnumerable<ModelNodeViewModel> Flatten(ModelNodeViewModel node) =>
         [node, .. node.Children.SelectMany(Flatten)];
 
+    [Fact]
+    public void TheViewCommandsMoveTheCameraAndChangeHowTheViewShowsTheModel()
+    {
+        MainWindowViewModel viewModel = Create();
+        var camera = new RecordingCamera();
+        viewModel.Camera = camera;
+        Assert.True(viewModel.IsShaded);
+        Assert.True(viewModel.IsPerspective);
+        Assert.True(viewModel.IsGridVisible);
+
+        viewModel.FitAllCommand.Execute(null);
+        viewModel.ShowViewCommand.Execute(StandardView.Top);
+        viewModel.SetDisplayModeCommand.Execute(DisplayMode.Wireframe);
+        viewModel.TogglePerspectiveCommand.Execute(null);
+        viewModel.ToggleGridCommand.Execute(null);
+
+        Assert.Equal(["fit all", "Top"], camera.Calls);
+        Assert.Equal(DisplayMode.Wireframe, viewModel.DisplayMode);
+        Assert.Equal((false, false, true), (viewModel.IsShaded, viewModel.IsShadedWithEdges, viewModel.IsWireframe));
+        Assert.False(viewModel.IsPerspective);
+        Assert.False(viewModel.IsGridVisible);
+    }
+
     private sealed class RecordingAppearance : IAppearance
     {
         public List<bool> Applied { get; } = [];
 
         public void Apply(bool dark) => Applied.Add(dark);
+    }
+
+    private sealed class RecordingCamera : IViewCamera
+    {
+        public List<string> Calls { get; } = [];
+
+        public void FitAll() => Calls.Add("fit all");
+
+        public void ShowView(StandardView view) => Calls.Add(view.ToString());
     }
 }

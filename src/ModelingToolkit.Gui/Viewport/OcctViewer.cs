@@ -80,6 +80,7 @@ internal sealed class OcctViewer : IDisposable
         Copy(colors.CubeEdge, native.CubeEdge);
         Copy(colors.CubeText, native.CubeText);
         Copy(colors.Highlight, native.Highlight);
+        Copy(colors.Edges, native.Edges);
         NativeMethods.SetColors(_handle, in native).ThrowIfFailed();
 
         static void Copy(Color color, float* rgb)
@@ -175,6 +176,17 @@ internal sealed class OcctViewer : IDisposable
 
     /// <summary>Turns the camera to show all the instances; with none, the view does not change.</summary>
     public void FitAll() => NativeMethods.FitAll(_handle).ThrowIfFailed();
+
+    /// <summary>Turns the camera to a standard view, fitting the instances, with an animation.</summary>
+    public void ShowView(StandardView view) => NativeMethods.ShowView(_handle, (int)view).ThrowIfFailed();
+
+    public void SetDisplayMode(DisplayMode mode) => NativeMethods.SetDisplayMode(_handle, (int)mode).ThrowIfFailed();
+
+    public void SetPerspective(bool perspective) =>
+        NativeMethods.SetPerspective(_handle, perspective ? 1 : 0).ThrowIfFailed();
+
+    /// <summary>Shows or hides the grid on the ground and the axes through the origin.</summary>
+    public void SetGridVisible(bool visible) => NativeMethods.SetGridVisible(_handle, visible ? 1 : 0).ThrowIfFailed();
 
     // Each input method returns whether the view changed: Redraw should then be called on the next frame.
 

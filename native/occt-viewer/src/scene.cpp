@@ -73,7 +73,26 @@ occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& m
     return aspect;
 }
 
+void apply_display_mode_to(Graphic3d_AspectFillArea3d& aspect, mtk_viewer_display_mode mode,
+                           const Quantity_ColorRGBA& edges) {
+    const bool wireframe = mode == MTK_VIEWER_DISPLAY_WIREFRAME;
+    aspect.SetInteriorStyle(wireframe ? Aspect_IS_EMPTY : Aspect_IS_SOLID);
+    // Without faces the edges take the colour of the material, lit and textured: in a single colour they stand out
+    // from the ground as in the other modes.
+    aspect.SetTextureMapOn(!wireframe && !aspect.TextureSet().IsNull());
+    aspect.SetShadingModel(wireframe ? Graphic3d_TypeOfShadingModel_Unlit : Graphic3d_TypeOfShadingModel_DEFAULT);
+    aspect.SetInteriorColor(edges);
+    aspect.SetDrawEdges(mode != MTK_VIEWER_DISPLAY_SHADED);
+    aspect.SetEdgeColor(edges);
+    aspect.SetEdgeWidth(1.0);
+}
+
 } // namespace
+
+void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges) {
+    apply_display_mode_to(*aspects.shaded, mode, Quantity_ColorRGBA(edges, 1.0f));
+    apply_display_mode_to(*aspects.faded, mode, Quantity_ColorRGBA(edges, faded_opacity));
+}
 
 mtk::MeshObject::MeshObject(const occ::handle<Graphic3d_ArrayOfTriangles>& triangles, const MaterialAspects& aspects)
     : triangles_(triangles), aspects_(aspects) {}

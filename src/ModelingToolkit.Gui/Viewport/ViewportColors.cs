@@ -13,4 +13,5 @@ internal sealed record ViewportColors(
     Color CubeFace,
     Color CubeEdge,
     Color CubeText,
-    Color Highlight);
+    Color Highlight,
+    Color Edges);

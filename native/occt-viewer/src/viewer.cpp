@@ -31,7 +31,7 @@ struct mtk_viewer : mtk::Viewer {
 };
 
 // The managed side declares the same layouts: these sizes must match the ones it checks in its tests.
-static_assert(sizeof(mtk_viewer_colors) == 120);
+static_assert(sizeof(mtk_viewer_colors) == 132);
 static_assert(sizeof(mtk_viewer_material) == 28);
 static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 48);
 
@@ -167,10 +167,10 @@ mtk::Viewer::Viewer(void* parent) {
 
     // The vertical axis through the origin, which the grid on the ground does not draw, in a blue that goes with its red
     // and green axes. Shown, never selected.
-    occ::handle<AIS_Line> vertical_axis = new AIS_Line(new Geom_Line(gp::OZ()));
-    vertical_axis->SetColor(Quantity_Color(0.15, 0.35, 1.0, Quantity_TOC_sRGB));
-    vertical_axis->SetWidth(1.0);
-    context_->Display(vertical_axis, 0, -1, false);
+    vertical_axis_ = new AIS_Line(new Geom_Line(gp::OZ()));
+    vertical_axis_->SetColor(Quantity_Color(0.15, 0.35, 1.0, Quantity_TOC_sRGB));
+    vertical_axis_->SetWidth(1.0);
+    context_->Display(vertical_axis_, 0, -1, false);
 
     view_ = viewer_->CreateView();
     // Drawn only by redraw() and by the native view, never as a side effect of a change.
@@ -179,7 +179,8 @@ mtk::Viewer::Viewer(void* parent) {
     view_->Camera()->SetProjectionType(Graphic3d_Camera::Projection_Perspective);
     view_->Camera()->SetFOVy(field_of_view);
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
-    view_->GridDisplay(ground_grid(Quantity_NOC_GRAY70));
+    grid_ = ground_grid(Quantity_NOC_GRAY70);
+    view_->GridDisplay(grid_);
 
     // In the lower left corner, at a distance set by apply_scale().
     const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
@@ -244,7 +245,10 @@ void mtk::Viewer::view_exposed() noexcept {
 void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     view_->SetBgGradientColors(to_color(colors.background_top), to_color(colors.background_bottom),
                                Aspect_GradientFillMethod_Vertical);
-    view_->GridDisplay(ground_grid(to_color(colors.grid)));
+    grid_ = ground_grid(to_color(colors.grid));
+    if (grid_visible_) {
+        view_->GridDisplay(grid_);
+    }
 
     const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
     const Quantity_Color x = to_color(colors.axis_x), y = to_color(colors.axis_y), z = to_color(colors.axis_z);
@@ -263,6 +267,8 @@ void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     hover->SetColor(highlight);
     hover->SetTransparency(hover_transparency);
 
+    edge_color_ = to_color(colors.edges);
+    set_display_mode(display_mode_);
     view_->Invalidate();
 }
 
@@ -279,7 +285,9 @@ int mtk::Viewer::add_texture(const uint8_t* pixels, int width, int height) {
 int mtk::Viewer::add_material(const mtk_viewer_material& material) {
     const occ::handle<Graphic3d_Texture2D> texture =
         material.base_color_texture >= 0 ? textures_[material.base_color_texture] : nullptr;
-    materials_.push_back(make_aspects(material, texture));
+    MaterialAspects aspects = make_aspects(material, texture);
+    apply_display_mode(aspects, display_mode_, edge_color_);
+    materials_.push_back(std::move(aspects));
     return material_count() - 1;
 }
 
@@ -339,6 +347,66 @@ void mtk::Viewer::fit_all() {
     if (is_attached() && !instances_.empty()) {
         view_->FitAll(fit_margin, false);
     }
+}
+
+void mtk::Viewer::show_view(mtk_viewer_view view) {
+    static constexpr V3d_TypeOfOrientation orientations[] = {
+        V3d_TypeOfOrientation_Zup_Top,   V3d_TypeOfOrientation_Zup_Bottom, V3d_TypeOfOrientation_Zup_Front,
+        V3d_TypeOfOrientation_Zup_Back,  V3d_TypeOfOrientation_Zup_Left,   V3d_TypeOfOrientation_Zup_Right,
+        V3d_TypeOfOrientation_Zup_AxoRight};
+
+    // The animation goes from the current camera to the one of the view, fitted as fit_all() does.
+    occ::handle<Graphic3d_Camera> start = new Graphic3d_Camera();
+    start->Copy(view_->Camera());
+    view_->SetProj(orientations[view]);
+    if (is_attached() && !instances_.empty()) {
+        view_->FitAll(fit_margin, false);
+    }
+    occ::handle<Graphic3d_Camera> end = new Graphic3d_Camera();
+    end->Copy(view_->Camera());
+    view_->Camera()->Copy(start);
+
+    myViewAnimation->SetView(view_);
+    myViewAnimation->SetCameraStart(start);
+    myViewAnimation->SetCameraEnd(end);
+    myViewAnimation->SetOwnDuration(view_cube_->Duration());
+    myViewAnimation->StartTimer(0.0, 1.0, true, false);
+    view_->Invalidate();
+}
+
+void mtk::Viewer::set_display_mode(mtk_viewer_display_mode mode) {
+    display_mode_ = mode;
+    for (MaterialAspects& aspects : materials_) {
+        apply_display_mode(aspects, mode, edge_color_);
+    }
+    // The instances placed by a transformation show the presentations of the shared meshes.
+    for (const auto& [key, mesh] : shared_meshes_) {
+        mesh->SynchronizeAspects();
+    }
+    for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
+        if (!instance->IsKind(STANDARD_TYPE(AIS_ConnectedInteractive))) {
+            instance->SynchronizeAspects();
+        }
+    }
+    view_->Invalidate();
+}
+
+void mtk::Viewer::set_perspective(bool perspective) {
+    view_->Camera()->SetProjectionType(perspective ? Graphic3d_Camera::Projection_Perspective
+                                                   : Graphic3d_Camera::Projection_Orthographic);
+    view_->Invalidate();
+}
+
+void mtk::Viewer::set_grid_visible(bool visible) {
+    grid_visible_ = visible;
+    if (visible) {
+        view_->GridDisplay(grid_);
+        context_->Display(vertical_axis_, 0, -1, false);
+    } else {
+        view_->GridErase();
+        context_->Erase(vertical_axis_, false);
+    }
+    view_->Invalidate();
 }
 
 bool mtk::Viewer::mouse_buttons(double x, double y, uint32_t buttons, uint32_t modifiers) {
@@ -604,7 +672,8 @@ mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* co
         }
         for (const float(*color)[3] : {&colors->background_top, &colors->background_bottom, &colors->grid,
                                        &colors->axis_x, &colors->axis_y, &colors->axis_z, &colors->cube_face,
-                                       &colors->cube_edge, &colors->cube_text, &colors->highlight}) {
+                                       &colors->cube_edge, &colors->cube_text, &colors->highlight,
+                                       &colors->edges}) {
             if (!is_color(*color)) {
                 return mtk::invalid_argument("Colour components must be between 0 and 1.");
             }
@@ -709,6 +778,52 @@ mtk_status mtk_viewer_fit_all(mtk_viewer* viewer) {
             return mtk::invalid_argument("viewer must not be null.");
         }
         viewer->fit_all();
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_show_view(mtk_viewer* viewer, int32_t view) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (view < MTK_VIEWER_VIEW_TOP || view > MTK_VIEWER_VIEW_ISOMETRIC) {
+            return mtk::invalid_argument("view is not a standard view.");
+        }
+        viewer->show_view(static_cast<mtk_viewer_view>(view));
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_display_mode(mtk_viewer* viewer, int32_t mode) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (mode < MTK_VIEWER_DISPLAY_SHADED || mode > MTK_VIEWER_DISPLAY_WIREFRAME) {
+            return mtk::invalid_argument("mode is not a display mode.");
+        }
+        viewer->set_display_mode(static_cast<mtk_viewer_display_mode>(mode));
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_perspective(mtk_viewer* viewer, int32_t perspective) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        viewer->set_perspective(perspective != 0);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_grid_visible(mtk_viewer* viewer, int32_t visible) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        viewer->set_grid_visible(visible != 0);
         return MTK_STATUS_OK;
     });
 }

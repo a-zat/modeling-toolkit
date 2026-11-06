@@ -4,8 +4,10 @@
 #include "scene.hpp"
 
 #include <AIS_InteractiveContext.hxx>
+#include <AIS_Line.hxx>
 #include <AIS_ViewController.hxx>
 #include <AIS_ViewCube.hxx>
+#include <Aspect_GridParams.hxx>
 #include <Aspect_NeutralWindow.hxx>
 #include <NCollection_Vec2.hxx>
 #include <V3d_View.hxx>
@@ -78,6 +80,12 @@ public:
     void set_selection(const int32_t* instances, int count);
     void clear();
     void fit_all();
+
+    // How the view shows the scene: the camera turns to a standard view with an animation, which redraw() plays.
+    void show_view(mtk_viewer_view view);
+    void set_display_mode(mtk_viewer_display_mode mode);
+    void set_perspective(bool perspective);
+    void set_grid_visible(bool visible);
     int mesh_count() const { return static_cast<int>(meshes_.size()); }
     int texture_count() const { return static_cast<int>(textures_.size()); }
     int material_count() const { return static_cast<int>(materials_.size()); }
@@ -114,6 +122,11 @@ private:
     occ::handle<V3d_View> view_;
     occ::handle<AIS_InteractiveContext> context_;
     occ::handle<AIS_ViewCube> view_cube_;
+    occ::handle<AIS_Line> vertical_axis_;
+    Aspect_GridParams grid_;
+    bool grid_visible_ = true;
+    mtk_viewer_display_mode display_mode_ = MTK_VIEWER_DISPLAY_SHADED;
+    Quantity_Color edge_color_ = Quantity_NOC_GRAY30;
     occ::handle<Aspect_NeutralWindow> window_;
     std::vector<occ::handle<Graphic3d_ArrayOfTriangles>> meshes_;
     std::vector<occ::handle<Graphic3d_Texture2D>> textures_;

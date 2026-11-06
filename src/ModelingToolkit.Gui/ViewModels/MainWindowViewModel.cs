@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
+using ModelingToolkit.Gui.Viewport;
 
 namespace ModelingToolkit.Gui.ViewModels;
 
@@ -27,6 +28,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         StatusMessage = string.Empty;
         ActivePanel = SidePanel.Model;
         IsDark = false;
+        IsPerspective = true;
+        IsGridVisible = true;
 
         ModelTree.PropertyChanged += (_, e) =>
         {
@@ -40,11 +43,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Open…", OpenCommand, Gesture: "Ctrl+O"),
             new("Save", SaveCommand, Gesture: "Ctrl+S"),
             new("Save As…", SaveAsCommand, Gesture: "Ctrl+Shift+S"),
-            new("Fit All", NotAvailableCommand, "Fit all"),
-            new("Standard Views", NotAvailableCommand, "Standard views"),
-            new("Shaded", NotAvailableCommand, "Shaded"),
-            new("Shaded with Edges", NotAvailableCommand, "Shaded with edges"),
-            new("Wireframe", NotAvailableCommand, "Wireframe"),
+            new("Fit All", FitAllCommand),
+            new("Top View", ShowViewCommand, StandardView.Top),
+            new("Bottom View", ShowViewCommand, StandardView.Bottom),
+            new("Front View", ShowViewCommand, StandardView.Front),
+            new("Back View", ShowViewCommand, StandardView.Back),
+            new("Left View", ShowViewCommand, StandardView.Left),
+            new("Right View", ShowViewCommand, StandardView.Right),
+            new("Isometric View", ShowViewCommand, StandardView.Isometric),
+            new("Shaded", SetDisplayModeCommand, DisplayMode.Shaded),
+            new("Shaded with Edges", SetDisplayModeCommand, DisplayMode.ShadedWithEdges),
+            new("Wireframe", SetDisplayModeCommand, DisplayMode.Wireframe),
+            new("Toggle Perspective", TogglePerspectiveCommand),
+            new("Toggle Grid", ToggleGridCommand),
             new("Toggle Dark Theme", ToggleDarkCommand),
         ];
         _initialized = true;
@@ -60,6 +71,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The open and save dialogs, provided by the window.</summary>
     public IFileDialogs? FileDialogs { get; set; }
+
+    /// <summary>The camera of the 3D view, provided by the layout that shows it.</summary>
+    public IViewCamera? Camera { get; set; }
 
     /// <summary>The open document, shown in the 3D view.</summary>
     [ObservableProperty]
@@ -101,6 +115,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool IsDark { get; set; }
+
+    // How the 3D view shows the document.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShaded), nameof(IsShadedWithEdges), nameof(IsWireframe))]
+    public partial DisplayMode DisplayMode { get; set; }
+
+    public bool IsShaded => DisplayMode == DisplayMode.Shaded;
+
+    public bool IsShadedWithEdges => DisplayMode == DisplayMode.ShadedWithEdges;
+
+    public bool IsWireframe => DisplayMode == DisplayMode.Wireframe;
+
+    /// <summary>Perspective, or orthographic (parallel) projection.</summary>
+    [ObservableProperty]
+    public partial bool IsPerspective { get; set; }
+
+    /// <summary>Whether the grid on the ground and the axes through the origin are shown.</summary>
+    [ObservableProperty]
+    public partial bool IsGridVisible { get; set; }
 
     /// <summary>Applies the variant of the theme chosen here.</summary>
     public void ApplyAppearance() => _appearance.Apply(IsDark);
@@ -192,10 +226,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    // The commands of the 3D viewport only report that they are not available yet.
     [RelayCommand]
-    private void NotAvailable(string feature) =>
-        StatusMessage = $"{feature}: available with the view tools (#16).";
+    private void FitAll() => Camera?.FitAll();
+
+    [RelayCommand]
+    private void ShowView(StandardView view) => Camera?.ShowView(view);
+
+    [RelayCommand]
+    private void SetDisplayMode(DisplayMode mode) => DisplayMode = mode;
+
+    [RelayCommand]
+    private void TogglePerspective() => IsPerspective = !IsPerspective;
+
+    [RelayCommand]
+    private void ToggleGrid() => IsGridVisible = !IsGridVisible;
 
     [RelayCommand]
     private void ToggleDark() => IsDark = !IsDark;

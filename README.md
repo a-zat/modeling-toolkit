@@ -38,7 +38,9 @@ cross at the origin. The left button rotates, the middle button or Shift with th
 pinch or the right button zooms; the status bar recalls it. Clicking a face of the cube in the upper right corner turns
 the view to it. Clicking a mesh selects it in the model tree, which opens down to it, and clicking the empty space
 clears the selection; the mesh under the pointer is tinted. Selecting a node of the tree fades the rest of the model,
-so that the selection stands out.
+so that the selection stands out. The bar at the top fits the model in the view, turns to the standard views and
+chooses how meshes are drawn: shaded, with the edges of their triangles, or as a wireframe. The View menu does the
+same, and switches to an orthographic projection or hides the grid.
 
 After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
 

@@ -53,8 +53,12 @@ occ::handle<Graphic3d_ArrayOfTriangles> transform_triangles(const occ::handle<Gr
 // A texture from checked pixels, as in mtk_viewer_add_texture.
 occ::handle<Graphic3d_Texture2D> make_texture(const uint8_t* pixels, int width, int height);
 
-// The aspects of the triangles of a checked material; texture may be null.
+// The aspects of the triangles of a checked material, shaded; texture may be null.
 MaterialAspects make_aspects(const mtk_viewer_material& material, const occ::handle<Graphic3d_Texture2D>& texture);
+
+// Changes the aspects to a display mode, with edges of the given colour where it draws them. The presentations that use
+// the aspects show the change once their aspects are synchronized (PrsMgr_PresentableObject::SynchronizeAspects).
+void apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges);
 
 // The matrix as a placement that OpenCASCADE can apply to a shared presentation: a rotation, possibly with a
 // reflection, a uniform scale and a translation. Other affine matrices have no such placement.

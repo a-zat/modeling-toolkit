@@ -51,7 +51,7 @@ mtk_viewer_colors colors(float value) {
     mtk_viewer_colors result{};
     for (float(*color)[3] : {&result.background_top, &result.background_bottom, &result.grid, &result.axis_x,
                              &result.axis_y, &result.axis_z, &result.cube_face, &result.cube_edge, &result.cube_text,
-                             &result.highlight}) {
+                             &result.highlight, &result.edges}) {
         for (float& component : *color) {
             component = value;
         }
@@ -149,6 +149,39 @@ TEST(Viewer, AcceptsColoursBetweenZeroAndOne) {
         EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &value), MTK_STATUS_INVALID_ARGUMENT) << invalid;
         EXPECT_STRNE(mtk_viewer_last_error_message(), "");
     }
+}
+
+TEST(Viewer, ChangesHowItShowsTheScene) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const mtk_viewer_colors theme = colors(0.5f);
+    ASSERT_EQ(mtk_viewer_set_colors(viewer.get(), &theme), MTK_STATUS_OK);
+
+    // Without a scene, and with one: materials added later take the display mode too.
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int32_t mode : {MTK_VIEWER_DISPLAY_WIREFRAME, MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES,
+                             MTK_VIEWER_DISPLAY_SHADED}) {
+            EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), mode), MTK_STATUS_OK)
+                << mtk_viewer_last_error_message();
+        }
+        for (int32_t view = MTK_VIEWER_VIEW_TOP; view <= MTK_VIEWER_VIEW_ISOMETRIC; ++view) {
+            EXPECT_EQ(mtk_viewer_show_view(viewer.get(), view), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+        }
+        EXPECT_EQ(mtk_viewer_set_perspective(viewer.get(), 0), MTK_STATUS_OK);
+        EXPECT_EQ(mtk_viewer_set_perspective(viewer.get(), 1), MTK_STATUS_OK);
+        EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 0), MTK_STATUS_OK);
+        EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 1), MTK_STATUS_OK);
+
+        ASSERT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_WIREFRAME), MTK_STATUS_OK);
+        add_mesh(viewer.get(), Square().mesh());
+        add_material(viewer.get(), grey());
+        add_instance(viewer.get(), 0, 0, identity);
+    }
+
+    EXPECT_EQ(mtk_viewer_show_view(viewer.get(), 7), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_show_view(viewer.get(), -1), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), 3), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_STRNE(mtk_viewer_last_error_message(), "");
 }
 
 TEST(Viewer, NumbersWhatItAddsToTheSceneFromZero) {
@@ -367,6 +400,10 @@ TEST(Viewer, NullArgumentsAreRejected) {
     EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &flag, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_clear(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_fit_all(nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_show_view(nullptr, MTK_VIEWER_VIEW_TOP), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_display_mode(nullptr, MTK_VIEWER_DISPLAY_SHADED), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_perspective(nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_grid_visible(nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
     mtk_viewer_release(nullptr);
 }
 

@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 7
+#define MTK_OCCT_VIEWER_ABI_VERSION 8
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -71,7 +71,26 @@ typedef struct mtk_viewer_colors {
     float cube_edge[3]; /* its bevelled edges and corners */
     float cube_text[3];
     float highlight[3]; /* the part of the ViewCube under the pointer */
+    float edges[3];     /* the edges of the triangles, in the display modes that draw them */
 } mtk_viewer_colors;
+
+/* The views of the faces of the ViewCube, and the view from its front right top corner, the initial one. */
+typedef enum mtk_viewer_view {
+    MTK_VIEWER_VIEW_TOP = 0,
+    MTK_VIEWER_VIEW_BOTTOM = 1,
+    MTK_VIEWER_VIEW_FRONT = 2,
+    MTK_VIEWER_VIEW_BACK = 3,
+    MTK_VIEWER_VIEW_LEFT = 4,
+    MTK_VIEWER_VIEW_RIGHT = 5,
+    MTK_VIEWER_VIEW_ISOMETRIC = 6
+} mtk_viewer_view;
+
+/* How the meshes are drawn. */
+typedef enum mtk_viewer_display_mode {
+    MTK_VIEWER_DISPLAY_SHADED = 0,
+    MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES = 1, /* with the edges of the triangles */
+    MTK_VIEWER_DISPLAY_WIREFRAME = 2          /* only the edges of the triangles */
+} mtk_viewer_display_mode;
 
 /*
  * Creates a viewer and its native view: an NSView on macOS, a child window of parent (an HWND) on Windows. On macOS
@@ -140,6 +159,18 @@ MTK_VIEWER_API mtk_status mtk_viewer_clear(mtk_viewer* viewer);
 
 /* Turns the camera to show all the instances; with none, the view does not change. */
 MTK_VIEWER_API mtk_status mtk_viewer_fit_all(mtk_viewer* viewer);
+
+/* Turns the camera to a standard view, fitting the instances, with the animation of the ViewCube. */
+MTK_VIEWER_API mtk_status mtk_viewer_show_view(mtk_viewer* viewer, int32_t view /* mtk_viewer_view */);
+
+/* Shaded is the initial mode. */
+MTK_VIEWER_API mtk_status mtk_viewer_set_display_mode(mtk_viewer* viewer, int32_t mode /* mtk_viewer_display_mode */);
+
+/* Perspective (1), the initial projection, or orthographic (0). */
+MTK_VIEWER_API mtk_status mtk_viewer_set_perspective(mtk_viewer* viewer, int32_t perspective);
+
+/* Shows (1), as initially, or hides (0) the grid on the ground and the axes through the origin. */
+MTK_VIEWER_API mtk_status mtk_viewer_set_grid_visible(mtk_viewer* viewer, int32_t visible);
 
 /*
  * Mouse input, with the buttons pressed after the event and the modifier keys held. Each function sets out_redraw

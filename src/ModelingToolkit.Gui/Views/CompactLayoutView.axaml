@@ -35,30 +35,51 @@
           </Border>
           <Border Classes="group">
             <StackPanel Orientation="Horizontal" Spacing="2">
-              <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Fit all"
-                      ToolTip.Tip="Fit all">
+              <Button Classes="tool" Command="{Binding FitAllCommand}" ToolTip.Tip="Fit all">
                 <PathIcon Data="{StaticResource Icon.ZoomFit}" />
               </Button>
-              <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Standard views"
-                      ToolTip.Tip="Standard views">
+              <Button Classes="tool" ToolTip.Tip="Standard views">
                 <PathIcon Data="{StaticResource Icon.CubeRotate}" />
+                <Button.Flyout>
+                  <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                    <MenuItem Header="Top" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Top}" />
+                    <MenuItem Header="Bottom" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Bottom}" />
+                    <MenuItem Header="Front" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Front}" />
+                    <MenuItem Header="Back" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Back}" />
+                    <MenuItem Header="Left" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Left}" />
+                    <MenuItem Header="Right" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Right}" />
+                    <Separator />
+                    <MenuItem Header="Isometric" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Isometric}" />
+                  </MenuFlyout>
+                </Button.Flyout>
               </Button>
             </StackPanel>
           </Border>
           <Border Classes="group">
             <StackPanel Orientation="Horizontal" Spacing="2">
-              <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Shaded"
-                      ToolTip.Tip="Shaded">
+              <ToggleButton Classes="tool" IsChecked="{Binding IsShaded, Mode=OneWay}"
+                            Command="{Binding SetDisplayModeCommand}"
+                            CommandParameter="{x:Static viewport:DisplayMode.Shaded}" ToolTip.Tip="Shaded">
                 <PathIcon Data="{StaticResource Icon.Cube}" />
-              </Button>
-              <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Shaded with edges"
-                      ToolTip.Tip="Shaded with edges">
+              </ToggleButton>
+              <ToggleButton Classes="tool" IsChecked="{Binding IsShadedWithEdges, Mode=OneWay}"
+                            Command="{Binding SetDisplayModeCommand}"
+                            CommandParameter="{x:Static viewport:DisplayMode.ShadedWithEdges}"
+                            ToolTip.Tip="Shaded with edges">
                 <PathIcon Data="{StaticResource Icon.BorderOutside}" />
-              </Button>
-              <Button Classes="tool" Command="{Binding NotAvailableCommand}" CommandParameter="Wireframe"
-                      ToolTip.Tip="Wireframe">
+              </ToggleButton>
+              <ToggleButton Classes="tool" IsChecked="{Binding IsWireframe, Mode=OneWay}"
+                            Command="{Binding SetDisplayModeCommand}"
+                            CommandParameter="{x:Static viewport:DisplayMode.Wireframe}" ToolTip.Tip="Wireframe">
                 <PathIcon Data="{StaticResource Icon.Grid}" />
-              </Button>
+              </ToggleButton>
             </StackPanel>
           </Border>
         </StackPanel>
@@ -110,9 +131,11 @@
       </Border>
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
 
-      <viewport:ViewportView Grid.Column="3" Document="{Binding Document}"
+      <viewport:ViewportView x:Name="Viewport" Grid.Column="3" Document="{Binding Document}"
                              Selection="{Binding ModelTree.SelectedNode.Path}"
-                             PickCommand="{Binding ModelTree.SelectCommand}" />
+                             PickCommand="{Binding ModelTree.SelectCommand}"
+                             DisplayMode="{Binding DisplayMode}" IsPerspective="{Binding IsPerspective}"
+                             IsGridVisible="{Binding IsGridVisible}" />
 
       <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />
       <Border Grid.Column="5" Classes="sidePanel" IsVisible="{Binding Properties.HasSelection}">

@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 7;
+    public const int AbiVersion = 8;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -47,6 +47,18 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_fit_all")]
     public static partial NativeStatus FitAll(ViewerHandle viewer);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_show_view")]
+    public static partial NativeStatus ShowView(ViewerHandle viewer, int view);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_display_mode")]
+    public static partial NativeStatus SetDisplayMode(ViewerHandle viewer, int mode);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_perspective")]
+    public static partial NativeStatus SetPerspective(ViewerHandle viewer, int perspective);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_grid_visible")]
+    public static partial NativeStatus SetGridVisible(ViewerHandle viewer, int visible);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_mouse_buttons")]
     public static partial NativeStatus MouseButtons(

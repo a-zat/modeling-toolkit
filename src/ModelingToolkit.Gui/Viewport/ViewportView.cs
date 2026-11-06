@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Gui.Viewport.Interop;
 using Document = ModelingToolkit.Core.Model.Document;
 using Entity = ModelingToolkit.Core.Model.Entity;
@@ -20,7 +21,7 @@ namespace ModelingToolkit.Gui.Viewport;
 /// are windows of their own. The native view lets the mouse through, so the input arrives here as for any other
 /// control and is passed on to the viewer, which is drawn again on the next frame of the window.
 /// </summary>
-public sealed class ViewportView : Border
+public sealed class ViewportView : Border, IViewCamera
 {
     public static readonly StyledProperty<Document?> DocumentProperty =
         AvaloniaProperty.Register<ViewportView, Document?>(nameof(Document));
@@ -30,6 +31,15 @@ public sealed class ViewportView : Border
 
     public static readonly StyledProperty<ICommand?> PickCommandProperty =
         AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(PickCommand));
+
+    public static readonly StyledProperty<DisplayMode> DisplayModeProperty =
+        AvaloniaProperty.Register<ViewportView, DisplayMode>(nameof(DisplayMode));
+
+    public static readonly StyledProperty<bool> IsPerspectiveProperty =
+        AvaloniaProperty.Register<ViewportView, bool>(nameof(IsPerspective), defaultValue: true);
+
+    public static readonly StyledProperty<bool> IsGridVisibleProperty =
+        AvaloniaProperty.Register<ViewportView, bool>(nameof(IsGridVisible), defaultValue: true);
 
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
@@ -95,7 +105,39 @@ public sealed class ViewportView : Border
         set => SetValue(PickCommandProperty, value);
     }
 
+    public DisplayMode DisplayMode
+    {
+        get => GetValue(DisplayModeProperty);
+        set => SetValue(DisplayModeProperty, value);
+    }
+
+    /// <summary>Perspective, or orthographic (parallel) projection.</summary>
+    public bool IsPerspective
+    {
+        get => GetValue(IsPerspectiveProperty);
+        set => SetValue(IsPerspectiveProperty, value);
+    }
+
+    /// <summary>Whether the grid on the ground and the axes through the origin are shown.</summary>
+    public bool IsGridVisible
+    {
+        get => GetValue(IsGridVisibleProperty);
+        set => SetValue(IsGridVisibleProperty, value);
+    }
+
     private OcctViewer? Viewer => _host.Viewer;
+
+    public void FitAll() => Send(viewer =>
+    {
+        viewer.FitAll();
+        return true;
+    });
+
+    public void ShowView(StandardView view) => Send(viewer =>
+    {
+        viewer.ShowView(view);
+        return true;
+    });
 
     /// <summary>The colours of the 3D view in a variant of the theme, or null if a resource is missing.</summary>
     internal ViewportColors? ReadColors(ThemeVariant theme)
@@ -106,9 +148,9 @@ public sealed class ViewportView : Border
                Find("Mtk.Viewport.AxisX", out Color axisX) && Find("Mtk.Viewport.AxisY", out Color axisY) &&
                Find("Mtk.Viewport.AxisZ", out Color axisZ) && Find("Mtk.ViewCube.Face", out Color cubeFace) &&
                Find("Mtk.ViewCube.Edge", out Color cubeEdge) && Find("Mtk.ViewCube.Text", out Color cubeText) &&
-               Find("SystemAccentColor", out Color highlight)
+               Find("SystemAccentColor", out Color highlight) && Find("Mtk.Viewport.Edge", out Color edges)
             ? new ViewportColors(gradient.GradientStops[0].Color, gradient.GradientStops[^1].Color, grid, axisX,
-                axisY, axisZ, cubeFace, cubeEdge, cubeText, highlight)
+                axisY, axisZ, cubeFace, cubeEdge, cubeText, highlight, edges)
             : null;
 
         bool Find(string key, out Color color)
@@ -133,6 +175,11 @@ public sealed class ViewportView : Border
                 scene.ShowSelectionIn(viewer, Selection);
                 return true;
             });
+        }
+        else if (change.Property == DisplayModeProperty || change.Property == IsPerspectiveProperty
+                 || change.Property == IsGridVisibleProperty)
+        {
+            Send(ApplySettings);
         }
     }
 
@@ -232,6 +279,7 @@ public sealed class ViewportView : Border
     private void OnViewerCreated()
     {
         ApplyColors();
+        Send(ApplySettings);
         // The first frame also tells whether the view could be shown in the window.
         RequestFrame();
         _ = ShowDocumentAsync();
@@ -275,6 +323,14 @@ public sealed class ViewportView : Border
 
             return true;
         });
+    }
+
+    private bool ApplySettings(OcctViewer viewer)
+    {
+        viewer.SetDisplayMode(DisplayMode);
+        viewer.SetPerspective(IsPerspective);
+        viewer.SetGridVisible(IsGridVisible);
+        return true;
     }
 
     // The native view takes its colours from the same resources as the rest of the interface, in the current theme.

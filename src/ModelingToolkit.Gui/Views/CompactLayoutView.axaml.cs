@@ -24,6 +24,7 @@ public partial class CompactLayoutView : UserControl
         _viewModel = DataContext as MainWindowViewModel;
         if (_viewModel is not null)
         {
+            _viewModel.Camera = Viewport;
             _viewModel.PropertyChanged += OnPanelsChanged;
             _viewModel.Properties.PropertyChanged += OnPanelsChanged;
             UpdateColumns(_viewModel);
@@ -35,6 +36,7 @@ public partial class CompactLayoutView : UserControl
         base.OnDetachedFromVisualTree(e);
         if (_viewModel is not null)
         {
+            _viewModel.Camera = null;
             _viewModel.PropertyChanged -= OnPanelsChanged;
             _viewModel.Properties.PropertyChanged -= OnPanelsChanged;
             _viewModel = null;

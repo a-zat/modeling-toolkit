@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
         xmlns:views="using:ModelingToolkit.Gui.Views"
+        xmlns:viewport="using:ModelingToolkit.Gui.Viewport"
         x:Class="ModelingToolkit.Gui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
@@ -40,6 +41,43 @@
           <NativeMenuItem Header="Materials Panel" ToggleType="CheckBox"
                           IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
                           Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Fit All" Command="{Binding FitAllCommand}" />
+          <NativeMenuItem Header="Standard Views">
+            <NativeMenu>
+              <NativeMenuItem Header="Top" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Top}" />
+              <NativeMenuItem Header="Bottom" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Bottom}" />
+              <NativeMenuItem Header="Front" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Front}" />
+              <NativeMenuItem Header="Back" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Back}" />
+              <NativeMenuItem Header="Left" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Left}" />
+              <NativeMenuItem Header="Right" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Right}" />
+              <NativeMenuItemSeparator />
+              <NativeMenuItem Header="Isometric" Command="{Binding ShowViewCommand}"
+                              CommandParameter="{x:Static viewport:StandardView.Isometric}" />
+            </NativeMenu>
+          </NativeMenuItem>
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Shaded" ToggleType="Radio" IsChecked="{Binding IsShaded, Mode=OneWay}"
+                          Command="{Binding SetDisplayModeCommand}"
+                          CommandParameter="{x:Static viewport:DisplayMode.Shaded}" />
+          <NativeMenuItem Header="Shaded with Edges" ToggleType="Radio"
+                          IsChecked="{Binding IsShadedWithEdges, Mode=OneWay}"
+                          Command="{Binding SetDisplayModeCommand}"
+                          CommandParameter="{x:Static viewport:DisplayMode.ShadedWithEdges}" />
+          <NativeMenuItem Header="Wireframe" ToggleType="Radio" IsChecked="{Binding IsWireframe, Mode=OneWay}"
+                          Command="{Binding SetDisplayModeCommand}"
+                          CommandParameter="{x:Static viewport:DisplayMode.Wireframe}" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Perspective" ToggleType="CheckBox" IsChecked="{Binding IsPerspective, Mode=OneWay}"
+                          Command="{Binding TogglePerspectiveCommand}" />
+          <NativeMenuItem Header="Grid" ToggleType="CheckBox" IsChecked="{Binding IsGridVisible, Mode=OneWay}"
+                          Command="{Binding ToggleGridCommand}" />
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Dark Theme" ToggleType="CheckBox" IsChecked="{Binding IsDark, Mode=OneWay}"
                           Command="{Binding ToggleDarkCommand}" />
