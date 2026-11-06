@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 2
+#define MTK_OCCT_BRIDGE_ABI_VERSION 3
 
 /* Opaque handle to an OpenCASCADE shape. */
 typedef struct mtk_shape mtk_shape;
@@ -43,8 +43,33 @@ MTK_API const char* mtk_occt_version(void);
 /* Message of the last error on the calling thread; valid until the next bridge call on the same thread. */
 MTK_API const char* mtk_last_error_message(void);
 
+/*
+ * Analytic primitives, solids with their own axes: the box fills [0, dx] x [0, dy] x [0, dz]; the cylinder and the cone
+ * stand on the XY plane, around the Z axis, from z = 0 to z = height; the sphere and the torus are centred at the
+ * origin, the torus around the Z axis. The cone narrows (or widens) from bottom_radius to top_radius, which may be
+ * zero for a point but not both, and must differ from bottom_radius: equal radii make a cylinder. The minor radius of
+ * the torus must be smaller than its major radius.
+ */
 MTK_API mtk_status mtk_shape_make_box(double dx, double dy, double dz, mtk_shape** out_shape);
+MTK_API mtk_status mtk_shape_make_cylinder(double radius, double height, mtk_shape** out_shape);
+MTK_API mtk_status mtk_shape_make_sphere(double radius, mtk_shape** out_shape);
+MTK_API mtk_status mtk_shape_make_cone(double bottom_radius, double top_radius, double height,
+                                       mtk_shape** out_shape);
+MTK_API mtk_status mtk_shape_make_torus(double major_radius, double minor_radius, mtk_shape** out_shape);
+
+/*
+ * A new shape: the shape moved by a placement, which shares its geometry. placement holds 12 values, the first three
+ * rows of a 4x4 matrix applied to column vectors, row after row: a rotation and a translation, without scaling or
+ * reflection.
+ */
+MTK_API mtk_status mtk_shape_place(const mtk_shape* shape, const double* placement, mtk_shape** out_shape);
+
 MTK_API mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume);
+
+/* The smallest box with the sides along the axes that contains the shape: out_bounds receives the minimum x, y and z,
+ * then the maximum x, y and z. */
+MTK_API mtk_status mtk_shape_bounds(const mtk_shape* shape, double* out_bounds /* 6 values */);
+
 MTK_API void mtk_shape_release(mtk_shape* shape);
 
 /*

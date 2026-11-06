@@ -6,7 +6,7 @@ namespace ModelingToolkit.Kernel.Occt.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_BRIDGE_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 2;
+    public const int AbiVersion = 3;
 
     private const string LibraryName = "mtk_occt_bridge";
 
@@ -16,8 +16,28 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_make_box")]
     public static partial NativeStatus ShapeMakeBox(double dx, double dy, double dz, out ShapeHandle shape);
 
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_make_cylinder")]
+    public static partial NativeStatus ShapeMakeCylinder(double radius, double height, out ShapeHandle shape);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_make_sphere")]
+    public static partial NativeStatus ShapeMakeSphere(double radius, out ShapeHandle shape);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_make_cone")]
+    public static partial NativeStatus ShapeMakeCone(
+        double bottomRadius, double topRadius, double height, out ShapeHandle shape);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_make_torus")]
+    public static partial NativeStatus ShapeMakeTorus(double majorRadius, double minorRadius, out ShapeHandle shape);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_place")]
+    public static partial NativeStatus ShapePlace(
+        ShapeHandle shape, ReadOnlySpan<double> placement, out ShapeHandle placed);
+
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_volume")]
     public static partial NativeStatus ShapeVolume(ShapeHandle shape, out double volume);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_bounds")]
+    public static partial NativeStatus ShapeBounds(ShapeHandle shape, Span<double> bounds);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_release")]
     public static partial void ShapeRelease(nint shape);

@@ -1,3 +1,4 @@
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Kernel.Occt.Interop;
 
@@ -27,10 +28,55 @@ public sealed class OcctKernel : IGeometryKernel
         return new OcctShape(handle);
     }
 
+    public IKernelShape MakeCylinder(double radius, double height)
+    {
+        NativeMethods.ShapeMakeCylinder(radius, height, out ShapeHandle handle).ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
+    public IKernelShape MakeSphere(double radius)
+    {
+        NativeMethods.ShapeMakeSphere(radius, out ShapeHandle handle).ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
+    public IKernelShape MakeCone(double bottomRadius, double topRadius, double height)
+    {
+        NativeMethods.ShapeMakeCone(bottomRadius, topRadius, height, out ShapeHandle handle).ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
+    public IKernelShape MakeTorus(double majorRadius, double minorRadius)
+    {
+        NativeMethods.ShapeMakeTorus(majorRadius, minorRadius, out ShapeHandle handle).ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
+    public IKernelShape Place(IKernelShape shape, Transform placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        ReadOnlySpan<double> matrix =
+        [
+            placement.M00, placement.M01, placement.M02, placement.M03,
+            placement.M10, placement.M11, placement.M12, placement.M13,
+            placement.M20, placement.M21, placement.M22, placement.M23,
+        ];
+        NativeMethods.ShapePlace(Unwrap(shape), matrix, out ShapeHandle handle).ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
     public double ComputeVolume(IKernelShape shape)
     {
         NativeMethods.ShapeVolume(Unwrap(shape), out double volume).ThrowIfFailed();
         return volume;
+    }
+
+    public BoundingBox GetBoundingBox(IKernelShape shape)
+    {
+        Span<double> bounds = stackalloc double[6];
+        NativeMethods.ShapeBounds(Unwrap(shape), bounds).ThrowIfFailed();
+        return new BoundingBox(
+            new Point3d(bounds[0], bounds[1], bounds[2]), new Point3d(bounds[3], bounds[4], bounds[5]));
     }
 
     private static ShapeHandle Unwrap(IKernelShape shape)
