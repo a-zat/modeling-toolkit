@@ -151,6 +151,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
         {
             "image/png" => ".png",
             "image/jpeg" => ".jpg",
+            "image/webp" => ".webp",
             _ => ".bin",
         };
     }

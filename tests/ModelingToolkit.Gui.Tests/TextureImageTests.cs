@@ -30,6 +30,19 @@ public sealed class TextureImageTests(HeadlessSession headless)
     }
 
     [Fact]
+    public async Task DecodesWebPImages()
+    {
+        byte[] data = File.ReadAllBytes(Paths.Asset("gltf", "webp", "Dot_C.webp"));
+
+        TextureImage? image = await headless.Session.Dispatch(
+            () => TextureImage.Decode(new Texture("Dot", "image/webp", data)),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(image);
+        Assert.Equal((128, 128), (image.Width, image.Height));
+    }
+
+    [Fact]
     public async Task ImagesThatCannotBeDecodedHaveNoPixels()
     {
         TextureImage? image = await headless.Session.Dispatch(

@@ -118,9 +118,9 @@ public sealed class MainWindowViewModelTests
     {
         MainWindowViewModel viewModel = Create();
         string folder = Directory.CreateTempSubdirectory("mtk-gui-tests-").FullName;
-        string path = Path.Combine(folder, "webp.gltf");
+        string path = Path.Combine(folder, "basisu.gltf");
         const string extensions = """
-            "extensionsUsed": ["EXT_texture_webp"], "extensionsRequired": ["EXT_texture_webp"], "asset"
+            "extensionsUsed": ["KHR_texture_basisu"], "extensionsRequired": ["KHR_texture_basisu"], "asset"
             """;
         string model = File.ReadAllText(Paths.Asset("gltf", "SimpleMeshes.gltf"));
         File.WriteAllText(path, model.Replace("\"asset\"", extensions));
@@ -134,8 +134,8 @@ public sealed class MainWindowViewModelTests
         }
 
         const string warning =
-            "Unsupported glTF extension EXT_texture_webp: the textures or materials that need it are left out.";
-        Assert.Equal($"Opened webp.gltf (glTF), with a warning: {warning}", viewModel.StatusMessage);
+            "Unsupported glTF extension KHR_texture_basisu: the textures or materials that need it are left out.";
+        Assert.Equal($"Opened basisu.gltf (glTF), with a warning: {warning}", viewModel.StatusMessage);
         Assert.Equal(warning, viewModel.StatusDetails);
         Assert.NotEmpty(viewModel.ModelTree.Roots);
 

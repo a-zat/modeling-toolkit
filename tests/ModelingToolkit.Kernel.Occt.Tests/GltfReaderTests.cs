@@ -41,6 +41,18 @@ public sealed class GltfReaderTests : IDisposable
         Assert.Empty(_warnings);
     }
 
+    [Fact]
+    public void Textures_in_webp_are_read_as_they_are()
+    {
+        Document document = Read(Asset(Path.Combine("webp", "BoxTextured.gltf")));
+
+        Texture texture = Assert.Single(document.Textures);
+        Assert.Equal("image/webp", texture.MediaType);
+        Assert.Equal(File.ReadAllBytes(Asset(Path.Combine("webp", "Dot_C.webp"))), texture.Data);
+        Assert.Same(texture, Assert.Single(document.Materials).BaseColorTexture);
+        Assert.Empty(_warnings);
+    }
+
     [Theory]
     [InlineData(".gltf")]
     [InlineData(".glb")]
@@ -55,14 +67,14 @@ public sealed class GltfReaderTests : IDisposable
     [Fact]
     public void Unsupported_texture_extensions_leave_out_only_textures()
     {
-        string path = WithExtensions(".glb", required: ["EXT_texture_webp"], used: ["KHR_texture_transform"]);
+        string path = WithExtensions(".glb", required: ["KHR_texture_basisu"], used: ["KHR_texture_transform"]);
 
         Document document = Read(path);
 
         Assert.Single(Meshes(document));
         Assert.Equal(
         [
-            "Unsupported glTF extension EXT_texture_webp: the textures or materials that need it are left out.",
+            "Unsupported glTF extension KHR_texture_basisu: the textures or materials that need it are left out.",
             "Unsupported glTF extension KHR_texture_transform: it is ignored.",
         ], _warnings);
     }

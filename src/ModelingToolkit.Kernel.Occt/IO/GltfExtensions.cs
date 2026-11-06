@@ -9,9 +9,9 @@ namespace ModelingToolkit.Kernel.Occt.IO;
 /// </summary>
 internal static class GltfExtensions
 {
-    // The extensions RWGltf_GltfJsonParser reads. Draco needs OpenCASCADE built with it (native/ports/opencascade).
+    // The extensions RWGltf_GltfJsonParser reads. Draco and WebP need OpenCASCADE as built by native/ports/opencascade.
     private static readonly HashSet<string> Supported =
-        ["KHR_binary_glTF", "KHR_draco_mesh_compression", "KHR_materials_common"];
+        ["EXT_texture_webp", "KHR_binary_glTF", "KHR_draco_mesh_compression", "KHR_materials_common"];
 
     private const uint GlbMagic = 0x46546C67;
     private const uint GlbJsonChunk = 0x4E4F534A;

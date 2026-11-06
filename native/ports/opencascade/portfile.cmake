@@ -1,4 +1,5 @@
-# vcpkg's opencascade port (external/vcpkg/ports/opencascade) plus a draco feature, which needs patch 0006.
+# vcpkg's opencascade port (external/vcpkg/ports/opencascade) plus a draco feature, which needs patch 0006, and the
+# WebP textures of glTF files (EXT_texture_webp), patch 0007.
 string(REPLACE "." "_" VERSION_STR "V${VERSION}")
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
@@ -13,6 +14,7 @@ vcpkg_from_github(
         0004-cmake-add-additional-path-extraction-for-OpenCASCADE.patch
         0005-drop-bin-letter.patch
         0006-cmake-find-draco-with-vcpkg-toolchain.patch
+        0007-gltf-read-webp-textures.patch
 )
 
 if (VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")

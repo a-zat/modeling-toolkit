@@ -1,0 +1,18 @@
+diff --git a/src/DataExchange/TKDEGLTF/RWGltf/RWGltf_GltfJsonParser.cxx b/src/DataExchange/TKDEGLTF/RWGltf/RWGltf_GltfJsonParser.cxx
+--- a/src/DataExchange/TKDEGLTF/RWGltf/RWGltf_GltfJsonParser.cxx
++++ b/src/DataExchange/TKDEGLTF/RWGltf/RWGltf_GltfJsonParser.cxx
+@@ -1182,6 +1182,14 @@ bool RWGltf_GltfJsonParser::gltfParseTexture(occ::handle<Image_Texture>& theText
+   const RWGltf_JsonValue* aSrcVal  = findObjectMember(*aTexNode, "source");
+   const RWGltf_JsonValue* aTargVal = findObjectMember(*aTexNode, "target");
+   if (aSrcVal == nullptr)
++  {
++    // EXT_texture_webp without a fallback image: the image is given by the extension
++    const RWGltf_JsonValue* anExtVal = findObjectMember(*aTexNode, "extensions");
++    const RWGltf_JsonValue* aWebpVal =
++      anExtVal != nullptr ? findObjectMember(*anExtVal, "EXT_texture_webp") : nullptr;
++    aSrcVal = aWebpVal != nullptr ? findObjectMember(*aWebpVal, "source") : nullptr;
++  }
++  if (aSrcVal == nullptr)
+   {
+     reportGltfWarning("Invalid texture node '" + aTextureId + "' without a 'source' property.");
+     return false;

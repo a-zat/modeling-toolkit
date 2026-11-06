@@ -5,6 +5,11 @@ project(ModelingToolkitNative
     DESCRIPTION "Native components of Modeling Toolkit"
     LANGUAGES C CXX)
 
+# vcpkg installs the dependencies when CMake configures, which it does again by itself only when vcpkg.json changes:
+# the overlay ports and triplets are dependencies of the configuration too.
+file(GLOB_RECURSE vcpkg_overlays CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/ports/*" "${PROJECT_SOURCE_DIR}/triplets/*")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${vcpkg_overlays})
+
 # The native view of the viewer on macOS is written in Objective-C++.
 if(APPLE)
     enable_language(OBJCXX)
