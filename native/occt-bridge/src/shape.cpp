@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <optional>
 
 namespace {
@@ -176,7 +177,10 @@ mtk_status mtk_shape_bounds(const mtk_shape* shape, double* out_bounds) {
         Bnd_Box box;
         BRepBndLib::AddOptimal(shape->value, box, false, false);
         if (box.IsVoid()) {
-            return mtk::invalid_argument("The shape has no geometry.");
+            constexpr double infinity = std::numeric_limits<double>::infinity();
+            std::fill_n(out_bounds, 3, infinity);
+            std::fill_n(out_bounds + 3, 3, -infinity);
+            return MTK_STATUS_OK;
         }
         box.Get(out_bounds[0], out_bounds[1], out_bounds[2], out_bounds[3], out_bounds[4], out_bounds[5]);
         return MTK_STATUS_OK;

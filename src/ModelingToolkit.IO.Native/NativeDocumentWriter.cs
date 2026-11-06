@@ -41,7 +41,15 @@ public sealed class NativeDocumentWriter : IDocumentWriter
         }
         catch
         {
-            File.Delete(temporaryPath);
+            // Best effort: when the folder does not exist, for example, deleting fails too, and must not hide why the
+            // writing failed.
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
             throw;
         }
     }

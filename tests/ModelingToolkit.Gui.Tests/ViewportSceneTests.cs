@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
@@ -119,6 +120,25 @@ public sealed class ViewportSceneTests
 
         Assert.Single(scene.Instances);
         Assert.Equal([$"Broken cannot be shown: {FailingKernel.Reason}"], scene.Warnings);
+    }
+
+    [Fact]
+    public void AShapeWithoutGeometryIsLeftOutWithAWarning()
+    {
+        var kernel = new OcctKernel();
+        var document = new Document();
+        document.Root.Entities.Add(new BrepEntity(kernel, kernel.Deserialize(Encoding.ASCII.GetBytes(
+            "CASCADE Topology V3, (c) Open Cascade\nLocations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n" +
+            "PolygonOnTriangulations 0\nSurfaces 0\nTriangulations 0\n\nTShapes 1\nCo\n\n1100000\n*\n\n+1 0\n")))
+        {
+            Name = "Empty",
+        });
+
+        var scene = ViewportScene.Of(document);
+
+        Assert.Empty(scene.Instances);
+        Assert.Equal(["Empty cannot be shown: it has no geometry."], scene.Warnings);
+        Assert.True(document.GetBoundingBox().IsEmpty);
     }
 
     [Fact]

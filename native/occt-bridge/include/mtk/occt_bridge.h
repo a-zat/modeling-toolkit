@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 8
+#define MTK_OCCT_BRIDGE_ABI_VERSION 9
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -98,7 +98,8 @@ MTK_API mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* se
                                      mtk_shape** out_shape);
 
 /* The smallest box with the sides along the axes that contains the shape: out_bounds receives the minimum x, y and z,
- * then the maximum x, y and z. */
+ * then the maximum x, y and z. A shape without geometry, such as an empty compound, has an empty box: its minimum is
+ * +infinity and its maximum -infinity. */
 MTK_API mtk_status mtk_shape_bounds(const mtk_shape* shape, double* out_bounds /* 6 values */);
 
 MTK_API void mtk_shape_release(mtk_shape* shape);

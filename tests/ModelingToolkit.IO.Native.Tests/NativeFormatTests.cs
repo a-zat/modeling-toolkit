@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Kernel.Occt;
@@ -176,15 +178,10 @@ public sealed class NativeFormatTests : IDisposable
     [Fact]
     public void Files_of_version_one_are_still_read()
     {
-        string path = PathOf("old.mtk");
-        using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Create))
-        using (var writer = new StreamWriter(archive.CreateEntry("manifest.json").Open()))
-        {
-            writer.Write("""
-                {"format": "modeling-toolkit", "version": 1, "units": "mm", "upAxis": "Z", "textures": [],
-                 "materials": [], "root": {"name": "Old", "entities": []}, "blocks": []}
-                """);
-        }
+        string path = Archive("old.mtk", """
+            {"format": "modeling-toolkit", "version": 1, "units": "mm", "upAxis": "Z", "textures": [],
+             "materials": [], "root": {"name": "Old", "entities": []}, "blocks": []}
+            """);
 
         Assert.Equal("Old", _reader.Read(path, []).Root.Name);
     }
@@ -231,17 +228,92 @@ public sealed class NativeFormatTests : IDisposable
     [Fact]
     public void Newer_versions_are_rejected()
     {
-        string path = PathOf("future.mtk");
-        using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Create))
-        using (var writer = new StreamWriter(archive.CreateEntry("manifest.json").Open()))
-        {
-            writer.Write("""
-                {"format": "modeling-toolkit", "version": 99, "units": "mm", "upAxis": "Z", "textures": [],
-                 "materials": [], "root": {"name": "Model", "entities": []}, "blocks": []}
-                """);
-        }
+        string path = Archive("future.mtk", """
+            {"format": "modeling-toolkit", "version": 99, "units": "mm", "upAxis": "Z", "textures": [],
+             "materials": [], "root": {"name": "Model", "entities": []}, "blocks": []}
+            """);
 
         Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+    }
+
+    [Theory]
+    [InlineData("""{"textures": null}""")]
+    [InlineData("""{"materials": [null]}""")]
+    [InlineData("""{"materials": [{"name": "m", "metallic": 0, "roughness": 1}]}""")]
+    [InlineData("""{"root": null}""")]
+    [InlineData("""{"root": {"name": "Model"}}""")]
+    [InlineData("""{"root": {"name": "Model", "entities": [null]}}""")]
+    [InlineData("""{"blocks": [{"name": "b", "entities": []}], "root": {"name": "Model", "entities": [{"type": "blockReference", "block": 0}]}}""")]
+    public void Manifests_without_what_the_format_requires_make_the_file_invalid(string changes)
+    {
+        string path = Archive("incomplete.mtk", Manifest(changes));
+
+        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+    }
+
+    [Theory]
+    [InlineData(3, 1)] // the data of the sample mesh
+    [InlineData(1_000_000_000, 1)]
+    [InlineData(-1, 1)]
+    [InlineData(3, int.MaxValue)]
+    public void A_mesh_is_read_only_if_its_file_holds_what_the_manifest_says(int vertexCount, int triangleCount)
+    {
+        byte[] data = new byte[3 * 24 + 12];
+        new[] { 0, 1, 2 }.CopyTo(MemoryMarshal.Cast<byte, int>(data.AsSpan(3 * 24)));
+        string path = Archive("mesh.mtk", Manifest($$$"""
+            {"root": {"name": "Model", "entities": [{"type": "mesh", "path": "meshes/0.bin",
+             "vertexCount": {{{vertexCount}}}, "triangleCount": {{{triangleCount}}}, "hasNormals": false,
+             "hasTextureCoordinates": false}]}}
+            """), ("meshes/0.bin", data));
+
+        if (vertexCount == 3 && triangleCount == 1)
+        {
+            Assert.IsType<MeshEntity>(Assert.Single(_reader.Read(path, []).Root.Entities));
+        }
+        else
+        {
+            Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+        }
+    }
+
+    [Fact]
+    public void Writing_into_a_folder_that_does_not_exist_reports_it()
+    {
+        string path = Path.Combine(_folder, "missing", "model.mtk");
+
+        Assert.Throws<DirectoryNotFoundException>(() => _writer.Write(SampleDocument(), path));
+    }
+
+    // A valid manifest of an empty document, with the properties of changes replacing its own.
+    private static string Manifest(string changes)
+    {
+        var manifest = (JsonObject)JsonNode.Parse("""
+            {"format": "modeling-toolkit", "version": 2, "units": "mm", "upAxis": "Z", "textures": [],
+             "materials": [], "root": {"name": "Model", "entities": []}, "blocks": []}
+            """)!;
+        foreach ((string name, JsonNode? value) in
+                 JsonNode.Parse(changes)!.AsObject())
+        {
+            manifest[name] = value?.DeepClone();
+        }
+        return manifest.ToJsonString();
+    }
+
+    // An archive with the manifest and the files given.
+    private string Archive(string name, string manifest, params (string Path, byte[] Data)[] files)
+    {
+        string path = PathOf(name);
+        using ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Create);
+        using (var writer = new StreamWriter(archive.CreateEntry("manifest.json").Open()))
+        {
+            writer.Write(manifest);
+        }
+        foreach ((string filePath, byte[] data) in files)
+        {
+            using Stream stream = archive.CreateEntry(filePath).Open();
+            stream.Write(data);
+        }
+        return path;
     }
 
     private static readonly Transform RotatedAndMoved = new(

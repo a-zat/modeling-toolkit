@@ -110,7 +110,9 @@ public interface IGeometryKernel
     ShapeTessellation Tessellate(IKernelShape shape, double linearDeflection, double angularDeflection = 0.5,
         IProgress<double>? progress = null, CancellationToken cancellationToken = default);
 
-    /// <summary>The smallest box with its sides along the axes that contains the shape.</summary>
-    /// <exception cref="ArgumentException">The shape has no geometry, as an empty compound.</exception>
+    /// <summary>
+    /// The smallest box with its sides along the axes that contains the shape; <see cref="BoundingBox.Empty"/> for a
+    /// shape without geometry.
+    /// </summary>
     BoundingBox GetBoundingBox(IKernelShape shape);
 }

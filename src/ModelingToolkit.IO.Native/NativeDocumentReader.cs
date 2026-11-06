@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using ModelingToolkit.Core.Geometry;
@@ -108,8 +109,35 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             {
                 throw new InvalidDataException($"Unsupported units '{manifest.Units}' or up axis '{manifest.UpAxis}'.");
             }
+            CheckComplete(manifest);
             return manifest;
         }
+
+        // The JSON may leave out, or set to null, what the format requires: found here rather than as a null reference
+        // later. Strings are not checked: the objects they are given to reject null.
+        private static void CheckComplete(Manifest manifest)
+        {
+            List<BlockEntry> blocks = [Required(manifest.Root, "root block"), .. Required(manifest.Blocks, "blocks")];
+            Required(manifest.Textures, "textures").ForEach(texture => Required(texture, "texture"));
+            foreach (MaterialEntry material in Required(manifest.Materials, "materials"))
+            {
+                Required(Required(material, "material").BaseColor, "base colour");
+            }
+            foreach (BlockEntry block in blocks)
+            {
+                foreach (EntityEntry entity in Required(Required(block, "block").Entities, "entities"))
+                {
+                    if (Required(entity, "entity") is BlockReferenceEntry reference)
+                    {
+                        Required(reference.Transform, "transformation");
+                    }
+                }
+            }
+        }
+
+        private static T Required<T>(T? value, string what)
+            where T : class =>
+            value ?? throw new InvalidDataException($"The manifest has a missing or null {what}.");
 
         private Texture ReadTexture(TextureEntry entry)
         {
@@ -155,12 +183,19 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
         private MeshEntity ReadMesh(MeshEntry entry)
         {
             _steps.Next();
+            ZipArchiveEntry file = Entry(entry.Path);
+            // Checked before anything is allocated, so that wrong counts cannot ask for gigabytes.
+            if (entry.VertexCount < 0 || entry.TriangleCount < 0 || file.Length != MeshFileLength(entry))
+            {
+                throw new InvalidDataException(
+                    $"'{entry.Path}' does not hold {entry.VertexCount} vertices and {entry.TriangleCount} triangles.");
+            }
             var vertices = new Point3d[entry.VertexCount];
             var triangles = new Triangle[entry.TriangleCount];
             Vector3[]? normals = entry.HasNormals ? new Vector3[entry.VertexCount] : null;
             Vector2[]? textureCoordinates = entry.HasTextureCoordinates ? new Vector2[entry.VertexCount] : null;
 
-            using (Stream stream = Entry(entry.Path).Open())
+            using (Stream stream = file.Open())
             {
                 stream.ReadExactly(MemoryMarshal.AsBytes(vertices.AsSpan()));
                 stream.ReadExactly(MemoryMarshal.AsBytes(triangles.AsSpan()));
@@ -174,6 +209,15 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 }
             }
             return new MeshEntity(vertices, triangles, normals, textureCoordinates);
+        }
+
+        // The bytes of a mesh file with the counts and the arrays of a manifest entry; see NativeFormat.
+        private static long MeshFileLength(MeshEntry entry)
+        {
+            long perVertex = Unsafe.SizeOf<Point3d>()
+                + (entry.HasNormals ? Unsafe.SizeOf<Vector3>() : 0)
+                + (entry.HasTextureCoordinates ? Unsafe.SizeOf<Vector2>() : 0);
+            return perVertex * entry.VertexCount + (long)Unsafe.SizeOf<Triangle>() * entry.TriangleCount;
         }
 
         private BrepEntity ReadShape(BrepEntry entry)

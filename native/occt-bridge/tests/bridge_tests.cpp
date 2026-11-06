@@ -293,6 +293,11 @@ std::string written(const ShapePtr& shape) {
     return std::string(reinterpret_cast<const char*>(data), static_cast<size_t>(size));
 }
 
+// A compound with nothing in it, in the BRep format.
+constexpr const char* empty_compound = "CASCADE Topology V3, (c) Open Cascade\n"
+                                       "Locations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\nPolygonOnTriangulations 0\n"
+                                       "Surfaces 0\nTriangulations 0\n\nTShapes 1\nCo\n\n1100000\n*\n\n+1 0\n";
+
 ShapePtr read_shape(const std::string& data) {
     mtk_shape* shape = nullptr;
     EXPECT_EQ(mtk_shape_read(reinterpret_cast<const uint8_t*>(data.data()), static_cast<int64_t>(data.size()), &shape),
@@ -411,6 +416,20 @@ TEST(Serialization, LeavesOutTheTrianglesOfAShape) {
     const std::string data = written(box);
 
     EXPECT_NE(data.find("\nTriangulations 0\n"), std::string::npos);
+}
+
+TEST(Serialization, AnEmptyCompoundIsAShapeWithAnEmptyBox) {
+    const ShapePtr empty = read_shape(empty_compound);
+    ASSERT_NE(empty, nullptr);
+
+    double bounds[6] = {};
+    ASSERT_EQ(mtk_shape_bounds(empty.get(), bounds), MTK_STATUS_OK) << mtk_last_error_message();
+    for (int axis = 0; axis < 3; ++axis) {
+        EXPECT_GT(bounds[axis], bounds[axis + 3]);
+    }
+
+    mtk_tessellation* tessellation = nullptr;
+    EXPECT_EQ(mtk_shape_tessellate(empty.get(), 1.0, 0.5, nullptr, &tessellation), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(Serialization, RejectsDataThatIsNotAShape) {

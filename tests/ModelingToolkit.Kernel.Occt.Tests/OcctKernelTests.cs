@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
@@ -82,6 +83,20 @@ public sealed class OcctKernelTests
         Assert.Equal(6000, _kernel.ComputeVolume(placed), precision: 6);
         AssertBox(new Point3d(0, 0, 0), new Point3d(10, 20, 30), _kernel.GetBoundingBox(box));
     }
+
+    [Fact]
+    public void A_shape_without_geometry_has_an_empty_box_and_no_triangles()
+    {
+        using IKernelShape empty = _kernel.Deserialize(Encoding.ASCII.GetBytes(EmptyCompound));
+
+        Assert.True(_kernel.GetBoundingBox(empty).IsEmpty);
+        Assert.Throws<ArgumentException>(() => _kernel.Tessellate(empty, 1));
+    }
+
+    // A compound with nothing in it, in the BRep format of OpenCASCADE.
+    internal const string EmptyCompound =
+        "CASCADE Topology V3, (c) Open Cascade\nLocations 0\nCurve2ds 0\nCurves 0\nPolygon3D 0\n" +
+        "PolygonOnTriangulations 0\nSurfaces 0\nTriangulations 0\n\nTShapes 1\nCo\n\n1100000\n*\n\n+1 0\n";
 
     [Theory]
     [InlineData(2, 0, 0, 0, 2, 0, 0, 0, 2)] // scaling

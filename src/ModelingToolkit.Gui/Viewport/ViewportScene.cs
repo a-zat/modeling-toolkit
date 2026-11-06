@@ -319,6 +319,10 @@ internal sealed class ViewportScene
             try
             {
                 BoundingBox box = brep.GetBoundingBox();
+                if (box.IsEmpty)
+                {
+                    return (null, $"{NameOf(brep)} cannot be shown: it has no geometry.");
+                }
                 double diagonal = Math.Sqrt(
                     Math.Pow(box.Max.X - box.Min.X, 2) + Math.Pow(box.Max.Y - box.Min.Y, 2) +
                     Math.Pow(box.Max.Z - box.Min.Z, 2));
@@ -327,10 +331,11 @@ internal sealed class ViewportScene
             }
             catch (Exception exception) when (exception is ArgumentException or GeometryKernelException)
             {
-                string name = brep.Name ?? brep.Material?.Name ?? "A shape";
-                return (null, $"{name} cannot be shown: {exception.Message}");
+                return (null, $"{NameOf(brep)} cannot be shown: {exception.Message}");
             }
         }
+
+        private static string NameOf(BrepEntity brep) => brep.Name ?? brep.Material?.Name ?? "A shape";
 
         private int IndexOf(MeshEntity mesh, Polylines? edges)
         {
