@@ -270,6 +270,81 @@ ShapePtr read_shape(const std::string& data) {
     return ShapePtr(shape);
 }
 
+ShapePtr combine(const ShapePtr& first, const ShapePtr& second, mtk_boolean_operation operation) {
+    mtk_shape* result = nullptr;
+    EXPECT_EQ(mtk_shape_boolean(first.get(), second.get(), operation, &result), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    return ShapePtr(result);
+}
+
+TEST(Boolean, CombinesOverlappingBoxesIntoTheVolumesOfSetOperations) {
+    ShapePtr a = make_box(10.0, 10.0, 10.0);
+    ShapePtr b = place(make_box(10.0, 10.0, 10.0), {1, 0, 0, 5, 0, 1, 0, 0, 0, 0, 1, 0}); // [5, 15] x [0, 10] x [0, 10]
+
+    ShapePtr both = combine(a, b, MTK_BOOLEAN_UNION);
+    ShapePtr common = combine(a, b, MTK_BOOLEAN_INTERSECTION);
+    ShapePtr only_a = combine(a, b, MTK_BOOLEAN_DIFFERENCE);
+
+    EXPECT_NEAR(volume_of(both), 1500.0, 1e-6);
+    EXPECT_NEAR(volume_of(common), 500.0, 1e-6);
+    EXPECT_NEAR(volume_of(only_a), 500.0, 1e-6);
+    expect_bounds(both, {0, 0, 0, 15, 10, 10});
+    expect_bounds(common, {5, 0, 0, 10, 10, 10});
+    expect_bounds(only_a, {0, 0, 0, 5, 10, 10});
+    EXPECT_NEAR(volume_of(a), 1000.0, 1e-6) << "the operands are not changed";
+}
+
+TEST(Boolean, DrillsAHoleThroughABox) {
+    ShapePtr box = make_box(100.0, 100.0, 100.0);
+    mtk_shape* shape = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(20.0, 120.0, &shape), MTK_STATUS_OK);
+    ShapePtr drill = place(ShapePtr(shape), {1, 0, 0, 50, 0, 1, 0, 50, 0, 0, 1, -10});
+
+    ShapePtr drilled = combine(box, drill, MTK_BOOLEAN_DIFFERENCE);
+
+    EXPECT_NEAR(volume_of(drilled), 1e6 - pi * 20.0 * 20.0 * 100.0, 1e-2);
+    expect_bounds(drilled, {0, 0, 0, 100, 100, 100});
+}
+
+TEST(Boolean, UnitesShapesThatDoNotMeet) {
+    ShapePtr a = make_box(10.0, 10.0, 10.0);
+    ShapePtr b = place(make_box(10.0, 10.0, 10.0), {1, 0, 0, 100, 0, 1, 0, 0, 0, 0, 1, 0});
+
+    ShapePtr both = combine(a, b, MTK_BOOLEAN_UNION);
+
+    EXPECT_NEAR(volume_of(both), 2000.0, 1e-6);
+    expect_bounds(both, {0, 0, 0, 110, 10, 10});
+}
+
+TEST(Boolean, ReportsAnEmptyResultAsAnError) {
+    ShapePtr a = make_box(10.0, 10.0, 10.0);
+    ShapePtr far = place(make_box(10.0, 10.0, 10.0), {1, 0, 0, 100, 0, 1, 0, 0, 0, 0, 1, 0});
+    mtk_shape* result = nullptr;
+
+    EXPECT_EQ(mtk_shape_boolean(a.get(), far.get(), MTK_BOOLEAN_INTERSECTION, &result), MTK_STATUS_KERNEL_ERROR);
+    EXPECT_EQ(result, nullptr);
+    EXPECT_NE(std::string(mtk_last_error_message()).find("empty"), std::string::npos);
+
+    EXPECT_EQ(mtk_shape_boolean(a.get(), a.get(), MTK_BOOLEAN_DIFFERENCE, &result), MTK_STATUS_KERNEL_ERROR);
+    EXPECT_EQ(result, nullptr);
+    EXPECT_NE(std::string(mtk_last_error_message()).find("empty"), std::string::npos);
+}
+
+TEST(Boolean, RejectsInvalidArguments) {
+    ShapePtr box = make_box(1.0, 1.0, 1.0);
+    mtk_shape* result = nullptr;
+
+    EXPECT_EQ(mtk_shape_boolean(nullptr, box.get(), MTK_BOOLEAN_UNION, &result), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_boolean(box.get(), nullptr, MTK_BOOLEAN_UNION, &result), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_boolean(box.get(), box.get(), MTK_BOOLEAN_UNION, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    for (int32_t operation : {-1, 3}) {
+        EXPECT_EQ(mtk_shape_boolean(box.get(), box.get(), operation, &result), MTK_STATUS_INVALID_ARGUMENT)
+            << operation;
+        EXPECT_EQ(result, nullptr);
+        EXPECT_STRNE(mtk_last_error_message(), "");
+    }
+}
+
 TEST(Serialization, ASolidSurvivesAWriteAndARead) {
     mtk_shape* shape = nullptr;
     ASSERT_EQ(mtk_shape_make_cylinder(10.0, 40.0, &shape), MTK_STATUS_OK);

@@ -66,6 +66,30 @@ public sealed class OcctKernel : IGeometryKernel
         return new OcctShape(handle);
     }
 
+    // The values are those of mtk_boolean_operation in the native header.
+    private enum BooleanOperation
+    {
+        Union,
+        Difference,
+        Intersection,
+    }
+
+    public IKernelShape Union(IKernelShape first, IKernelShape second) =>
+        Combine(first, second, BooleanOperation.Union);
+
+    public IKernelShape Subtract(IKernelShape shape, IKernelShape tool) =>
+        Combine(shape, tool, BooleanOperation.Difference);
+
+    public IKernelShape Intersect(IKernelShape first, IKernelShape second) =>
+        Combine(first, second, BooleanOperation.Intersection);
+
+    private static OcctShape Combine(IKernelShape first, IKernelShape second, BooleanOperation operation)
+    {
+        NativeMethods.ShapeBoolean(Unwrap(first), Unwrap(second), (int)operation, out ShapeHandle handle)
+            .ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
     public double ComputeVolume(IKernelShape shape)
     {
         NativeMethods.ShapeVolume(Unwrap(shape), out double volume).ThrowIfFailed();

@@ -51,6 +51,24 @@ public interface IGeometryKernel
     /// <exception cref="ArgumentException">The placement is not a rotation and a translation.</exception>
     IKernelShape Place(IKernelShape shape, Transform placement);
 
+    // The boolean operations make a new shape and leave their operands as they are.
+
+    /// <summary>What is in either shape.</summary>
+    /// <exception cref="GeometryKernelException">The operation fails, on shapes that are not valid for example.</exception>
+    IKernelShape Union(IKernelShape first, IKernelShape second);
+
+    /// <summary>What is in <paramref name="shape"/> and not in <paramref name="tool"/>.</summary>
+    /// <exception cref="GeometryKernelException">
+    /// The operation fails, or leaves nothing, as when a shape is subtracted from itself.
+    /// </exception>
+    IKernelShape Subtract(IKernelShape shape, IKernelShape tool);
+
+    /// <summary>What is in both shapes.</summary>
+    /// <exception cref="GeometryKernelException">
+    /// The operation fails, or leaves nothing, as for shapes that do not meet.
+    /// </exception>
+    IKernelShape Intersect(IKernelShape first, IKernelShape second);
+
     double ComputeVolume(IKernelShape shape);
 
     /// <summary>

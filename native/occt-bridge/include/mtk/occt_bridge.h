@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 5
+#define MTK_OCCT_BRIDGE_ABI_VERSION 6
 
 /* Opaque handle to an OpenCASCADE shape. */
 typedef struct mtk_shape mtk_shape;
@@ -65,6 +65,20 @@ MTK_API mtk_status mtk_shape_make_torus(double major_radius, double minor_radius
 MTK_API mtk_status mtk_shape_place(const mtk_shape* shape, const double* placement, mtk_shape** out_shape);
 
 MTK_API mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume);
+
+typedef enum mtk_boolean_operation {
+    MTK_BOOLEAN_UNION = 0,        /* what is in either shape */
+    MTK_BOOLEAN_DIFFERENCE = 1,   /* what is in the first shape and not in the second */
+    MTK_BOOLEAN_INTERSECTION = 2  /* what is in both shapes */
+} mtk_boolean_operation;
+
+/*
+ * A new shape: the result of a boolean operation on two shapes, which are not changed. A failure of the operation, for
+ * example on shapes that are not valid, and an empty result, such as the intersection of shapes that do not meet, are
+ * reported as MTK_STATUS_KERNEL_ERROR.
+ */
+MTK_API mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* second,
+                                     int32_t operation /* mtk_boolean_operation */, mtk_shape** out_shape);
 
 /* The smallest box with the sides along the axes that contains the shape: out_bounds receives the minimum x, y and z,
  * then the maximum x, y and z. */

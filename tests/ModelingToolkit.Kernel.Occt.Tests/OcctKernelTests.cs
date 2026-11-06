@@ -200,6 +200,49 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void Overlapping_boxes_combine_into_the_volumes_of_the_set_operations()
+    {
+        using IKernelShape a = _kernel.MakeBox(10, 10, 10);
+        using IKernelShape b = _kernel.Place(_kernel.MakeBox(10, 10, 10), Transform.Translation(5, 0, 0));
+
+        using IKernelShape union = _kernel.Union(a, b);
+        using IKernelShape common = _kernel.Intersect(a, b);
+        using IKernelShape difference = _kernel.Subtract(a, b);
+
+        Assert.Equal(1500, _kernel.ComputeVolume(union), precision: 6);
+        Assert.Equal(500, _kernel.ComputeVolume(common), precision: 6);
+        Assert.Equal(500, _kernel.ComputeVolume(difference), precision: 6);
+        AssertBox(new Point3d(0, 0, 0), new Point3d(15, 10, 10), _kernel.GetBoundingBox(union));
+        AssertBox(new Point3d(5, 0, 0), new Point3d(10, 10, 10), _kernel.GetBoundingBox(common));
+        AssertBox(new Point3d(0, 0, 0), new Point3d(5, 10, 10), _kernel.GetBoundingBox(difference));
+        Assert.Equal(1000, _kernel.ComputeVolume(a), precision: 6);
+    }
+
+    [Fact]
+    public void A_cylinder_subtracted_from_a_box_leaves_a_hole()
+    {
+        using IKernelShape box = _kernel.MakeBox(100, 100, 100);
+        using IKernelShape drill = _kernel.Place(_kernel.MakeCylinder(20, 120), Transform.Translation(50, 50, -10));
+
+        using IKernelShape drilled = _kernel.Subtract(box, drill);
+
+        Assert.Equal(1e6 - Math.PI * 20 * 20 * 100, _kernel.ComputeVolume(drilled), precision: 2);
+    }
+
+    [Fact]
+    public void An_empty_result_is_reported_as_an_error()
+    {
+        using IKernelShape a = _kernel.MakeBox(10, 10, 10);
+        using IKernelShape far = _kernel.Place(_kernel.MakeBox(10, 10, 10), Transform.Translation(100, 0, 0));
+
+        var intersection = Assert.Throws<GeometryKernelException>(() => _kernel.Intersect(a, far));
+        var difference = Assert.Throws<GeometryKernelException>(() => _kernel.Subtract(a, a));
+
+        Assert.Contains("empty", intersection.Message);
+        Assert.Contains("empty", difference.Message);
+    }
+
+    [Fact]
     public void A_disposed_shape_cannot_be_used()
     {
         IKernelShape box = _kernel.MakeBox(1, 1, 1);
@@ -209,6 +252,9 @@ public sealed class OcctKernelTests
         Assert.Throws<ObjectDisposedException>(() => _kernel.GetBoundingBox(box));
         Assert.Throws<ObjectDisposedException>(() => _kernel.Place(box, Transform.Identity));
         Assert.Throws<ObjectDisposedException>(() => _kernel.Tessellate(box, 1));
+        using IKernelShape other = _kernel.MakeBox(1, 1, 1);
+        Assert.Throws<ObjectDisposedException>(() => _kernel.Union(box, other));
+        Assert.Throws<ObjectDisposedException>(() => _kernel.Subtract(other, box));
     }
 
     private readonly record struct Measures(double Area, double Volume, int TrianglesAgainstTheirNormals);
