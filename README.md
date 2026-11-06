@@ -4,13 +4,22 @@ A versatile toolkit for importing, processing, modifying, and exporting 3D model
 It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primitives), with a C# core and
 [OpenCASCADE](https://github.com/Open-Cascade-SAS/OCCT) as geometry kernel.
 
-> **Status:** early development. The `mtk` command line tool reads glTF models (`.gltf`, `.glb`, with meshes
+> **Status:** version 0.1.0, a viewer: see the [changelog](CHANGELOG.md). The `mtk` command line tool reads glTF models (`.gltf`, `.glb`, with meshes
 > compressed by Draco and textures in WebP too) and writes them in the native `.mtk` format, keeping shared geometry,
 > hierarchy, materials and textures. It also builds shapes of exact geometry, with their boolean combinations. The
 > desktop application opens and saves models, shows them in its 3D view, drawn by OpenCASCADE, and shows their
 > structure, materials and properties.
 
+## Download
+
+The [releases](https://github.com/a-zat/modeling-toolkit/releases) have a package for macOS (Apple Silicon) and one
+for Windows (x64), with the desktop application and the `mtk` tool: unzip it and run them, nothing needs to be
+installed. The application is not signed by a developer identity: on macOS, remove the quarantine mark of the
+unzipped folder once with `xattr -dr com.apple.quarantine <folder>`; on Windows, SmartScreen asks to confirm.
+
 ## Requirements
+
+To build the toolkit from its sources:
 
 | | macOS (Apple Silicon) | Windows (x64) |
 |---|---|---|
@@ -40,7 +49,8 @@ pinch or the right button zooms; the status bar recalls it. Clicking a face of t
 the view to it. Clicking a mesh selects it in the model tree, which opens down to it, and clicking the empty space
 clears the selection; the mesh under the pointer is tinted. Selecting a node of the tree fades the rest of the model,
 so that the selection stands out. The bar at the top fits the model in the view, turns to the standard views and
-chooses how meshes are drawn: shaded, with the edges of their triangles, or as a wireframe. The View menu does the
+chooses how the model is drawn: shaded, with its edges, or as a wireframe. The edges of a shape are its own, those of
+a mesh its sharp ones, where its faces meet at an angle. The View menu does the
 same, and switches to an orthographic projection or hides the grid.
 
 After a build, the tool is `artifacts/bin/ModelingToolkit.Cli/debug/mtk`:
@@ -86,4 +96,12 @@ The repository is set up for VS Code: open the folder and install the recommende
 (`⇧⌘B`) builds everything, and the launch configurations run the desktop application or the CLI under the .NET
 debugger or, for the C++ code, the CLI under LLDB.
 
-Third-party material included in the repository is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The packages of a release are made by `python3 packaging/package.py`, on the platform they are for, after a build:
+it publishes the applications self-contained and collects the licences of what they contain. The release workflow
+runs it on Windows when a version is tagged.
+
+## License
+
+The Modeling Toolkit is released under the [MIT licence](LICENSE). Third-party material included in the repository,
+and the components that the applications contain with their licences, are listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
