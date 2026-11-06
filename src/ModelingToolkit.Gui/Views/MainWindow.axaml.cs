@@ -16,5 +16,22 @@ public partial class MainWindow : Window
         }
     }
 
+    // Closing while a file is opened or saved waits for it (see WhenIdleAsync), then closes.
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (!e.Cancel && DataContext is MainWindowViewModel { IsBusy: true } viewModel)
+        {
+            e.Cancel = true;
+            _ = CloseWhenIdleAsync(viewModel);
+        }
+    }
+
+    private async Task CloseWhenIdleAsync(MainWindowViewModel viewModel)
+    {
+        await viewModel.WhenIdleAsync();
+        Close();
+    }
+
     private void OnPaletteOpened(object? sender, EventArgs e) => Palette.TakeKeyboard();
 }

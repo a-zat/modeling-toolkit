@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModelingToolkit.Core.IO;
-using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
 
@@ -17,6 +16,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly bool _initialized;
     private string? _path;
     private CancellationTokenSource? _operation; // of the file being opened or saved
+    private bool _saving;
+    private TaskCompletionSource _idle = Completed();
 
     public MainWindowViewModel(DocumentFormats formats, IAppearance appearance)
     {
@@ -168,15 +169,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         string name = Path.GetFileName(path);
         StatusMessage = $"Opening {name}…";
-        using CancellationTokenSource cancellation = BeginOperation();
+        using CancellationTokenSource cancellation = BeginOperation(saving: false);
         try
         {
             IDocumentReader reader = _formats.ReaderFor(path);
             var warnings = new List<string>();
             IProgress<double> progress = OperationProgressReporter();
-            Document document = await Task.Run(
-                () => reader.Read(path, warnings, progress, cancellation.Token), cancellation.Token);
-            Show(document, path);
+            // The statistics visit every placed vertex: they are counted with the reading, away from the interface.
+            (Document document, DocumentStatistics statistics) = await Task.Run(() =>
+            {
+                Document read = reader.Read(path, warnings, progress, cancellation.Token);
+                return (read, DocumentStatistics.Of(read));
+            }, cancellation.Token);
+            Show(document, statistics, path);
             StatusMessage = warnings.Count switch
             {
                 0 => $"Opened {name} ({reader.FormatName}).",
@@ -189,8 +194,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             StatusMessage = $"Opening {name} was cancelled.";
         }
-        catch (Exception exception) when (IsExpected(exception))
+        catch (Exception exception)
         {
+            // Whatever goes wrong with a file is reported rather than closing the application, which has nothing else
+            // to lose: a file can fail in more ways than the formats document.
             StatusMessage = $"Cannot open {name}: {exception.Message}";
         }
         finally
@@ -203,9 +210,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Cancel() => _operation?.Cancel();
 
-    private CancellationTokenSource BeginOperation()
+    /// <summary>
+    /// Completes once no file is being opened or saved, so that the window can close: a file being opened is
+    /// cancelled, one being saved is written to the end, so that the saving is neither lost nor half done.
+    /// </summary>
+    public Task WhenIdleAsync()
+    {
+        if (!_saving)
+        {
+            _operation?.Cancel();
+        }
+        return _idle.Task;
+    }
+
+    private CancellationTokenSource BeginOperation(bool saving)
     {
         _operation = new CancellationTokenSource();
+        _saving = saving;
+        _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         OperationProgress = 0;
         IsBusy = true;
         return _operation;
@@ -215,6 +237,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         _operation = null;
         IsBusy = false;
+        _idle.TrySetResult();
+    }
+
+    private static TaskCompletionSource Completed()
+    {
+        var source = new TaskCompletionSource();
+        source.SetResult();
+        return source;
     }
 
     // Reports on the thread of the interface, which Progress<T> captures, however the operation reports.
@@ -323,14 +353,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ShowPanel(SidePanel panel) => ActivePanel = ActivePanel == panel ? SidePanel.None : panel;
 
-    private void Show(Document document, string path)
+    private void Show(Document document, DocumentStatistics statistics, string path)
     {
         Document = document;
         _path = path;
         DocumentName = Path.GetFileName(path);
         Title = $"{DocumentName} — {ApplicationName}";
 
-        DocumentStatistics statistics = DocumentStatistics.Of(document);
         bool onlyShapes = statistics.BrepShapes > 0 && statistics.Meshes == 0;
         List<string> summary = [];
         if (!onlyShapes)
@@ -349,6 +378,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         summary.Add("Z up");
         Summary = string.Join(" · ", summary);
 
+        Properties.Know(document, statistics);
         ModelTree.Show(document);
         Materials.Show(document);
     }
@@ -358,7 +388,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         string name = Path.GetFileName(path);
         StatusMessage = $"Saving {name}…";
         Document document = Document!;
-        using CancellationTokenSource cancellation = BeginOperation();
+        using CancellationTokenSource cancellation = BeginOperation(saving: true);
         try
         {
             IDocumentWriter writer = _formats.WriterFor(path);
@@ -373,9 +403,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             StatusMessage = $"Saving {name} was cancelled: the file is as it was.";
         }
-        catch (Exception exception) when (IsExpected(exception))
+        catch (Exception exception)
         {
-            StatusMessage = $"Cannot save {name}: {exception.Message}";
+            // As for opening; a failed writing leaves the file as it was, and the document is still open.
+            StatusMessage = $"Cannot save {name}: {exception.Message} The file is as it was.";
         }
         finally
         {
@@ -388,7 +419,4 @@ public sealed partial class MainWindowViewModel : ObservableObject
         string extension = Path.GetExtension(path).ToLowerInvariant();
         return _formats.Writers.Any(writer => writer.Extensions.Contains(extension));
     }
-
-    private static bool IsExpected(Exception exception) => exception is IOException or InvalidDataException
-        or NotSupportedException or UnauthorizedAccessException or GeometryKernelException;
 }

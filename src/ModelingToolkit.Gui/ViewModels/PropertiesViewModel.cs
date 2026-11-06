@@ -30,6 +30,14 @@ public sealed partial class PropertiesViewModel : ObservableObject
     [ObservableProperty]
     public partial bool HasSelection { get; private set; }
 
+    private (Document Document, DocumentStatistics Statistics)? _known;
+
+    /// <summary>
+    /// Gives the statistics of a document, counted when it was read, as they take long on large models: the model node
+    /// of that document shows them without counting again.
+    /// </summary>
+    public void Know(Document document, DocumentStatistics statistics) => _known = (document, statistics);
+
     public void Show(ModelNodeViewModel? node)
     {
         HasSelection = node is not null;
@@ -45,7 +53,8 @@ public sealed partial class PropertiesViewModel : ObservableObject
         };
         Rows = node switch
         {
-            { Document: { } document } => ModelRows(document),
+            { Document: { } document } => ModelRows(
+                _known is { } known && known.Document == document ? known.Statistics : DocumentStatistics.Of(document)),
             { Entity: BlockReference reference } => ReferenceRows(reference),
             { Entity: MeshEntity mesh } => MeshRows(mesh),
             { Entity: BrepEntity brep } => BrepRows(brep),
@@ -53,9 +62,8 @@ public sealed partial class PropertiesViewModel : ObservableObject
         };
     }
 
-    private static List<PropertyRow> ModelRows(Document document)
+    private static List<PropertyRow> ModelRows(DocumentStatistics statistics)
     {
-        DocumentStatistics statistics = DocumentStatistics.Of(document);
         List<PropertyRow> rows =
         [
             new("Blocks", Formatting.Count(statistics.Blocks)),

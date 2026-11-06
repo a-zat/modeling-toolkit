@@ -63,6 +63,29 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task WaitingToCloseCancelsAFileBeingOpenedButNotOneBeingSaved()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.WhenIdleAsync();
+
+        Task opening = viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        await viewModel.WhenIdleAsync();
+        await opening;
+        Assert.Equal("Opening CesiumMilkTruck.glb was cancelled.", viewModel.StatusMessage);
+
+        await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        string path = Path.Combine(Directory.CreateTempSubdirectory("mtk-tests-").FullName, "truck.mtk");
+        viewModel.FileDialogs = new FixedFileDialogs(path);
+        Task saving = viewModel.SaveAsCommand.ExecuteAsync(null);
+        await viewModel.WhenIdleAsync();
+        Assert.False(viewModel.IsBusy);
+        await saving;
+        Assert.Equal("Saved truck.mtk (Modeling Toolkit).", viewModel.StatusMessage);
+        Assert.True(File.Exists(path));
+        Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+    }
+
+    [Fact]
     public async Task TheSummaryCountsOneOfAKindInTheSingular()
     {
         MainWindowViewModel viewModel = Create();
@@ -192,6 +215,51 @@ public sealed class MainWindowViewModelTests
             "Cannot open model.obj: '.obj' files cannot be read. Supported: .glb, .gltf, .mtk.", viewModel.StatusMessage);
         Assert.Empty(viewModel.ModelTree.Roots);
         Assert.False(viewModel.SaveCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task AnyFailureOfAFormatIsReportedInTheStatusBarAndTheDocumentStaysOpen()
+    {
+        var failing = new FailingFormat();
+        var viewModel = new MainWindowViewModel(
+            new DocumentFormats([new GltfReader(), failing], [new NativeDocumentWriter(), failing]),
+            new RecordingAppearance());
+
+        await viewModel.LoadAsync("model.fail");
+        Assert.Equal($"Cannot open model.fail: {FailingFormat.Reason}", viewModel.StatusMessage);
+
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        Document document = viewModel.Document!;
+        await viewModel.SaveAsCommand.ExecuteAsync(null); // no dialogs: nothing happens
+        viewModel.FileDialogs = new FixedFileDialogs("copy.fail");
+        await viewModel.SaveAsCommand.ExecuteAsync(null);
+        Assert.Equal($"Cannot save copy.fail: {FailingFormat.Reason} The file is as it was.", viewModel.StatusMessage);
+        Assert.Same(document, viewModel.Document);
+        Assert.False(viewModel.IsBusy);
+    }
+
+    // A format whose reader and writer fail in a way that no format documents.
+    private sealed class FailingFormat : IDocumentReader, IDocumentWriter
+    {
+        public const string Reason = "Something unexpected.";
+
+        public string FormatName => "Failing";
+
+        public IReadOnlyList<string> Extensions { get; } = [".fail"];
+
+        public Document Read(string path, ICollection<string> warnings, IProgress<double>? progress = null,
+            CancellationToken cancellationToken = default) => throw new InvalidOperationException(Reason);
+
+        public void Write(Document document, string path, IProgress<double>? progress = null,
+            CancellationToken cancellationToken = default) => throw new InvalidOperationException(Reason);
+    }
+
+    private sealed class FixedFileDialogs(string path) : IFileDialogs
+    {
+        public Task<string?> OpenAsync(string title, IReadOnlyList<FileType> types) => Task.FromResult<string?>(path);
+
+        public Task<string?> SaveAsync(string title, FileType type, string suggestedName) =>
+            Task.FromResult<string?>(path);
     }
 
     [Fact]

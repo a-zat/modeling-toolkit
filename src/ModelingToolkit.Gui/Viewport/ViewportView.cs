@@ -309,21 +309,32 @@ public sealed class ViewportView : Border, IViewCamera
 
         int shown = ++_shownDocuments;
         Document? document = Document;
-        (ViewportScene Scene, TextureImage?[] Images)? prepared = document is null
-            ? null
-            : await Task.Run(() =>
+        (ViewportScene Scene, TextureImage?[] Images)? prepared = null;
+        IReadOnlyList<string> warnings = [];
+        try
+        {
+            if (document is not null)
             {
-                var scene = ViewportScene.Of(document);
-                return (scene, scene.Textures.Select(TextureImage.Decode).ToArray());
-            });
+                prepared = await Task.Run(() =>
+                {
+                    var scene = ViewportScene.Of(document);
+                    return (scene, scene.Textures.Select(TextureImage.Decode).ToArray());
+                });
+                warnings = prepared.Value.Scene.Warnings;
+            }
+        }
+        catch (Exception exception)
+        {
+            // Nothing awaits this method: a failure would go unnoticed, with the previous document still shown.
+            warnings = [$"The 3D view cannot show the document: {exception.Message}"];
+        }
         if (shown != _shownDocuments)
         {
             return;
         }
 
         _shownScene = prepared?.Scene;
-        if (prepared is { Scene.Warnings: { Count: > 0 } warnings } && WarningsCommand is { } command &&
-            command.CanExecute(warnings))
+        if (warnings.Count > 0 && WarningsCommand is { } command && command.CanExecute(warnings))
         {
             command.Execute(warnings);
         }
