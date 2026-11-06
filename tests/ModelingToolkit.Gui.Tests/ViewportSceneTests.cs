@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
@@ -12,7 +11,7 @@ public sealed class ViewportSceneTests
     [Fact]
     public void TheWheelsOfTheMilkTruckShareTheirMesh()
     {
-        Document document = new GltfReader(NullLogger<GltfReader>.Instance).Read(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        Document document = new GltfReader().Read(Paths.Asset("gltf", "CesiumMilkTruck.glb"), []);
         DocumentStatistics statistics = DocumentStatistics.Of(document);
 
         var scene = ViewportScene.Of(document);

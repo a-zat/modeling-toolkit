@@ -83,6 +83,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial string StatusMessage { get; private set; }
 
+    /// <summary>All the warnings of the last opened file, one per line, when the status message reports them.</summary>
+    [ObservableProperty]
+    public partial string? StatusDetails { get; private set; }
+
     // One side panel at a time, chosen in the activity bar.
 
     [ObservableProperty]
@@ -109,15 +113,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
         try
         {
             IDocumentReader reader = _formats.ReaderFor(path);
-            Document document = await Task.Run(() => reader.Read(path));
+            var warnings = new List<string>();
+            Document document = await Task.Run(() => reader.Read(path, warnings));
             Show(document, path);
-            StatusMessage = $"Opened {name} ({reader.FormatName}).";
+            StatusMessage = warnings.Count switch
+            {
+                0 => $"Opened {name} ({reader.FormatName}).",
+                1 => $"Opened {name} ({reader.FormatName}), with a warning: {warnings[0]}",
+                _ => $"Opened {name} ({reader.FormatName}), with {warnings.Count} warnings: {warnings[0]}",
+            };
+            StatusDetails = warnings.Count > 0 ? string.Join(Environment.NewLine, warnings) : null;
         }
         catch (Exception exception) when (IsExpected(exception))
         {
             StatusMessage = $"Cannot open {name}: {exception.Message}";
         }
     }
+
+    partial void OnStatusMessageChanged(string value) => StatusDetails = null;
 
     // The initial value is applied by the application, once Avalonia is ready.
     partial void OnIsDarkChanged(bool value)

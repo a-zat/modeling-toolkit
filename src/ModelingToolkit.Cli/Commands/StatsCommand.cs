@@ -20,7 +20,9 @@ internal static class StatsCommand
         {
             FileInfo modelFile = parseResult.GetRequiredValue(file);
             IDocumentReader reader = services.GetRequiredService<DocumentFormats>().ReaderFor(modelFile.FullName);
-            DocumentStatistics statistics = DocumentStatistics.Of(reader.Read(modelFile.FullName));
+            var warnings = new List<string>();
+            DocumentStatistics statistics = DocumentStatistics.Of(reader.Read(modelFile.FullName, warnings));
+            CommandErrors.WriteWarnings(parseResult, warnings);
 
             console.WriteLine($"{modelFile.Name} ({reader.FormatName})");
             Row(console, "Blocks", Count(statistics.Blocks));

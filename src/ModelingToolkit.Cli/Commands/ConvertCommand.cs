@@ -28,7 +28,9 @@ internal static class ConvertCommand
             IDocumentReader reader = formats.ReaderFor(inputFile.FullName);
             IDocumentWriter writer = formats.WriterFor(outputFile.FullName);
 
-            Document document = reader.Read(inputFile.FullName);
+            var warnings = new List<string>();
+            Document document = reader.Read(inputFile.FullName, warnings);
+            CommandErrors.WriteWarnings(parseResult, warnings);
             writer.Write(document, outputFile.FullName);
 
             console.WriteLine(

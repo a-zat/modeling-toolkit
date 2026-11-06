@@ -15,9 +15,10 @@ public sealed class NativeDocumentReader : IDocumentReader
 
     public IReadOnlyList<string> Extensions { get; } = [NativeFormat.Extension];
 
-    public Document Read(string path)
+    public Document Read(string path, ICollection<string> warnings)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(warnings);
         if (!BitConverter.IsLittleEndian)
         {
             throw new PlatformNotSupportedException("The native format is read on little-endian platforms only.");

@@ -21,7 +21,7 @@ public sealed class NativeFormatTests : IDisposable
         string path = PathOf("sample.mtk");
 
         _writer.Write(original, path);
-        Document copy = _reader.Read(path);
+        Document copy = _reader.Read(path, []);
 
         Texture texture = Assert.Single(copy.Textures);
         Assert.Equal(("bricks", "image/png"), (texture.Name, texture.MediaType));
@@ -98,7 +98,7 @@ public sealed class NativeFormatTests : IDisposable
         string path = PathOf("text.mtk");
         File.WriteAllText(path, "not an archive");
 
-        Assert.Throws<InvalidDataException>(() => _reader.Read(path));
+        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class NativeFormatTests : IDisposable
                 """);
         }
 
-        Assert.Throws<InvalidDataException>(() => _reader.Read(path));
+        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
     }
 
     private static readonly Transform RotatedAndMoved = new(

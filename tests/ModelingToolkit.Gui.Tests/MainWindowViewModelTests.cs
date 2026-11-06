@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
@@ -115,6 +114,37 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task WhatAFileLeavesOutIsReportedInTheStatusBar()
+    {
+        MainWindowViewModel viewModel = Create();
+        string folder = Directory.CreateTempSubdirectory("mtk-gui-tests-").FullName;
+        string path = Path.Combine(folder, "webp.gltf");
+        const string extensions = """
+            "extensionsUsed": ["EXT_texture_webp"], "extensionsRequired": ["EXT_texture_webp"], "asset"
+            """;
+        string model = File.ReadAllText(Paths.Asset("gltf", "SimpleMeshes.gltf"));
+        File.WriteAllText(path, model.Replace("\"asset\"", extensions));
+        try
+        {
+            await viewModel.LoadAsync(path);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+
+        const string warning =
+            "Unsupported glTF extension EXT_texture_webp: the textures or materials that need it are left out.";
+        Assert.Equal($"Opened webp.gltf (glTF), with a warning: {warning}", viewModel.StatusMessage);
+        Assert.Equal(warning, viewModel.StatusDetails);
+        Assert.NotEmpty(viewModel.ModelTree.Roots);
+
+        await viewModel.LoadAsync("model.obj");
+
+        Assert.Null(viewModel.StatusDetails);
+    }
+
+    [Fact]
     public void SwitchingToTheDarkVariantAppliesIt()
     {
         var appearance = new RecordingAppearance();
@@ -140,7 +170,7 @@ public sealed class MainWindowViewModelTests
 
     private static MainWindowViewModel Create() => new(
         new DocumentFormats(
-            [new GltfReader(NullLogger<GltfReader>.Instance), new NativeDocumentReader()],
+            [new GltfReader(), new NativeDocumentReader()],
             [new NativeDocumentWriter()]),
         new RecordingAppearance());
 

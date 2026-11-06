@@ -65,6 +65,25 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public void What_a_model_leaves_out_is_reported_on_standard_error()
+    {
+        string path = Path.Combine(_folder, "webp.gltf");
+        const string extensions = """
+            "extensionsUsed": ["EXT_texture_webp"], "extensionsRequired": ["EXT_texture_webp"], "asset"
+            """;
+        File.WriteAllText(path, File.ReadAllText(Asset("SimpleMeshes.gltf")).Replace("\"asset\"", extensions));
+
+        (int exitCode, string output, string error) = Run("stats", path);
+
+        Assert.Equal(0, exitCode);
+        Assert.StartsWith("webp.gltf (glTF)", output);
+        Assert.Equal(
+            "Warning: Unsupported glTF extension EXT_texture_webp: "
+            + "the textures or materials that need it are left out.",
+            error.Trim());
+    }
+
+    [Fact]
     public void Missing_files_are_reported()
     {
         (int exitCode, _, string error) = Run("stats", Path.Combine(_folder, "missing.glb"));

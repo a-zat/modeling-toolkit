@@ -11,7 +11,9 @@ public interface IDocumentReader
     /// <summary>Lower-case extensions of the files of the format, dot included, e.g. <c>.glb</c>.</summary>
     IReadOnlyList<string> Extensions { get; }
 
+    /// <param name="path">The file to read.</param>
+    /// <param name="warnings">Receives a message for each part of the file that cannot be read and is left out.</param>
     /// <exception cref="FileNotFoundException">The file does not exist.</exception>
-    /// <exception cref="InvalidDataException">The file is not valid in this format.</exception>
-    Document Read(string path);
+    /// <exception cref="InvalidDataException">The file is not valid, or needs what is not supported.</exception>
+    Document Read(string path, ICollection<string> warnings);
 }

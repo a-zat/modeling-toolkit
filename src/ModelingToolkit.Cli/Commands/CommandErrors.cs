@@ -23,4 +23,13 @@ internal static class CommandErrors
             return 1;
         }
     }
+
+    /// <summary>Reports what a reader left out, one line each on standard error.</summary>
+    public static void WriteWarnings(ParseResult parseResult, IEnumerable<string> warnings)
+    {
+        foreach (string warning in warnings)
+        {
+            parseResult.InvocationConfiguration.Error.WriteLine($"Warning: {warning}");
+        }
+    }
 }

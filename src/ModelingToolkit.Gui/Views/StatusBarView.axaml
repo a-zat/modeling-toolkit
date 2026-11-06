@@ -33,7 +33,8 @@
       <StackPanel Orientation="Horizontal" Spacing="10">
         <TextBlock Classes="label" Text="MODEL" />
         <TextBlock Text="{Binding Summary}" />
-        <TextBlock Text="{Binding StatusMessage}" Classes="secondary" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding StatusMessage}" Classes="secondary" TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding StatusDetails}" />
       </StackPanel>
     </DockPanel>
   </Border>

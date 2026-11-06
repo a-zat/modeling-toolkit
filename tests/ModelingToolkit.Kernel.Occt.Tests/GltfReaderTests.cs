@@ -1,4 +1,6 @@
-using Microsoft.Extensions.Logging.Abstractions;
+using System.Buffers.Binary;
+using System.Text;
+using System.Text.Json.Nodes;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Kernel.Occt.IO;
@@ -7,36 +9,68 @@ namespace ModelingToolkit.Kernel.Occt.Tests;
 
 // Expected values computed independently from the glTF files: vertices through the node transformations, converted
 // from metres and Y up to millimetres and Z up.
-public sealed class GltfReaderTests
+public sealed class GltfReaderTests : IDisposable
 {
-    private readonly GltfReader _reader = new(NullLogger<GltfReader>.Instance);
+    private readonly GltfReader _reader = new();
+    private readonly List<string> _warnings = [];
+    private readonly string _folder = Directory.CreateTempSubdirectory("mtk-gltf-tests-").FullName;
+
+    public void Dispose() => Directory.Delete(_folder, recursive: true);
 
     [Fact]
     public void Box_is_read_in_millimetres_with_its_material()
     {
-        Document document = _reader.Read(Asset("Box.glb"));
+        Document document = Read(Asset("Box.glb"));
 
         AssertBox(new Point3d(-500, -500, -500), new Point3d(500, 500, 500), WorldBoundingBox(document));
         Material material = Assert.Single(document.Materials);
         Assert.Same(material, Assert.Single(Meshes(document)).Material);
+        Assert.Empty(_warnings);
     }
 
     [Fact]
     public void Meshes_compressed_by_draco_are_decoded()
     {
-        Document document = _reader.Read(Asset(Path.Combine("draco", "Box.gltf")));
+        Document document = Read(Asset(Path.Combine("draco", "Box.gltf")));
 
         // Draco quantizes the positions.
         AssertBox(new Point3d(-500, -500, -500), new Point3d(500, 500, 500), WorldBoundingBox(document), 1);
         MeshEntity mesh = Assert.Single(Meshes(document));
         Assert.Equal(12, mesh.Triangles.Length);
         Assert.Same(Assert.Single(document.Materials), mesh.Material);
+        Assert.Empty(_warnings);
+    }
+
+    [Theory]
+    [InlineData(".gltf")]
+    [InlineData(".glb")]
+    public void Files_that_require_unsupported_geometry_extensions_are_refused(string extension)
+    {
+        string path = WithExtensions(extension, required: ["EXT_meshopt_compression", "EXT_mesh_gpu_instancing"]);
+
+        var exception = Assert.Throws<InvalidDataException>(() => Read(path));
+        Assert.EndsWith("not supported: EXT_mesh_gpu_instancing, EXT_meshopt_compression.", exception.Message);
+    }
+
+    [Fact]
+    public void Unsupported_texture_extensions_leave_out_only_textures()
+    {
+        string path = WithExtensions(".glb", required: ["EXT_texture_webp"], used: ["KHR_texture_transform"]);
+
+        Document document = Read(path);
+
+        Assert.Single(Meshes(document));
+        Assert.Equal(
+        [
+            "Unsupported glTF extension EXT_texture_webp: the textures or materials that need it are left out.",
+            "Unsupported glTF extension KHR_texture_transform: it is ignored.",
+        ], _warnings);
     }
 
     [Fact]
     public void Hierarchy_and_shared_meshes_are_preserved()
     {
-        Document document = _reader.Read(Asset("CesiumMilkTruck.glb"));
+        Document document = Read(Asset("CesiumMilkTruck.glb"));
 
         AssertBox(
             new Point3d(-1395.999944, -2437.999853, 1.451834),
@@ -50,7 +84,7 @@ public sealed class GltfReaderTests
     [Fact]
     public void Materials_share_the_textures_of_the_file()
     {
-        Document document = _reader.Read(Asset("CesiumMilkTruck.glb"));
+        Document document = Read(Asset("CesiumMilkTruck.glb"));
 
         Assert.Equal(["wheels", "truck", "glass", "window_trim"], document.Materials.Select(material => material.Name));
         Texture texture = Assert.Single(document.Textures);
@@ -62,7 +96,7 @@ public sealed class GltfReaderTests
     [Fact]
     public void Normals_and_texture_coordinates_are_read()
     {
-        MeshEntity mesh = Assert.Single(Meshes(_reader.Read(Asset("BoxTextured.glb"))));
+        MeshEntity mesh = Assert.Single(Meshes(Read(Asset("BoxTextured.glb"))));
 
         Assert.Equal(mesh.Vertices.Length, mesh.Normals?.Length);
         Assert.Equal(mesh.Vertices.Length, mesh.TextureCoordinates?.Length);
@@ -71,7 +105,7 @@ public sealed class GltfReaderTests
     [Fact]
     public void Meshes_without_material_take_it_by_block()
     {
-        Document document = _reader.Read(Asset("SimpleMeshes.gltf"));
+        Document document = Read(Asset("SimpleMeshes.gltf"));
 
         Assert.Empty(document.Materials);
         Assert.Null(Assert.Single(Meshes(document)).Material);
@@ -81,22 +115,45 @@ public sealed class GltfReaderTests
     [Fact]
     public void Missing_file_is_reported()
     {
-        Assert.Throws<FileNotFoundException>(() => _reader.Read(Asset("Missing.glb")));
+        Assert.Throws<FileNotFoundException>(() => Read(Asset("Missing.glb")));
     }
 
     [Fact]
     public void Invalid_file_is_reported()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.glb");
+        string path = Path.Combine(_folder, "text.glb");
         File.WriteAllText(path, "not a glTF file");
-        try
+
+        Assert.Throws<InvalidDataException>(() => Read(path));
+    }
+
+    private Document Read(string path) => _reader.Read(path, _warnings);
+
+    // SimpleMeshes, whose buffers are embedded, listing the given extensions; a .glb holds it as its only chunk.
+    private string WithExtensions(string extension, string[] required, string[]? used = null)
+    {
+        JsonNode json = JsonNode.Parse(File.ReadAllText(Asset("SimpleMeshes.gltf")))!;
+        json["extensionsRequired"] = new JsonArray([.. required.Select(name => JsonValue.Create(name))]);
+        json["extensionsUsed"] = new JsonArray([.. required.Concat(used ?? []).Select(name => JsonValue.Create(name))]);
+        string path = Path.Combine(_folder, "model" + extension);
+        if (extension == ".gltf")
         {
-            Assert.Throws<InvalidDataException>(() => _reader.Read(path));
+            File.WriteAllText(path, json.ToJsonString());
+            return path;
         }
-        finally
-        {
-            File.Delete(path);
-        }
+
+        byte[] text = Encoding.UTF8.GetBytes(json.ToJsonString());
+        int chunkLength = (text.Length + 3) / 4 * 4;
+        byte[] glb = new byte[20 + chunkLength];
+        BinaryPrimitives.WriteUInt32LittleEndian(glb, 0x46546C67);
+        BinaryPrimitives.WriteUInt32LittleEndian(glb.AsSpan(4), 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(glb.AsSpan(8), (uint)glb.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(glb.AsSpan(12), (uint)chunkLength);
+        BinaryPrimitives.WriteUInt32LittleEndian(glb.AsSpan(16), 0x4E4F534A);
+        text.CopyTo(glb, 20);
+        glb.AsSpan(20 + text.Length).Fill((byte)' ');
+        File.WriteAllBytes(path, glb);
+        return path;
     }
 
     private static string Asset(string name) => Path.Combine(AppContext.BaseDirectory, "assets", "gltf", name);
