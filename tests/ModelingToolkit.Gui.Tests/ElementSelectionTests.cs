@@ -28,7 +28,7 @@ public sealed class ElementSelectionTests : IDisposable
 
         Assert.Equal([top], viewModel.SelectedElements);
         Assert.Null(viewModel.ModelTree.SelectedNode);
-        Assert.False(viewModel.DeleteCommand.CanExecute(null));
+        Assert.True(viewModel.DeleteCommand.CanExecute(null)); // erases the face
         PropertiesViewModel properties = viewModel.Properties;
         Assert.True(properties.HasSelection);
         Assert.False(properties.IsEditable);
