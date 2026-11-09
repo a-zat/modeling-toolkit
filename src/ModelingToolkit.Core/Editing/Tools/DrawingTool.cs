@@ -161,6 +161,51 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
         _ => throw new ArgumentException($"A curve of type {curve.GetType().Name} cannot be drawn.", nameof(curve)),
     };
 
+    /// <summary>
+    /// A flat face of the geometry being edited, in the model space: its plane, with the normal the kernel gives it, its
+    /// outline, the circles and arcs as segments, and its corners, the ends of its edges.
+    /// </summary>
+    protected sealed record FlatFace(
+        BrepEntity Entity, int Index, Plane Plane, IReadOnlyList<PreviewLine> Outline, IReadOnlyList<Point3d> Corners);
+
+    /// <summary>The flat face of the geometry being edited under the pointer; null for none.</summary>
+    protected FlatFace? FlatFaceUnder(ToolPick pick)
+    {
+        ArgumentNullException.ThrowIfNull(pick);
+        if (pick.Element is not { Kind: ElementKind.Face } element ||
+            !Host.Context.Block.Entities.Contains(element.Entity) ||
+            Kernel.GetFaceInfo(element.Entity.Shape, element.Index).Plane is not { } plane)
+        {
+            return null;
+        }
+        Transform placement = InferenceEngine.PlacementOf(element.Path);
+        Vector3d normal = placement.ApplyVector(plane.Normal).Normalized();
+        Point3d onPlane = placement.Apply(Point3d.Origin + plane.Normal * plane.Offset);
+        EdgeInfo[] edges = [.. Kernel.GetFaceEdges(element.Entity.Shape, element.Index)
+            .Select(edge => Kernel.GetEdgeInfo(element.Entity.Shape, edge))];
+        return new FlatFace(element.Entity, element.Index, new Plane(normal, normal.Dot(onPlane - Point3d.Origin)),
+            [.. edges.SelectMany(edge => LinesOf(edge, placement))],
+            [.. edges.Where(edge => !edge.IsClosed).Select(edge => placement.Apply(edge.Start)).Distinct()]);
+    }
+
+    private static IEnumerable<PreviewLine> LinesOf(EdgeInfo info, Transform placement)
+    {
+        if (info.Circle is not { } circle)
+        {
+            return [new PreviewLine(placement.Apply(info.Start), placement.Apply(info.End))];
+        }
+        Vector3d start = info.Start - circle.Centre;
+        Vector3d end = info.End - circle.Centre;
+        double sweep = 2 * Math.PI;
+        if (!info.IsClosed)
+        {
+            sweep = Math.Atan2(start.Cross(end).Dot(circle.Normal.Normalized()), start.Dot(end));
+            sweep = sweep <= 0 ? sweep + 2 * Math.PI : sweep;
+        }
+        return Around(circle.Centre, start, circle.Normal, sweep)
+            .Select(line => new PreviewLine(placement.Apply(line.Start), placement.Apply(line.End)));
+    }
+
     /// <summary>A direction of unit length at right angles to another.</summary>
     protected static Vector3d Perpendicular(Vector3d direction)
     {

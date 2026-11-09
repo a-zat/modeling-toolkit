@@ -87,42 +87,17 @@ public sealed class PushPullTool(IGeometryKernel kernel) : DrawingTool(kernel)
         return true;
     }
 
-    // The flat face of the geometry being edited under the pointer, with its outline; null for none.
+    // The flat face of the geometry being edited under the pointer; null for none.
     private Taken? Take(ToolPick pick)
     {
-        if (pick.Element is not { Kind: ElementKind.Face } element ||
-            !Host.Context.Block.Entities.Contains(element.Entity) ||
-            Kernel.GetFaceInfo(element.Entity.Shape, element.Index).Plane is not { } plane)
+        if (FlatFaceUnder(pick) is not { } face)
         {
             return null;
         }
-        Transform placement = InferenceEngine.PlacementOf(element.Path);
-        Vector3d normal = placement.ApplyVector(plane.Normal).Normalized();
+        Vector3d normal = face.Plane.Normal;
         // The face of a solid is seen from outside, along its normal; one alone may be seen from either side.
         double sign = pick.Ray is { } ray && ray.Direction.Dot(normal) > 0 ? -1 : 1;
-        EdgeInfo[] edges = [.. Kernel.GetFaceEdges(element.Entity.Shape, element.Index)
-            .Select(edge => Kernel.GetEdgeInfo(element.Entity.Shape, edge))];
-        return new Taken(element.Entity, element.Index, pick.Point, normal * sign, sign,
-            [.. edges.SelectMany(edge => LinesOf(edge, placement))],
-            [.. edges.Where(edge => !edge.IsClosed).Select(edge => placement.Apply(edge.Start)).Distinct()]);
-    }
-
-    private static IEnumerable<PreviewLine> LinesOf(EdgeInfo info, Transform placement)
-    {
-        if (info.Circle is not { } circle)
-        {
-            return [new PreviewLine(placement.Apply(info.Start), placement.Apply(info.End))];
-        }
-        Vector3d start = info.Start - circle.Centre;
-        Vector3d end = info.End - circle.Centre;
-        double sweep = 2 * Math.PI;
-        if (!info.IsClosed)
-        {
-            sweep = Math.Atan2(start.Cross(end).Dot(circle.Normal.Normalized()), start.Dot(end));
-            sweep = sweep <= 0 ? sweep + 2 * Math.PI : sweep;
-        }
-        return Around(circle.Centre, start, circle.Normal, sweep)
-            .Select(line => new PreviewLine(placement.Apply(line.Start), placement.Apply(line.End)));
+        return new Taken(face.Entity, face.Index, pick.Point, normal * sign, sign, face.Outline, face.Corners);
     }
 
     // The distance along the normal to the point under the pointer: the one it snaps to, or the nearest of the line of

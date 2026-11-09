@@ -124,6 +124,15 @@ public interface IGeometryKernel
     FaceInfo GetFaceInfo(IKernelShape shape, int face);
 
     /// <summary>
+    /// Offsets the outer loop of a planar face on its plane, outwards for a positive distance and inwards for a
+    /// negative one, with sharp corners, in a new shape: inwards the loop splits the face, both parts coming from it;
+    /// outwards the ring between the loops is a new face.
+    /// </summary>
+    /// <exception cref="ArgumentException">The face is not planar, or the distance is zero or not finite.</exception>
+    /// <exception cref="GeometryKernelException">The face cannot be offset by the distance.</exception>
+    ShapeEdit OffsetFace(IKernelShape shape, int face, double distance);
+
+    /// <summary>
     /// Erases faces and edges of a shape, in a new shape. A face erased leaves its edges; an edge erased takes the
     /// faces it bounds with it. A solid that loses a face is left as the faces that remain. Erasing everything gives an
     /// empty shape, without faces or edges.

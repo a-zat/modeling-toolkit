@@ -182,6 +182,12 @@ public sealed class OcctKernel : IGeometryKernel
         return Take(edit);
     }
 
+    public ShapeEdit OffsetFace(IKernelShape shape, int face, double distance)
+    {
+        NativeMethods.ShapeOffsetFace(Unwrap(shape), face, distance, out EditHandle edit).ThrowIfFailed();
+        return Take(edit);
+    }
+
     public ShapeEdit RemoveElements(IKernelShape shape, IReadOnlyList<int> faces, IReadOnlyList<int> edges)
     {
         ArgumentNullException.ThrowIfNull(faces);

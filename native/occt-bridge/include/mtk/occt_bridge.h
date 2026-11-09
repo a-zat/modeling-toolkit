@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 18
+#define MTK_OCCT_BRIDGE_ABI_VERSION 19
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -176,6 +176,15 @@ MTK_API mtk_status mtk_shape_add_edges(const mtk_shape* shape, const mtk_curve* 
  * that would leave nothing, is a kernel error.
  */
 MTK_API mtk_status mtk_shape_push_pull(const mtk_shape* shape, int32_t face, double distance, mtk_edit** out_edit);
+
+/*
+ * Offsets the outer loop of a planar face on its plane by a distance, outwards when positive and inwards when
+ * negative, the corners staying sharp, and adds the loop made to the shape, in a new edit; the shape is not changed.
+ * Inwards, the loop splits the face, both parts coming from it; outwards, the ring between the loops becomes a new
+ * face. A face that is not planar, a distance that is zero or not finite, are invalid arguments; a distance the face
+ * cannot be offset by, as inwards past its middle, is a kernel error.
+ */
+MTK_API mtk_status mtk_shape_offset_face(const mtk_shape* shape, int32_t face, double distance, mtk_edit** out_edit);
 
 /*
  * The edges that bound a face, by their index in the shape, each once, wire after wire. out_count receives how many

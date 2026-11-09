@@ -638,4 +638,68 @@ TEST(Scale, ScalesAShapeFromAPointByAFactor) {
     EXPECT_EQ(made, nullptr);
 }
 
+Edited offset(const ShapePtr& shape, int32_t face, double distance) {
+    mtk_edit* edit = nullptr;
+    EXPECT_EQ(mtk_shape_offset_face(shape.get(), face, distance, &edit), MTK_STATUS_OK) << mtk_last_error_message();
+    Edited result;
+    if (edit == nullptr) {
+        return result;
+    }
+    mtk_shape* made = nullptr;
+    EXPECT_EQ(mtk_edit_get_shape(edit, &made), MTK_STATUS_OK);
+    result.shape.reset(made);
+    const int32_t* origins = nullptr;
+    int32_t count = 0;
+    EXPECT_EQ(mtk_edit_get_face_origins(edit, &origins, &count), MTK_STATUS_OK);
+    result.origins.assign(origins, origins + count);
+    mtk_edit_release(edit);
+    return result;
+}
+
+TEST(OffsetFace, InwardsSplitsTheFaceIntoARingAndAnInnerFace) {
+    ShapePtr face = square(100);
+    Edited inner = offset(face, 0, -20);
+    EXPECT_EQ(counts_of(inner.shape).faces, 2);
+    EXPECT_EQ(counts_of(inner.shape).edges, 8);
+    EXPECT_EQ(inner.origins, (std::vector<int32_t>{0, 0}));
+    std::vector<double> areas;
+    for (int32_t f = 0; f < 2; ++f) {
+        areas.push_back(face_of(inner.shape, f).area);
+    }
+    std::sort(areas.begin(), areas.end());
+    EXPECT_NEAR(areas[0], 3600, 1e-6);
+    EXPECT_NEAR(areas[1], 6400, 1e-6);
+    EXPECT_TRUE(is_valid(inner.shape));
+}
+
+TEST(OffsetFace, OutwardsAddsARingAroundTheFace) {
+    ShapePtr face = square(100);
+    Edited outer = offset(face, 0, 10);
+    EXPECT_EQ(counts_of(outer.shape).faces, 2);
+    EXPECT_EQ(counts_of(outer.shape).vertices, 8);
+    EXPECT_NEAR(area_of(outer.shape), 14400, 1e-6);
+    EXPECT_EQ(std::count(outer.origins.begin(), outer.origins.end(), -1), 1);
+    EXPECT_TRUE(is_valid(outer.shape));
+}
+
+TEST(OffsetFace, OnTheTopOfABoxKeepsTheSolidAndRejectsWhatCannotBeOffset) {
+    ShapePtr solid = box(100);
+    const int32_t top = faces_on(solid, {0, 0, 1}, 100)[0];
+    Edited inner = offset(solid, top, -25);
+    EXPECT_EQ(counts_of(inner.shape).solids, 1);
+    EXPECT_EQ(counts_of(inner.shape).faces, 7);
+    EXPECT_NEAR(volume_of(inner.shape), 1e6, 1e-3);
+
+    mtk_edit* edit = nullptr;
+    EXPECT_EQ(mtk_shape_offset_face(solid.get(), top, -60, &edit), MTK_STATUS_KERNEL_ERROR);
+    EXPECT_EQ(mtk_shape_offset_face(solid.get(), top, 0, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_offset_face(solid.get(), 6, 10, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(edit, nullptr);
+
+    Edited disc = add(nullptr, {circle({0, 0, 0}, 50)});
+    Edited ring = offset(disc.shape, 0, -10);
+    EXPECT_EQ(counts_of(ring.shape).faces, 2);
+    EXPECT_NEAR(area_of(ring.shape), M_PI * 2500, 1e-6);
+}
+
 } // namespace

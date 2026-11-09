@@ -11,7 +11,9 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepLib.hxx>
+#include <BRepOffsetAPI_MakeOffset.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepTools.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <TopoDS_Solid.hxx>
 #include <BRepAlgoAPI_Splitter.hxx>
@@ -822,6 +824,93 @@ mtk_status mtk_shape_remove_elements(const mtk_shape* shape, const int32_t* face
             origins.push_back(all_faces.FindIndex(result_faces(i)) - 1);
         }
         *out_edit = new mtk_edit{result, std::move(origins)};
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_shape_offset_face(const mtk_shape* shape, int32_t face, double distance, mtk_edit** out_edit) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_edit);
+        if (shape == nullptr || out_edit == nullptr) {
+            return mtk::invalid_argument("shape and out_edit must not be null.");
+        }
+        ShapeMap faces;
+        TopExp::MapShapes(shape->value, TopAbs_FACE, faces);
+        if (face < 0 || face >= faces.Extent()) {
+            return mtk::invalid_argument("face is not a face of the shape.");
+        }
+        if (!std::isfinite(distance) || std::abs(distance) <= Precision::Confusion()) {
+            return mtk::invalid_argument("distance must be finite and not zero.");
+        }
+        const TopoDS_Face& original = TopoDS::Face(faces(face + 1));
+        const BRepAdaptor_Surface surface(original);
+        if (surface.GetType() != GeomAbs_Plane) {
+            return mtk::invalid_argument("The face is not planar.");
+        }
+        const gp_Pln plane = surface.Plane();
+        const TopoDS_Wire outer = BRepTools::OuterWire(original);
+        const auto region = [&](const TopoDS_Wire& wire) -> std::optional<TopoDS_Face> {
+            BRepBuilderAPI_MakeFace made(plane, wire, true);
+            if (!made.IsDone()) {
+                return std::nullopt;
+            }
+            return made.Face();
+        };
+        const auto area = [](const TopoDS_Shape& part) {
+            GProp_GProps properties;
+            BRepGProp::SurfaceProperties(part, properties);
+            return std::abs(properties.Mass());
+        };
+        const std::optional<TopoDS_Face> inside = region(outer);
+        if (!inside) {
+            throw mtk::kernel_error("The outer loop of the face does not bound a region.");
+        }
+        // The single loop offset by a distance; nothing when the offset fails or splits the loop.
+        const auto offset = [&](double by) -> std::optional<TopoDS_Wire> {
+            BRepOffsetAPI_MakeOffset maker(*inside, GeomAbs_Intersection);
+            maker.Perform(by);
+            if (!maker.IsDone()) {
+                return std::nullopt;
+            }
+            std::optional<TopoDS_Wire> found;
+            for (TopExp_Explorer wire(maker.Shape(), TopAbs_WIRE); wire.More(); wire.Next()) {
+                if (found) {
+                    return std::nullopt;
+                }
+                found = TopoDS::Wire(wire.Current());
+            }
+            return found;
+        };
+        // Which way the algorithm offsets depends on how the loop turns: the area tells.
+        const double before = area(*inside);
+        std::optional<TopoDS_Wire> loop = offset(distance);
+        std::optional<TopoDS_Face> bounded = loop ? region(*loop) : std::nullopt;
+        if (!bounded || (area(*bounded) > before) != (distance > 0)) {
+            loop = offset(-distance);
+            bounded = loop ? region(*loop) : std::nullopt;
+        }
+        if (!bounded || (area(*bounded) > before) != (distance > 0)) {
+            throw mtk::kernel_error("The face cannot be offset by this distance.");
+        }
+
+        std::vector<TopoDS_Shape> added;
+        if (distance < 0) {
+            added.push_back(*loop);
+        } else {
+            BRepAlgoAPI_Cut ring;
+            ring.SetArguments(ShapeList{*bounded});
+            ring.SetTools(ShapeList{*inside});
+            ring.SetRunParallel(false);
+            ring.Build();
+            if (!ring.IsDone() || ring.HasErrors()) {
+                throw mtk::kernel_error("The ring of the offset could not be made.");
+            }
+            for (TopExp_Explorer part(ring.Shape(), TopAbs_FACE); part.More(); part.Next()) {
+                added.push_back(part.Current());
+            }
+        }
+        const Step step = fuse_into(shape->value, added);
+        *out_edit = new mtk_edit{step.shape, face_origins(shape->value, step)};
         return MTK_STATUS_OK;
     });
 }

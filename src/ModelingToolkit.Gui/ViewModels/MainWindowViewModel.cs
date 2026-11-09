@@ -56,6 +56,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 new ToolItemViewModel(new CircleTool(kernel), "Icon.Circle"),
                 new ToolItemViewModel(new ArcTool(kernel), "Icon.Arc"),
                 new ToolItemViewModel(new PushPullTool(kernel), "Icon.PushPull"),
+                new ToolItemViewModel(new OffsetTool(kernel), "Icon.Offset"),
                 new ToolItemViewModel(new MoveTool(kernel), "Icon.Move"),
                 new ToolItemViewModel(new RotateTool(kernel), "Icon.Rotate"),
                 new ToolItemViewModel(new ScaleTool(kernel), "Icon.Scale"),
