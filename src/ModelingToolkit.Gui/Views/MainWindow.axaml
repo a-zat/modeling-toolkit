@@ -53,15 +53,9 @@
           <NativeMenuItem Header="Command Palette…" Command="{Binding Palette.OpenCommand}"
                           Gesture="{OnPlatform Default=Ctrl+K, macOS=Cmd+K}" />
           <NativeMenuItemSeparator />
-          <NativeMenuItem Header="Model Panel" ToggleType="CheckBox"
-                          IsChecked="{Binding IsModelPanelActive, Mode=OneWay}"
-                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Model}" />
-          <NativeMenuItem Header="Materials Panel" ToggleType="CheckBox"
-                          IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
-                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}" />
-          <NativeMenuItem Header="Settings" ToggleType="CheckBox"
-                          IsChecked="{Binding IsSettingsPanelActive, Mode=OneWay}"
-                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Settings}" />
+          <NativeMenuItem Header="Inspector" ToggleType="CheckBox"
+                          IsChecked="{Binding IsInspectorOpen, Mode=OneWay}" Command="{Binding ToggleInspectorCommand}" />
+          <NativeMenuItem Header="Settings…" Command="{Binding OpenSettingsCommand}" />
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Fit All" Command="{Binding FitAllCommand}" />
           <NativeMenuItem Header="Standard Views">

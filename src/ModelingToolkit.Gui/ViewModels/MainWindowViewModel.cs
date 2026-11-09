@@ -32,7 +32,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DocumentName = "No document";
         Summary = "Open a model with File › Open";
         StatusMessage = string.Empty;
-        ActivePanel = SidePanel.Model;
+        IsInspectorOpen = true;
+        IsOutlineExpanded = true;
         IsDark = false;
         IsPerspective = true;
         IsGridVisible = true;
@@ -81,7 +82,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Toggle Perspective", TogglePerspectiveCommand),
             new("Toggle Grid", ToggleGridCommand),
             new("Toggle Dark Theme", ToggleDarkCommand),
-            new("Settings", ShowPanelCommand, SidePanel.Settings),
+            new("Show or Hide the Inspector", ToggleInspectorCommand),
+            new("Settings", OpenSettingsCommand),
         ];
         _initialized = true;
     }
@@ -89,8 +91,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ModelTreeViewModel ModelTree { get; } = new();
 
     public PropertiesViewModel Properties { get; } = new();
-
-    public MaterialsViewModel Materials { get; } = new();
 
     public CommandPaletteViewModel Palette { get; } = new();
 
@@ -243,10 +243,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Escape goes to the active tool, and leaves the block being edited if the tool does not take it.</summary>
+    /// <summary>
+    /// Escape closes the settings when they are open; otherwise it goes to the active tool, and leaves the block being
+    /// edited if the tool does not take it.
+    /// </summary>
     [RelayCommand]
     private void Escape()
     {
+        if (IsSettingsOpen)
+        {
+            IsSettingsOpen = false;
+            return;
+        }
         if (ActiveTool is { IsActive: true } tool && tool.Key(ToolKey.Escape, ToolModifiers.None))
         {
             return;
@@ -436,20 +444,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial string? StatusDetails { get; private set; }
 
-    // One side panel at a time, chosen in the activity bar.
-
+    /// <summary>Whether the inspector is shown, on the right of the 3D view: the outline and the properties.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSidePanelOpen), nameof(IsModelPanelActive), nameof(IsMaterialsPanelActive),
-        nameof(IsSettingsPanelActive))]
-    public partial SidePanel ActivePanel { get; set; }
+    public partial bool IsInspectorOpen { get; set; }
 
-    public bool IsSidePanelOpen => ActivePanel != SidePanel.None;
+    /// <summary>Whether the outline is open in the inspector, above the properties.</summary>
+    [ObservableProperty]
+    public partial bool IsOutlineExpanded { get; set; }
 
-    public bool IsModelPanelActive => ActivePanel == SidePanel.Model;
-
-    public bool IsMaterialsPanelActive => ActivePanel == SidePanel.Materials;
-
-    public bool IsSettingsPanelActive => ActivePanel == SidePanel.Settings;
+    /// <summary>Whether the settings are open, below their button in the top bar.</summary>
+    [ObservableProperty]
+    public partial bool IsSettingsOpen { get; set; }
 
     [ObservableProperty]
     public partial bool IsDark { get; set; }
@@ -696,9 +701,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleDark() => IsDark = !IsDark;
 
-    // Selecting the active panel again closes it, as in VS Code.
     [RelayCommand]
-    private void ShowPanel(SidePanel panel) => ActivePanel = ActivePanel == panel ? SidePanel.None : panel;
+    private void ToggleInspector() => IsInspectorOpen = !IsInspectorOpen;
+
+    [RelayCommand]
+    private void ToggleOutline() => IsOutlineExpanded = !IsOutlineExpanded;
+
+    [RelayCommand]
+    private void OpenSettings() => IsSettingsOpen = true;
 
     // The changes of the document are those that subscribed before, the model tree first, already know.
     partial void OnDocumentChanged(Document? oldValue, Document? newValue)
@@ -768,7 +778,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         Properties.Know(document, statistics);
         ModelTree.Show(document);
-        Materials.Show(document);
         Document = document;
         OnEditingChanged();
     }

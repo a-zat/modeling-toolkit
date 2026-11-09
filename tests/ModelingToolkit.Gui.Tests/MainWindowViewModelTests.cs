@@ -11,7 +11,7 @@ namespace ModelingToolkit.Gui.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Fact]
-    public async Task OpeningAModelShowsItsStructureMaterialsAndSummary()
+    public async Task OpeningAModelShowsItsStructureAndSummary()
     {
         MainWindowViewModel viewModel = Create();
 
@@ -21,7 +21,7 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("4 meshes (5 placed) · 3,624 triangles · 4 materials · mm · Z up", viewModel.Summary);
         ModelNodeViewModel model = Assert.Single(viewModel.ModelTree.Roots);
         Assert.Equal(2, Flatten(model).Count(node => node.Entity is BlockReference { Block.Name: "Wheels" }));
-        Assert.Equal(4, viewModel.Materials.Items.Count);
+        Assert.Equal(4, viewModel.Document!.Materials.Count);
         Assert.True(viewModel.SaveCommand.CanExecute(null));
     }
 
@@ -404,11 +404,11 @@ public sealed class MainWindowViewModelTests
         MainWindowViewModel viewModel = Create();
         Assert.Equal(RenderStyle.Standard, viewModel.RenderStyle);
 
-        viewModel.ShowPanelCommand.Execute(SidePanel.Settings);
+        viewModel.OpenSettingsCommand.Execute(null);
         viewModel.IsCadRenderStyle = true;
         viewModel.IsStandardRenderStyle = false; // the other radio button, unchecked
 
-        Assert.True(viewModel.IsSettingsPanelActive);
+        Assert.True(viewModel.IsSettingsOpen);
         Assert.Equal(RenderStyle.Cad, viewModel.RenderStyle);
         Assert.False(viewModel.IsStandardRenderStyle);
 

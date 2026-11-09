@@ -17,3 +17,19 @@ internal sealed class CollapsibleColumn(ColumnDefinition column)
         column.Width = visible ? _width : new GridLength(0);
     }
 }
+
+/// <summary>A row of a grid that can be hidden and shown again at the height it had.</summary>
+internal sealed class CollapsibleRow(RowDefinition row)
+{
+    private GridLength _height = row.Height;
+
+    public void Show(bool visible)
+    {
+        if (!visible && row.Height.Value > 0)
+        {
+            _height = row.Height;
+        }
+
+        row.Height = visible ? _height : new GridLength(0);
+    }
+}

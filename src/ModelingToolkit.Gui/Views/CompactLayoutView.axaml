@@ -1,4 +1,4 @@
-<!-- Compact layout: activity bar with one panel at a time, properties of the selection, command palette. -->
+<!-- The main layout: the top bar; the tool column, the 3D view and the inspector (outline and properties); the status bar. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
@@ -96,7 +96,23 @@
           </Border>
         </StackPanel>
 
-        <Button Grid.Column="2" Classes="search" HorizontalAlignment="Right" MinWidth="240"
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+        <ToggleButton x:Name="SettingsButton" Classes="tool" IsChecked="{Binding IsSettingsOpen}" ToolTip.Tip="Settings">
+          <PathIcon Data="{StaticResource Icon.Settings}" />
+        </ToggleButton>
+        <Popup IsOpen="{Binding IsSettingsOpen, Mode=TwoWay}" PlacementTarget="{Binding #SettingsButton}"
+               Placement="BottomEdgeAlignedRight" IsLightDismissEnabled="True">
+          <Border Classes="popover" Width="300">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="SETTINGS" />
+              <views:SettingsView />
+            </DockPanel>
+          </Border>
+        </Popup>
+        <ToggleButton Classes="tool" IsChecked="{Binding IsInspectorOpen}" ToolTip.Tip="Show or hide the inspector">
+          <PathIcon Data="{StaticResource Icon.PanelRight}" />
+        </ToggleButton>
+        <Button Classes="search" MinWidth="240" Margin="4,0,0,0"
                 HorizontalContentAlignment="Stretch" Command="{Binding Palette.OpenCommand}">
           <DockPanel>
             <Border DockPanel.Dock="Right" Classes="key" Margin="16,0,0,0">
@@ -108,57 +124,15 @@
             </StackPanel>
           </DockPanel>
         </Button>
+        </StackPanel>
       </Grid>
     </Border>
 
     <views:StatusBarView DockPanel.Dock="Bottom" />
 
-    <Grid x:Name="Panels" ColumnDefinitions="Auto,260,Auto,*,Auto,280">
-      <Border Grid.Column="0" Classes="activityBar">
-        <DockPanel>
-          <!-- The settings at the bottom, as in VS Code. -->
-          <ToggleButton DockPanel.Dock="Bottom" Classes="tool activity"
-                        IsChecked="{Binding IsSettingsPanelActive, Mode=OneWay}"
-                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Settings}"
-                        ToolTip.Tip="Settings">
-            <PathIcon Data="{StaticResource Icon.Settings}" />
-          </ToggleButton>
-          <StackPanel Spacing="4">
-            <ToggleButton Classes="tool activity" IsChecked="{Binding IsModelPanelActive, Mode=OneWay}"
-                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Model}"
-                          ToolTip.Tip="Model">
-              <PathIcon Data="{StaticResource Icon.CubeTree}" />
-            </ToggleButton>
-            <ToggleButton Classes="tool activity" IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
-                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}"
-                          ToolTip.Tip="Materials">
-              <PathIcon Data="{StaticResource Icon.Color}" />
-            </ToggleButton>
-          </StackPanel>
-        </DockPanel>
-      </Border>
-
-      <Border Grid.Column="1" Classes="sidePanel" IsVisible="{Binding IsSidePanelOpen}">
-        <Panel>
-          <DockPanel IsVisible="{Binding IsModelPanelActive}">
-            <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="MODEL" />
-            <views:ModelTreeView DataContext="{Binding ModelTree}" />
-          </DockPanel>
-          <DockPanel IsVisible="{Binding IsMaterialsPanelActive}">
-            <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="MATERIALS" />
-            <views:MaterialsView DataContext="{Binding Materials}" />
-          </DockPanel>
-          <DockPanel IsVisible="{Binding IsSettingsPanelActive}">
-            <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="SETTINGS" />
-            <views:SettingsView />
-          </DockPanel>
-        </Panel>
-      </Border>
-      <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
-
-      <DockPanel Grid.Column="3">
+    <Grid x:Name="Panels" ColumnDefinitions="Auto,*,Auto,300">
       <!-- The tools of the 3D view, beside it: controls cannot float over its native view. -->
-      <Border DockPanel.Dock="Left" Classes="toolColumn">
+      <Border Grid.Column="0" Classes="toolColumn">
         <ItemsControl ItemsSource="{Binding Tools}">
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="vm:ToolItemViewModel">
@@ -172,7 +146,8 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </Border>
-      <viewport:ViewportView x:Name="Viewport" Document="{Binding Document}"
+
+      <viewport:ViewportView x:Name="Viewport" Grid.Column="1" Document="{Binding Document}"
                              Selection="{Binding EmphasizedPath}"
                              InputCommand="{Binding ViewInputCommand}"
                              HighlightedElements="{Binding SelectedElements}"
@@ -180,12 +155,28 @@
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
                              IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}" />
-      </DockPanel>
 
-      <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />
-      <Border Grid.Column="5" Classes="sidePanel" IsVisible="{Binding Properties.HasSelection}">
-        <views:PropertiesView DataContext="{Binding Properties}" />
-      </Border>
+      <GridSplitter Grid.Column="2" IsVisible="{Binding IsInspectorOpen}" />
+      <!-- The inspector: the outline, which can be closed, above the properties of the selection. -->
+      <Grid x:Name="Inspector" Grid.Column="3" Classes="inspector" RowDefinitions="Auto,*,Auto,1.4*"
+            IsVisible="{Binding IsInspectorOpen}">
+        <Button Grid.Row="0" Classes="sectionHeader" Command="{Binding ToggleOutlineCommand}"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+          <DockPanel>
+            <Panel DockPanel.Dock="Right" Width="14" Height="14">
+              <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="12" Height="12"
+                        IsVisible="{Binding IsOutlineExpanded}" />
+              <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="12" Height="12"
+                        IsVisible="{Binding !IsOutlineExpanded}" />
+            </Panel>
+            <TextBlock Classes="label" Text="OUTLINE" />
+          </DockPanel>
+        </Button>
+        <views:ModelTreeView Grid.Row="1" DataContext="{Binding ModelTree}" />
+        <GridSplitter Grid.Row="2" Classes="horizontal" ResizeDirection="Rows"
+                      IsVisible="{Binding IsOutlineExpanded}" />
+        <views:PropertiesView Grid.Row="3" DataContext="{Binding Properties}" />
+      </Grid>
     </Grid>
   </DockPanel>
 

@@ -7,15 +7,15 @@ namespace ModelingToolkit.Gui.Views;
 
 public partial class CompactLayoutView : UserControl
 {
-    private readonly CollapsibleColumn _sideColumn;
-    private readonly CollapsibleColumn _propertiesColumn;
+    private readonly CollapsibleColumn _inspectorColumn;
+    private readonly CollapsibleRow _outlineRow;
     private MainWindowViewModel? _viewModel;
 
     public CompactLayoutView()
     {
         InitializeComponent();
-        _sideColumn = new CollapsibleColumn(Panels.ColumnDefinitions[1]);
-        _propertiesColumn = new CollapsibleColumn(Panels.ColumnDefinitions[5]);
+        _inspectorColumn = new CollapsibleColumn(Panels.ColumnDefinitions[3]);
+        _outlineRow = new CollapsibleRow(Inspector.RowDefinitions[1]);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -26,8 +26,7 @@ public partial class CompactLayoutView : UserControl
         {
             _viewModel.Camera = Viewport;
             _viewModel.PropertyChanged += OnPanelsChanged;
-            _viewModel.Properties.PropertyChanged += OnPanelsChanged;
-            UpdateColumns(_viewModel);
+            UpdatePanels(_viewModel);
         }
     }
 
@@ -38,22 +37,22 @@ public partial class CompactLayoutView : UserControl
         {
             _viewModel.Camera = null;
             _viewModel.PropertyChanged -= OnPanelsChanged;
-            _viewModel.Properties.PropertyChanged -= OnPanelsChanged;
             _viewModel = null;
         }
     }
 
     private void OnPanelsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MainWindowViewModel.IsSidePanelOpen) or nameof(PropertiesViewModel.HasSelection))
+        if (e.PropertyName is nameof(MainWindowViewModel.IsInspectorOpen) or nameof(MainWindowViewModel.IsOutlineExpanded))
         {
-            UpdateColumns(_viewModel!);
+            UpdatePanels(_viewModel!);
         }
     }
 
-    private void UpdateColumns(MainWindowViewModel viewModel)
+    // The grid keeps the space of hidden columns and rows: they are given none, and their size back when shown.
+    private void UpdatePanels(MainWindowViewModel viewModel)
     {
-        _sideColumn.Show(viewModel.IsSidePanelOpen);
-        _propertiesColumn.Show(viewModel.Properties.HasSelection);
+        _inspectorColumn.Show(viewModel.IsInspectorOpen);
+        _outlineRow.Show(viewModel.IsOutlineExpanded);
     }
 }
