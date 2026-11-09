@@ -46,6 +46,10 @@
           <Border Classes="key"><TextBlock Text="Drag" /></Border>
           <TextBlock Classes="secondary" Text="orbit" />
         </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsSelecting}">
+          <Border Classes="key"><TextBlock Text="{OnPlatform Default='Ctrl + drag', macOS='⌘ drag'}" /></Border>
+          <TextBlock Classes="secondary" Text="select" />
+        </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Border Classes="key"><TextBlock Text="{OnPlatform Default='Shift + drag', macOS='⇧ drag'}" /></Border>
           <TextBlock Classes="secondary" Text="pan" />

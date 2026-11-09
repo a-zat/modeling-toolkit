@@ -6,6 +6,7 @@
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_Line.hxx>
+#include <AIS_RubberBand.hxx>
 #include <AIS_ViewController.hxx>
 #include <AIS_ViewCube.hxx>
 #include <Aspect_GridParams.hxx>
@@ -118,6 +119,12 @@ public:
     // Shows an overlay in place of the previous one; an empty one shows none.
     void set_overlay(Overlay overlay);
 
+    // Shows the rectangle of a window selection, between corners in device-independent units, or hides it.
+    void set_window_band(bool shown, double x0, double y0, double x1, double y1, bool crossing);
+
+    // Points of the model space where the camera shows them, in device-independent units; NaN behind the camera.
+    void project(const double* points, int count, double* out_points) const;
+
     // Highlights checked elements as selected, in place of those highlighted before.
     void set_highlighted_elements(const mtk_viewer_element* elements, int count);
 
@@ -180,6 +187,7 @@ private:
     std::vector<std::pair<int, occ::handle<ElementOwner>>> highlighted_; // by instance
     Overlay overlay_;
     occ::handle<OverlayObject> overlay_object_; // null when the overlay is empty
+    occ::handle<AIS_RubberBand> window_band_; // null until a window selection is shown
     bool needs_next_frame_ = false; // whether the last redraw asked for another frame, see handleViewRedraw()
     double scale_ = 0.0;
     std::string failure_;

@@ -57,6 +57,21 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<ViewOverlay> OverlayProperty =
         AvaloniaProperty.Register<ViewportView, ViewOverlay>(nameof(Overlay), ViewOverlay.Empty);
 
+    /// <summary>
+    /// Whether a drag with the Command key (Control elsewhere) selects in a window, in place of turning the view, as
+    /// with the select tool.
+    /// </summary>
+    public static readonly StyledProperty<bool> IsWindowSelectionEnabledProperty =
+        AvaloniaProperty.Register<ViewportView, bool>(nameof(IsWindowSelectionEnabled));
+
+    /// <summary>The references to the block being edited, whose shapes a window selects from; empty for the model.</summary>
+    public static readonly StyledProperty<IReadOnlyList<Entity>> EditPathProperty =
+        AvaloniaProperty.Register<ViewportView, IReadOnlyList<Entity>>(nameof(EditPath), []);
+
+    /// <summary>Receives the <see cref="WindowSelection"/> made by a window.</summary>
+    public static readonly StyledProperty<ICommand?> WindowSelectCommandProperty =
+        AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(WindowSelectCommand));
+
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
 
@@ -72,6 +87,7 @@ public sealed class ViewportView : Border, IViewCamera
     private bool _hoverMoved; // since the last frame, without buttons pressed
     private KeyModifiers _hoverModifiers;
     private bool _updatePosted;
+    private Point? _windowStart; // where a window selection began, while it is dragged
 
     public ViewportView()
     {
@@ -138,6 +154,26 @@ public sealed class ViewportView : Border, IViewCamera
         get => GetValue(InputCommandProperty);
         set => SetValue(InputCommandProperty, value);
     }
+
+    public bool IsWindowSelectionEnabled
+    {
+        get => GetValue(IsWindowSelectionEnabledProperty);
+        set => SetValue(IsWindowSelectionEnabledProperty, value);
+    }
+
+    public IReadOnlyList<Entity> EditPath
+    {
+        get => GetValue(EditPathProperty);
+        set => SetValue(EditPathProperty, value);
+    }
+
+    public ICommand? WindowSelectCommand
+    {
+        get => GetValue(WindowSelectCommandProperty);
+        set => SetValue(WindowSelectCommandProperty, value);
+    }
+
+    private static KeyModifiers WindowModifier => OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
     /// <summary>The faces, edges and vertices of shapes shown as selected; null for none.</summary>
     public IReadOnlyList<ElementReference>? HighlightedElements
@@ -267,6 +303,12 @@ public sealed class ViewportView : Border, IViewCamera
     {
         base.OnPointerPressed(e);
         Focus(); // out of the fields, so that typed values and arrows go to the tools
+        if (IsWindowSelectionEnabled && e.KeyModifiers.HasFlag(WindowModifier) &&
+            e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            _windowStart = e.GetPosition(_host); // the viewer does not turn the view
+            return;
+        }
         _clickCount = e.ClickCount;
         SendButtons(e);
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
@@ -278,6 +320,12 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_windowStart is { } start)
+        {
+            _windowStart = null;
+            SelectInWindow(start, e.GetPosition(_host), e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            return;
+        }
         _clickModifiers = e.KeyModifiers;
         SendButtons(e);
         if (e.InitialPressMouseButton == MouseButton.Left)
@@ -289,6 +337,16 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        if (_windowStart is { } start)
+        {
+            Point at = e.GetPosition(_host);
+            Send(viewer =>
+            {
+                viewer.SetWindowBand(WindowArea.Between(start, at), at.X < start.X);
+                return true;
+            });
+            return;
+        }
         Send(viewer => viewer.MouseMove(Position(e), Buttons(e), OcctViewer.ToNative(e.KeyModifiers)));
         PointerPointProperties buttons = e.GetCurrentPoint(this).Properties;
         if (buttons.IsLeftButtonPressed)
@@ -302,6 +360,26 @@ public sealed class ViewportView : Border, IViewCamera
             _hoverModifiers = e.KeyModifiers;
             RequestFrame();
         }
+    }
+
+    // From left to right, what the window holds whole; from right to left, what it touches too.
+    private void SelectInWindow(Point start, Point end, bool add)
+    {
+        Send(viewer =>
+        {
+            viewer.SetWindowBand(null, false);
+            if (_shownScene is { } scene && WindowSelectCommand is { } command &&
+                (Math.Abs(end.X - start.X) > 2 || Math.Abs(end.Y - start.Y) > 2))
+            {
+                var selection = new WindowSelection(
+                    scene.ElementsIn(EditPath, viewer.Project, WindowArea.Between(start, end), end.X < start.X), add);
+                if (command.CanExecute(selection))
+                {
+                    command.Execute(selection);
+                }
+            }
+            return true;
+        });
     }
 
     private void Raise(ViewportPick input)

@@ -442,6 +442,56 @@ void mtk::Viewer::set_overlay(Overlay overlay) {
     view_->Invalidate();
 }
 
+void mtk::Viewer::set_window_band(bool shown, double x0, double y0, double x1, double y1, bool crossing) {
+    if (!shown) {
+        if (!window_band_.IsNull() && window_band_->HasInteractiveContext()) {
+            context_->Remove(window_band_, false);
+        }
+        view_->Invalidate();
+        return;
+    }
+    const Quantity_Color line(0.18, 0.43, 0.87, Quantity_TOC_sRGB);
+    if (window_band_.IsNull()) {
+        window_band_ = new AIS_RubberBand(line, Aspect_TOL_SOLID, line, 0.85, 1.0);
+        window_band_->SetZLayer(Graphic3d_ZLayerId_TopOSD);
+        window_band_->SetTransformPersistence(new Graphic3d_TransformPers(Graphic3d_TMF_2d, Aspect_TOTP_LEFT_UPPER));
+        window_band_->SetDisplayMode(0);
+        window_band_->SetMutable(true);
+    }
+    window_band_->SetLineType(crossing ? Aspect_TOL_DASH : Aspect_TOL_SOLID);
+    const NCollection_Vec2<int> a = to_pixels(x0, y0), b = to_pixels(x1, y1);
+    // Anchored at the top-left corner of the view, upwards.
+    window_band_->SetRectangle(std::min(a.x(), b.x()), -std::max(a.y(), b.y()), std::max(a.x(), b.x()),
+                               -std::min(a.y(), b.y()));
+    if (window_band_->HasInteractiveContext()) {
+        context_->Redisplay(window_band_, false);
+    } else {
+        context_->Display(window_band_, 0, -1, false); // never picked
+    }
+    view_->Invalidate();
+}
+
+void mtk::Viewer::project(const double* points, int count, double* out_points) const {
+    int width = 0, height = 0;
+    if (is_attached()) {
+        window_->Size(width, height);
+    }
+    const occ::handle<Graphic3d_Camera>& camera = view_->Camera();
+    const gp_Dir forward = camera->Direction();
+    for (int i = 0; i < count; ++i) {
+        const gp_Pnt point(points[3 * i], points[3 * i + 1], points[3 * i + 2]);
+        double* out = out_points + 2 * i;
+        if (width == 0 || scale_ <= 0.0 ||
+            (!camera->IsOrthographic() && gp_Vec(camera->Eye(), point).Dot(gp_Vec(forward)) <= 0.0)) {
+            out[0] = out[1] = std::numeric_limits<double>::quiet_NaN();
+            continue;
+        }
+        const gp_Pnt projected = camera->Project(point);
+        out[0] = (projected.X() + 1.0) * 0.5 * width / scale_;
+        out[1] = (1.0 - projected.Y()) * 0.5 * height / scale_;
+    }
+}
+
 void mtk::Viewer::set_grid_step(double step) {
     grid_step_ = step;
     grid_.SetScale(1.0 / step);
@@ -1366,6 +1416,30 @@ mtk_status mtk_viewer_set_overlay(mtk_viewer* viewer, const mtk_viewer_overlay* 
             return mtk::invalid_argument(error.c_str());
         }
         viewer->set_overlay(std::move(*checked));
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_window_band(mtk_viewer* viewer, int32_t shown, double x0, double y0, double x1, double y1,
+                                      int32_t crossing) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (shown != 0 && !(std::isfinite(x0) && std::isfinite(y0) && std::isfinite(x1) && std::isfinite(y1))) {
+            return mtk::invalid_argument("The corners must be finite.");
+        }
+        viewer->set_window_band(shown != 0, x0, y0, x1, y1, crossing != 0);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_project(const mtk_viewer* viewer, const double* points, int32_t count, double* out_points) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || count < 0 || (count > 0 && (points == nullptr || out_points == nullptr))) {
+            return mtk::invalid_argument("viewer must not be null, nor the points when counted, and count not negative.");
+        }
+        viewer->project(points, count, out_points);
         return MTK_STATUS_OK;
     });
 }

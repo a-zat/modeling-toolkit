@@ -150,6 +150,8 @@
       <viewport:ViewportView x:Name="Viewport" Grid.Column="1" Document="{Binding Document}"
                              Selection="{Binding EmphasizedPath}"
                              InputCommand="{Binding ViewInputCommand}"
+                             IsWindowSelectionEnabled="{Binding IsSelecting}" EditPath="{Binding EditPath}"
+                             WindowSelectCommand="{Binding WindowSelectCommand}"
                              HighlightedElements="{Binding SelectedElements}"
                              WarningsCommand="{Binding ReportViewWarningsCommand}"
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"

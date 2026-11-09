@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 16
+#define MTK_OCCT_VIEWER_ABI_VERSION 17
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -331,6 +331,21 @@ typedef struct mtk_viewer_overlay {
  * too. The arrays are read during the call only.
  */
 MTK_VIEWER_API mtk_status mtk_viewer_set_overlay(mtk_viewer* viewer, const mtk_viewer_overlay* overlay);
+
+/*
+ * Shows the rectangle of a window selection over the view, between two corners in device-independent units from the
+ * top-left corner of the view, dashed when crossing is nonzero, in place of the one shown before; shown 0 hides it.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_set_window_band(mtk_viewer* viewer, int32_t shown, double x0, double y0, double x1,
+                                                     double y1, int32_t crossing);
+
+/*
+ * Where points of the model space (x, y, z each, count of them) are in the view as the camera shows them now:
+ * out_points receives x, y for each, in device-independent units from the top-left corner of the view, or NaN for a
+ * point behind the camera.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_project(const mtk_viewer* viewer, const double* points, int32_t count,
+                                             double* out_points);
 
 /* Zooms at (x, y) by delta notches of the mouse wheel, positive to zoom in; fractions come from touchpads. */
 MTK_VIEWER_API mtk_status mtk_viewer_scroll(mtk_viewer* viewer, double x, double y, double delta,

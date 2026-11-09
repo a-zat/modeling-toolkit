@@ -333,6 +333,28 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
 
     /// <summary>Shows an overlay in place of the previous one; an empty one shows none.</summary>
     /// <exception cref="ArgumentException">The viewer refuses the overlay: points that are not finite, for example.</exception>
+    /// <summary>Shows the rectangle of a window selection between two corners, dashed when crossing; null hides it.</summary>
+    public void SetWindowBand(WindowArea? window, bool crossing)
+    {
+        WindowArea area = window ?? default;
+        NativeMethods.SetWindowBand(_handle, window is null ? 0 : 1, area.Left, area.Top, area.Right, area.Bottom,
+            crossing ? 1 : 0).ThrowIfFailed();
+    }
+
+    /// <summary>Where points of the model space are in the view, in device-independent units; NaN behind the camera.</summary>
+    public (double X, double Y)[] Project(Point3d[] points)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+        double[] values = new double[points.Length * 3];
+        for (int i = 0; i < points.Length; i++)
+        {
+            (values[3 * i], values[3 * i + 1], values[3 * i + 2]) = (points[i].X, points[i].Y, points[i].Z);
+        }
+        double[] projected = new double[points.Length * 2];
+        NativeMethods.Project(_handle, values, points.Length, projected).ThrowIfFailed();
+        return [.. Enumerable.Range(0, points.Length).Select(i => (projected[2 * i], projected[2 * i + 1]))];
+    }
+
     public unsafe void SetOverlay(ViewOverlay overlay)
     {
         ArgumentNullException.ThrowIfNull(overlay);

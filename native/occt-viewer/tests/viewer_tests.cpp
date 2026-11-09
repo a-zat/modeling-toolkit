@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+
 #include <array>
 #include <limits>
 #include <memory>
@@ -138,6 +140,23 @@ TEST(Viewer, IgnoresInputUntilTheViewIsInAWindow) {
     pick.instance = 5;
     EXPECT_EQ(mtk_viewer_get_hovered(viewer.get(), &pick), MTK_STATUS_OK);
     EXPECT_EQ(pick.instance, -1) << "nothing under the pointer of a view never shown";
+}
+
+TEST(Viewer, ShowsAWindowBandAndProjectsNothingBeforeTheViewIsInAWindow) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+
+    EXPECT_EQ(mtk_viewer_set_window_band(viewer.get(), 1, 10, 20, 200, 100, 1), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_set_window_band(viewer.get(), 1, 10, 20, std::nan(""), 100, 0), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_window_band(viewer.get(), 0, 0, 0, 0, 0, 0), MTK_STATUS_OK);
+
+    const double points[] = {0, 0, 0, 100, 0, 0};
+    double projected[4] = {};
+    EXPECT_EQ(mtk_viewer_project(viewer.get(), points, 2, projected), MTK_STATUS_OK);
+    EXPECT_TRUE(std::isnan(projected[0]) && std::isnan(projected[3]));
+    EXPECT_EQ(mtk_viewer_project(viewer.get(), nullptr, 2, projected), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_project(viewer.get(), nullptr, 0, nullptr), MTK_STATUS_OK);
 }
 
 TEST(Viewer, AcceptsColoursBetweenZeroAndOne) {

@@ -45,6 +45,27 @@ public sealed class ElementSelection
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Selects elements, in place of those selected or, with <paramref name="add"/>, after them.</summary>
+    /// <exception cref="ArgumentException">An element is not one of the document.</exception>
+    public void Select(IEnumerable<ElementReference> elements, bool add)
+    {
+        ArgumentNullException.ThrowIfNull(elements);
+        ElementReference[] chosen = [.. elements];
+        foreach (ElementReference element in chosen)
+        {
+            CheckInDocument(element);
+        }
+        if (!add)
+        {
+            _selected.Clear();
+        }
+        foreach (ElementReference element in chosen.Where(element => !Contains(element)))
+        {
+            _selected.Add((element, element.Entity.Shape));
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Adds the element to the selection, or takes it out if it is already selected.</summary>
     /// <exception cref="ArgumentException">The element is not one of the document.</exception>
     public void Toggle(ElementReference element)

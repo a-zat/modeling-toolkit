@@ -131,6 +131,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private PaintTool? PaintTool => Tools.Select(item => item.Tool).OfType<PaintTool>().FirstOrDefault();
 
+    /// <summary>Whether the select tool is active, with which a drag holding Command selects in a window.</summary>
+    public bool IsSelecting => ActiveTool is SelectTool;
+
+    /// <summary>The references to the block being edited; empty for the model.</summary>
+    public IReadOnlyList<Entity> EditPath => Context?.Path ?? [];
+
+    /// <summary>Selects the faces and edges of a window, in place of the selection or after it.</summary>
+    [RelayCommand]
+    private void WindowSelect(WindowSelection selection)
+    {
+        if (Elements is null || IsBusy)
+        {
+            return;
+        }
+        ModelTree.SelectedNode = null;
+        Elements.Select(selection.Elements, selection.Add);
+    }
+
     /// <summary>Whether the paint tool is active, which shows its material in the status bar.</summary>
     public bool IsPainting => ActiveTool is PaintTool;
 
@@ -266,6 +284,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(ActiveTool));
         OnPropertyChanged(nameof(IsPainting));
+        OnPropertyChanged(nameof(IsSelecting));
         OnPropertyChanged(nameof(ToolHint));
         OnToolMeasurementChanged(this, EventArgs.Empty);
     }
@@ -463,6 +482,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(IsEditingBlock));
         OnPropertyChanged(nameof(ContextName));
+        OnPropertyChanged(nameof(EditPath));
         OnPropertyChanged(nameof(EmphasizedPath));
     }
 

@@ -270,6 +270,50 @@ internal sealed class ViewportScene
     }
 
     /// <summary>
+    /// The faces and edges of the shapes of a block, reached through a path of references, that a window of the view
+    /// holds whole, or, when crossing, that it touches. The points are placed on the view by a projection, which gives
+    /// NaN for those behind the camera.
+    /// </summary>
+    public List<ElementReference> ElementsIn(
+        IReadOnlyList<Entity> block, Func<Point3d[], (double X, double Y)[]> project, WindowArea window, bool crossing)
+    {
+        var found = new List<ElementReference>();
+        foreach (ViewportInstance instance in _instances)
+        {
+            if (instance.Path.Count != block.Count + 1 || instance.Path[^1] is not BrepEntity ||
+                !StartsWith(instance.Path, block) || _meshShapes[instance.Mesh] is not { } shape)
+            {
+                continue;
+            }
+            (double X, double Y)[] corners = project([.. shape.Mesh.Vertices.Select(instance.Placement.Apply)]);
+            Triangle[] triangles = shape.Mesh.Triangles;
+            for (int face = 0; face < shape.FaceCount; face++)
+            {
+                Range range = shape.TrianglesOf(face);
+                (int start, int length) = range.GetOffsetAndLength(triangles.Length);
+                IEnumerable<((double X, double Y) A, (double X, double Y) B, (double X, double Y) C)> faceTriangles =
+                    triangles.Skip(start).Take(length).Select(t => (corners[t.A], corners[t.B], corners[t.C]));
+                if (length > 0 && (crossing ? faceTriangles.Any(window.Touches) : faceTriangles.All(window.Holds)))
+                {
+                    found.Add(new ElementReference(instance.Path, ElementKind.Face, face));
+                }
+            }
+            for (int polyline = 0; polyline < shape.Edges.Count; polyline++)
+            {
+                (double X, double Y)[] points = project([.. shape.Edges[polyline].ToArray().Select(instance.Placement.Apply)]);
+                bool selected = crossing
+                    ? points.Zip(points.Skip(1)).Any(segment => window.Touches(segment.First, segment.Second))
+                    : points.All(window.Holds);
+                if (selected)
+                {
+                    found.Add(new ElementReference(instance.Path, ElementKind.Edge, shape.EdgeIndices[polyline]));
+                }
+            }
+        }
+        return found;
+    }
+
+    /// <summary>
     /// Highlights elements as selected in the viewer that shows the scene, in place of those highlighted before; null
     /// for none. The elements that the scene does not show, as its shapes are being tessellated or no longer have them,
     /// are left out.
