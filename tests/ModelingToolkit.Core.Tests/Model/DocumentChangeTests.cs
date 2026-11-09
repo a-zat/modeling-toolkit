@@ -91,14 +91,11 @@ public sealed class DocumentChangeTests
 
         reference.Name = "Front leg";
         reference.Name = "Front leg";
-        reference.Material = material;
-        reference.Material = material;
         reference.Transform = Transform.Translation(10, 0, 0);
 
         Assert.Equal<DocumentChange>(
         [
             new PropertyChanged(reference, nameof(Entity.Name)),
-            new PropertyChanged(reference, nameof(Entity.Material)),
             new PropertyChanged(reference, nameof(BlockReference.Transform)),
         ], changes);
     }

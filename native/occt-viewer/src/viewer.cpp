@@ -41,7 +41,7 @@ struct mtk_viewer : mtk::Viewer {
 // The managed side declares the same layouts: these sizes must match the ones it checks in its tests.
 static_assert(sizeof(mtk_viewer_colors) == 144);
 static_assert(sizeof(mtk_viewer_material) == 28);
-static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 112);
+static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 120);
 static_assert(sizeof(mtk_viewer_element) == 12);
 static_assert(sizeof(mtk_viewer_pick) == 56);
 
@@ -329,14 +329,15 @@ occ::handle<AIS_InteractiveObject> mtk::Viewer::make_instance(int mesh, int mate
     if (const std::optional<gp_Trsf> placement = to_placement(transform)) {
         occ::handle<MeshObject>& shared = shared_meshes_[{mesh, material}];
         if (shared.IsNull()) {
-            shared = new MeshObject(meshes_[mesh], materials_[material], edge_aspects_);
+            shared = new MeshObject(meshes_[mesh], materials_[material], edge_aspects_, materials_);
         }
         occ::handle<ConnectedMesh> connected = new ConnectedMesh();
         connected->Connect(shared, *placement);
         instance = connected;
     } else {
         // Stretched or sheared: a copy of the triangles of its own.
-        instance = new MeshObject(transform_mesh(meshes_[mesh], transform), materials_[material], edge_aspects_);
+        instance = new MeshObject(transform_mesh(meshes_[mesh], transform), materials_[material], edge_aspects_,
+                                  materials_);
     }
     return instance;
 }
@@ -981,10 +982,18 @@ mtk_status mtk_viewer_add_mesh(mtk_viewer* viewer, const mtk_viewer_mesh* mesh, 
             return mtk::invalid_argument("viewer, mesh and out_mesh must not be null.");
         }
         const mtk_status status = check_mesh(*mesh);
-        if (status == MTK_STATUS_OK) {
-            *out_mesh = viewer->add_mesh(*mesh);
+        if (status != MTK_STATUS_OK) {
+            return status;
         }
-        return status;
+        if (mesh->face_first_triangles != nullptr && mesh->face_materials != nullptr) {
+            for (int32_t face = 0; face < mesh->face_count; ++face) {
+                if (mesh->face_materials[face] < -1 || mesh->face_materials[face] >= viewer->material_count()) {
+                    return mtk::invalid_argument("The material of a face must be one of the viewer, or -1.");
+                }
+            }
+        }
+        *out_mesh = viewer->add_mesh(*mesh);
+        return MTK_STATUS_OK;
     });
 }
 

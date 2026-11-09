@@ -40,7 +40,7 @@ internal sealed class NoKernel : IGeometryKernel
 
     public double ComputeVolume(IKernelShape shape) => throw new NotSupportedException();
 
-    public bool IsValid(IKernelShape shape) => throw new NotSupportedException();
+    public bool IsValid(IKernelShape shape) => true;
 
     public ShapeTopology CountElements(IKernelShape shape) => throw new NotSupportedException();
 

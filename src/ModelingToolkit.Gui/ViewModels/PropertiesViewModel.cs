@@ -9,10 +9,20 @@ namespace ModelingToolkit.Gui.ViewModels;
 /// <summary>A row of the properties panel.</summary>
 public sealed record PropertyRow(string Name, string Value);
 
-/// <summary>A material that an entity can take, or "By block" for none.</summary>
+/// <summary>A material that surfaces can take, or "Default" for none.</summary>
 public sealed record MaterialChoice(string Name, Material? Material)
 {
-    public static MaterialChoice ByBlock { get; } = new("By block", null);
+    public static MaterialChoice Default { get; } = new("Default", null);
+}
+
+/// <summary>Surfaces that take a material: a whole mesh, or faces of a shape.</summary>
+internal readonly record struct Surfaces(MeshEntity? Mesh, BrepEntity? Shape, int[] Faces)
+{
+    public IEnumerable<Material?> Materials => Mesh is { } mesh ? [mesh.Material] : Faces.Select(Shape!.MaterialOf);
+
+    public IEditCommand Paint(Material? material) => Mesh is { } mesh
+        ? new SetMeshMaterialCommand(mesh, material)
+        : new PaintFacesCommand(Shape!, Faces, material);
 }
 
 /// <summary>The properties of the selected node of the model tree, or of the faces, edges and vertices selected.</summary>
@@ -41,9 +51,23 @@ public sealed partial class PropertiesViewModel : ObservableObject
     /// <summary>Runs the commands that the panel makes, as the edits of its fields; null when nothing can be edited.</summary>
     public Func<IEditCommand, bool>? Edit { get; set; }
 
-    /// <summary>Whether the selection is an entity, whose name and material can be changed.</summary>
+    /// <summary>Whether the selection is an entity, whose name can be changed.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFields))]
     public partial bool IsEditable { get; private set; }
+
+    /// <summary>
+    /// Whether the selection has surfaces, whose material can be changed: a mesh, a shape, whose faces are all
+    /// painted at once, or faces. Edges, vertices and references have none.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFields))]
+    public partial bool HasMaterial { get; private set; }
+
+    /// <summary>Whether the selection has a field to edit: its name or its material.</summary>
+    public bool HasFields => IsEditable || HasMaterial;
+
+    private Surfaces[] _surfaces = [];
 
     /// <summary>The name of the entity, as typed: setting it renames the entity, or takes its name away when empty.</summary>
     public string EditedName
@@ -60,23 +84,56 @@ public sealed partial class PropertiesViewModel : ObservableObject
         }
     }
 
-    /// <summary>The materials of the document, after "By block".</summary>
+    /// <summary>The materials of the document, after "Default".</summary>
     [ObservableProperty]
     public partial IReadOnlyList<MaterialChoice> MaterialChoices { get; private set; } = [];
 
-    /// <summary>The material of the entity: choosing another one changes it.</summary>
+    /// <summary>
+    /// The material of the surfaces selected; null when they have different ones. Choosing one paints them all.
+    /// </summary>
     public MaterialChoice? SelectedMaterial
     {
-        get => _node?.Entity is { } entity ? MaterialChoices.FirstOrDefault(c => ReferenceEquals(c.Material, entity.Material)) : null;
+        get
+        {
+            Material?[] materials = [.. _surfaces.SelectMany(surfaces => surfaces.Materials).Distinct()];
+            return materials.Length == 1
+                ? MaterialChoices.FirstOrDefault(choice => ReferenceEquals(choice.Material, materials[0]))
+                : null;
+        }
         set
         {
             // The list clears its selection when its items change: that is not a choice.
-            if (value is not null && _node?.Entity is { } entity && !ReferenceEquals(value.Material, entity.Material))
+            if (value is not null && _surfaces.Length > 0 &&
+                _surfaces.SelectMany(surfaces => surfaces.Materials).Any(material => !ReferenceEquals(material, value.Material)))
             {
-                Edit?.Invoke(new SetMaterialCommand(entity, value.Material));
+                IEditCommand[] commands = [.. _surfaces.Select(surfaces => surfaces.Paint(value.Material))];
+                Edit?.Invoke(commands.Length == 1 ? commands[0] : new CompositeCommand("Paint", commands));
             }
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>Whether the surfaces selected have different materials.</summary>
+    public bool IsMixedMaterial => _surfaces.SelectMany(surfaces => surfaces.Materials).Distinct().Skip(1).Any();
+
+    // The materials to choose from: those of the document, and those of the surfaces that it does not list.
+    private void ShowMaterials(Surfaces[] surfaces)
+    {
+        _surfaces = surfaces;
+        HasMaterial = surfaces.Length > 0;
+        List<MaterialChoice> choices = [MaterialChoice.Default];
+        IEnumerable<Material> materials = _document?.Materials ?? [];
+        foreach (Material material in surfaces.SelectMany(surface => surface.Materials).OfType<Material>())
+        {
+            if (!materials.Contains(material))
+            {
+                materials = materials.Append(material);
+            }
+        }
+        choices.AddRange(materials.Select(material => new MaterialChoice(material.Name, material)));
+        MaterialChoices = choices;
+        OnPropertyChanged(nameof(SelectedMaterial));
+        OnPropertyChanged(nameof(IsMixedMaterial));
     }
 
     private ModelNodeViewModel? _node;
@@ -107,19 +164,13 @@ public sealed partial class PropertiesViewModel : ObservableObject
     {
         _node = node;
         IsEditable = node?.Entity is not null;
-        List<MaterialChoice> choices = [MaterialChoice.ByBlock];
-        if (node?.Entity is { } entity)
+        ShowMaterials(node?.Entity switch
         {
-            IEnumerable<Material> materials = _document?.Materials ?? [];
-            if (entity.Material is { } own && !materials.Contains(own))
-            {
-                materials = materials.Append(own);
-            }
-            choices.AddRange(materials.Select(material => new MaterialChoice(material.Name, material)));
-        }
-        MaterialChoices = choices;
+            MeshEntity mesh => [new Surfaces(mesh, null, [])],
+            BrepEntity shape => [new Surfaces(null, shape, [.. Enumerable.Range(0, shape.Kernel.CountElements(shape.Shape).Faces)])],
+            _ => [],
+        });
         OnPropertyChanged(nameof(EditedName));
-        OnPropertyChanged(nameof(SelectedMaterial));
         HasSelection = node is not null;
         Title = node?.Name ?? string.Empty;
         Kind = node switch
@@ -158,6 +209,10 @@ public sealed partial class PropertiesViewModel : ObservableObject
         }
 
         HasSelection = true;
+        // The faces selected take a material, shape by shape; edges and vertices have none.
+        ShowMaterials([.. elements.Where(element => element.Kind == ElementKind.Face)
+            .GroupBy(element => element.Entity)
+            .Select(faces => new Surfaces(null, faces.Key, [.. faces.Select(face => face.Index).Distinct()]))]);
         if (elements.Count == 1)
         {
             ElementReference element = elements[0];

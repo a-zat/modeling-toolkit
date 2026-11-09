@@ -10,9 +10,9 @@ namespace ModelingToolkit.IO.Native;
 /// A shape file is the shape as the geometry kernel writes it, in the BRep text format of OpenCASCADE.
 /// <para>
 /// The manifest holds the version of the format the file was written in; files are always written in the current
-/// one. The files of older versions are read, and migrated if needed, those of newer or unknown versions refused. A
-/// change that older readers would misread needs a new version. Version 2 added the shapes, so the files of version
-/// 1 are read as they are.
+/// one, and only files of that version are read. A change that older readers would misread needs a new version.
+/// Version 2 added the shapes; version 3 moved the materials to the surfaces, a mesh having one and each face of a
+/// shape its own, references having none.
 /// </para>
 /// </remarks>
 public static class NativeFormat
@@ -20,7 +20,7 @@ public static class NativeFormat
     public const string Extension = ".mtk";
 
     internal const string FormatId = "modeling-toolkit";
-    internal const int Version = 2;
+    internal const int Version = 3;
     internal const string Units = "mm";
     internal const string UpAxis = "Z";
     internal const string ManifestEntry = "manifest.json";

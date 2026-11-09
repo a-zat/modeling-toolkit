@@ -55,23 +55,23 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public async Task ChoosingAMaterialChangesItAndByBlockTakesItAway()
+    public async Task ChoosingAMaterialChangesItAndDefaultTakesItAway()
     {
         MainWindowViewModel viewModel = await OpenBox();
-        ModelNodeViewModel mesh = SelectMesh(viewModel);
-        Material own = mesh.Entity!.Material!;
-        Assert.Equal(["By block", own.Name], viewModel.Properties.MaterialChoices.Select(choice => choice.Name));
+        var mesh = (MeshEntity)SelectMesh(viewModel).Entity!;
+        Material own = mesh.Material!;
+        Assert.Equal(["Default", own.Name], viewModel.Properties.MaterialChoices.Select(choice => choice.Name));
         Assert.Same(own, viewModel.Properties.SelectedMaterial!.Material);
 
         viewModel.Properties.SelectedMaterial = null; // as the list does when its items change
         Assert.False(viewModel.UndoCommand.CanExecute(null));
 
-        viewModel.Properties.SelectedMaterial = MaterialChoice.ByBlock;
-        Assert.Null(mesh.Entity.Material);
-        Assert.Same(MaterialChoice.ByBlock, viewModel.Properties.SelectedMaterial);
+        viewModel.Properties.SelectedMaterial = MaterialChoice.Default;
+        Assert.Null(mesh.Material);
+        Assert.Same(MaterialChoice.Default, viewModel.Properties.SelectedMaterial);
 
         viewModel.UndoCommand.Execute(null);
-        Assert.Same(own, mesh.Entity.Material);
+        Assert.Same(own, mesh.Material);
     }
 
     [Fact]

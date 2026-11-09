@@ -106,14 +106,12 @@ public sealed class NativeDocumentWriter : IDocumentWriter
 
         private EntityEntry ToEntry(Entity entity)
         {
-            int? material = entity.Material is null ? null : Find(_materials, entity.Material, "material");
             return entity switch
             {
-                MeshEntity mesh => WriteMesh(mesh, material),
-                BrepEntity brep => WriteShape(brep, material),
+                MeshEntity mesh => WriteMesh(mesh, mesh.Material is null ? null : Find(_materials, mesh.Material, "material")),
+                BrepEntity brep => WriteShape(brep),
                 BlockReference reference => new BlockReferenceEntry(
                     reference.Name,
-                    material,
                     Find(_blocks, reference.Block, "block"),
                     [
                         reference.Transform.M00, reference.Transform.M01, reference.Transform.M02, reference.Transform.M03,
@@ -151,7 +149,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                 mesh.TextureCoordinates is not null);
         }
 
-        private BrepEntry WriteShape(BrepEntity brep, int? material)
+        private BrepEntry WriteShape(BrepEntity brep)
         {
             _steps.Next();
             string path = $"shapes/{_shapeCount++}.brep";
@@ -159,7 +157,11 @@ public sealed class NativeDocumentWriter : IDocumentWriter
             {
                 stream.Write(brep.Kernel.Serialize(brep.Shape));
             }
-            return new BrepEntry(brep.Name, material, path);
+            List<FaceMaterialEntry>? faces = brep.FaceMaterials.Count == 0
+                ? null
+                : [.. brep.FaceMaterials.OrderBy(pair => pair.Key)
+                    .Select(pair => new FaceMaterialEntry(pair.Key, Find(_materials, pair.Value, "material")))];
+            return new BrepEntry(brep.Name, path, faces);
         }
 
         private static Dictionary<T, int> IndexOf<T>(IList<T> items)

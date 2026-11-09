@@ -245,7 +245,7 @@ public sealed partial class ModelNodeViewModel : ObservableObject
                 return (name, name == reference.Block.Name ? null : reference.Block.Name);
             case MeshEntity mesh:
                 // The meshes read from glTF files have no names: their materials tell them apart.
-                return (entity.Name ?? entity.Material?.Name ?? "Mesh", $"{Formatting.Count(mesh.Triangles.Length)} triangles");
+                return (entity.Name ?? mesh.Material?.Name ?? "Mesh", $"{Formatting.Count(mesh.Triangles.Length)} triangles");
             case BrepEntity shape:
                 return (entity.Name ?? "Geometry", ShapeDetail(shape));
             default:

@@ -6,6 +6,23 @@ namespace ModelingToolkit.Core.Model;
 /// <summary>Triangle mesh. The entity owns the arrays it is created with.</summary>
 public sealed class MeshEntity : Entity
 {
+    /// <summary>
+    /// The material of all the triangles of the mesh, which is one surface: a mesh has no faces of its own. Null for
+    /// the default material.
+    /// </summary>
+    public Material? Material
+    {
+        get;
+        set
+        {
+            if (!ReferenceEquals(field, value))
+            {
+                field = value;
+                Raise(new PropertyChanged(this, nameof(Material)));
+            }
+        }
+    }
+
     public MeshEntity(
         Point3d[] vertices,
         Triangle[] triangles,

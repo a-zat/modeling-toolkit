@@ -35,6 +35,8 @@ struct Mesh {
     bool has_own_edges = false;               // otherwise the display modes with edges draw those of the triangles
     occ::handle<Graphic3d_ArrayOfPolylines> edges; // null when it has none
     std::shared_ptr<const Elements> elements;      // null for a mesh picked as a whole
+    // With elements, the material of each face, -1 for the one of the instance; empty for that one everywhere.
+    std::vector<int32_t> face_materials;
 };
 
 // The owner of a face, an edge or a vertex of the shape that an object shows, picked with priority to vertices, then
@@ -105,7 +107,9 @@ public:
     static constexpr int shaded_mode = 0;
     static constexpr int faded_mode = 1;
 
-    MeshObject(const Mesh& mesh, const MaterialAspects& aspects, const EdgeAspects& edge_aspects);
+    // materials: those of the viewer, which the faces with materials of their own take, kept by the viewer.
+    MeshObject(const Mesh& mesh, const MaterialAspects& aspects, const EdgeAspects& edge_aspects,
+               const std::vector<MaterialAspects>& materials);
 
     bool AcceptDisplayMode(const int mode) const override { return mode == shaded_mode || mode == faded_mode; }
 
@@ -121,6 +125,7 @@ private:
     Mesh mesh_;
     MaterialAspects aspects_;
     EdgeAspects edge_aspects_;
+    const std::vector<MaterialAspects>* materials_;
 };
 
 // A mesh object placed by a transformation, sharing its presentations. Unlike AIS_ConnectedInteractive, whose owners

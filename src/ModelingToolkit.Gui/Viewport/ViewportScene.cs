@@ -16,10 +16,10 @@ internal sealed record ShapeMesh(BrepEntity Entity, IKernelShape Shape, ShapeTes
 
 /// <summary>
 /// What the 3D view shows of a document: each mesh, material and texture once, and an instance for each placement of a
-/// mesh, through the block references that reach it from the model space. A mesh without a material takes the one of
-/// the closest reference that has one, "by block", or <see cref="DefaultMaterial"/>. The instances follow the order of
-/// the model tree, so that those of a node are consecutive. A B-rep shape is shown as its tessellation, made once, for
-/// a deflection that is a fraction of the size of the shape.
+/// mesh, through the block references that reach it from the model space. A mesh without a material, and a face of a
+/// shape without one, take <see cref="DefaultMaterial"/>. The instances follow the order of the model tree, so that
+/// those of a node are consecutive. A B-rep shape is shown as its tessellation, made once, for a deflection that is a
+/// fraction of the size of the shape, with the materials of its faces.
 /// </summary>
 /// <remarks>
 /// The scene follows the changes of the document through <see cref="Update"/>, which walks the model again, cheaply as
@@ -39,10 +39,12 @@ internal sealed class ViewportScene
     private readonly List<MeshEntity?> _meshes = [];
     private readonly List<Polylines?> _meshEdges = [];
     private readonly List<ShapeTessellation?> _meshShapes = []; // for the meshes of shapes, picked by their elements
+    private readonly List<int[]?> _meshFaceMaterials = []; // of the faces of the meshes of shapes painted, -1 for none
     private readonly List<Material> _materials = [];
     private readonly List<int> _materialTextures = [];
     private readonly List<Texture> _textures = [];
-    private readonly Dictionary<MeshEntity, int> _meshIndices = new(ReferenceEqualityComparer.Instance);
+    // A mesh once for each painting of its faces: the materials of the faces, as a key, empty for none.
+    private readonly Dictionary<(MeshEntity Mesh, string FaceMaterials), int> _meshIndices = [];
     private readonly Dictionary<Material, int> _materialIndices = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Texture, int> _textureIndices = new(ReferenceEqualityComparer.Instance);
 
@@ -319,7 +321,7 @@ internal sealed class ViewportScene
         var instances = new List<ViewportInstance>();
         _reachedShapes = [];
         var reached = new HashSet<BrepEntity>(ReferenceEqualityComparer.Instance);
-        Visit(_root, Transform.Identity, inherited: null, [], instances, reached);
+        Visit(_root, Transform.Identity, [], instances, reached);
 
         // The tessellations of the shapes no longer in the model are of no use.
         foreach (BrepEntity gone in _tessellations.Keys.Where(brep => !reached.Contains(brep)).ToList())
@@ -330,10 +332,8 @@ internal sealed class ViewportScene
     }
 
     /// <param name="placement">From the coordinates of the block to those of the model space.</param>
-    /// <param name="inherited">The material "by block": the one of the closest reference that has one.</param>
     private void Visit(
-        Block block, Transform placement, Material? inherited, List<Entity> path, List<ViewportInstance> instances,
-        HashSet<BrepEntity> reached)
+        Block block, Transform placement, List<Entity> path, List<ViewportInstance> instances, HashSet<BrepEntity> reached)
     {
         foreach (Entity entity in block.Entities)
         {
@@ -341,23 +341,22 @@ internal sealed class ViewportScene
             switch (entity)
             {
                 case MeshEntity mesh when mesh.Triangles.Length > 0:
-                    instances.Add(new(IndexOf(mesh, null), IndexOf(entity.Material ?? inherited), placement, [.. path]));
+                    instances.Add(new(IndexOf(mesh, null, null), IndexOf(mesh.Material), placement, [.. path]));
                     break;
                 case BrepEntity brep:
                     if (reached.Add(brep))
                     {
                         _reachedShapes.Add(brep);
                     }
-                    if (_tessellations.GetValueOrDefault(brep)?.Tessellation is { } tessellation)
+                    if (_tessellations.GetValueOrDefault(brep) is { Tessellation: { } tessellation } shown)
                     {
                         instances.Add(new(
-                            IndexOf(tessellation.Mesh, tessellation), IndexOf(entity.Material ?? inherited),
+                            IndexOf(tessellation.Mesh, tessellation, FaceMaterialsOf(brep, shown)), IndexOf(DefaultMaterial),
                             placement, [.. path]));
                     }
                     break;
                 case BlockReference reference:
-                    Visit(reference.Block, placement * reference.Transform, reference.Material ?? inherited, path,
-                        instances, reached);
+                    Visit(reference.Block, placement * reference.Transform, path, instances, reached);
                     break;
             }
             path.RemoveAt(path.Count - 1);
@@ -497,7 +496,9 @@ internal sealed class ViewportScene
             {
                 try
                 {
-                    shown = viewer.AddMesh(mesh, _meshEdges[index], _meshShapes[index]);
+                    int[]? faceMaterials = _meshFaceMaterials[index]?
+                        .Select(material => material < 0 ? -1 : _shownMaterials[material]).ToArray();
+                    shown = viewer.AddMesh(mesh, _meshEdges[index], _meshShapes[index], faceMaterials);
                 }
                 catch (ArgumentException)
                 {
@@ -524,10 +525,11 @@ internal sealed class ViewportScene
             {
                 viewer.RemoveMesh(_shownMeshes[index]);
             }
-            _meshIndices.Remove(mesh);
+            _meshIndices.Remove((mesh, Key(_meshFaceMaterials[index])));
             _meshes[index] = null;
             _meshEdges[index] = null;
             _meshShapes[index] = null;
+            _meshFaceMaterials[index] = null;
         }
     }
 
@@ -547,17 +549,38 @@ internal sealed class ViewportScene
         return true;
     }
 
-    private static string NameOf(BrepEntity brep) => brep.Name ?? brep.Material?.Name ?? "A shape";
+    private static string NameOf(BrepEntity brep) => brep.Name ?? "A shape";
 
-    private int IndexOf(MeshEntity mesh, ShapeTessellation? shape)
+    // The materials of the faces of a shape shown by a tessellation, as indices into the materials of the scene, -1
+    // for the faces that have none; null for a shape without any. Those of a shape that is being tessellated anew are
+    // left out: they are of the faces of the new shape.
+    private int[]? FaceMaterialsOf(BrepEntity brep, ShapeMesh shown)
     {
-        if (!_meshIndices.TryGetValue(mesh, out int index))
+        if (brep.FaceMaterials.Count == 0 || !ReferenceEquals(shown.Shape, brep.Shape) || shown.Tessellation is null)
         {
-            index = _meshIndices[mesh] = _meshes.Count;
+            return null;
+        }
+
+        int[] materials = new int[shown.Tessellation.FaceCount];
+        for (int face = 0; face < materials.Length; face++)
+        {
+            materials[face] = brep.MaterialOf(face) is { } material ? IndexOf(material) : -1;
+        }
+        return materials;
+    }
+
+    private static string Key(int[]? faceMaterials) => faceMaterials is null ? string.Empty : string.Join(',', faceMaterials);
+
+    private int IndexOf(MeshEntity mesh, ShapeTessellation? shape, int[]? faceMaterials)
+    {
+        if (!_meshIndices.TryGetValue((mesh, Key(faceMaterials)), out int index))
+        {
+            index = _meshIndices[(mesh, Key(faceMaterials))] = _meshes.Count;
             _meshes.Add(mesh);
             // A mesh read from a file has no edges but those of its triangles: the sharp ones outline it.
             _meshEdges.Add(shape?.Edges ?? SharpEdges.Of(mesh.Vertices, mesh.Triangles));
             _meshShapes.Add(shape);
+            _meshFaceMaterials.Add(faceMaterials);
         }
 
         return index;

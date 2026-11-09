@@ -72,21 +72,32 @@ public sealed class ViewportSceneUpdateTests
     }
 
     [Fact]
-    public void AMaterialByBlockReachesTheInstancesOfTheReference()
+    public void PaintingFacesShowsTheShapeWithAMeshOfItsMaterials()
     {
-        var wheel = new Block("Wheel") { Entities = { Square(), Square(new Material("Own")) } };
-        var reference = new BlockReference(wheel, Transform.Identity);
+        var brep = new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10));
+        var part = new Block("Part") { Entities = { brep } };
         var document = new Document();
-        document.Blocks.Add(wheel);
-        document.Root.Entities.Add(reference);
+        document.Blocks.Add(part);
+        document.Root.Entities.Add(new BlockReference(part, Transform.Identity));
+        document.Root.Entities.Add(new BlockReference(part, Transform.Translation(20, 0, 0)));
         (ViewportScene scene, RecordingViewer viewer) = Show(document);
         var red = new Material("Red");
 
-        reference.Material = red;
+        brep.Paint([2, 4], red);
         scene.Update();
 
-        Assert.Equal(["set instance 0"], viewer.Changes);
-        Assert.Same(red, viewer.Materials[viewer.Instances[0].Material]);
+        // Both placements show the painted faces, which the block holds; the tessellation is not made again.
+        Assert.Equal(["add mesh 1", "set instance 0", "set instance 1", "remove mesh 0"], viewer.Changes);
+        int[] faces = viewer.FaceMaterials[1];
+        Assert.Same(red, viewer.Materials[faces[2]]);
+        Assert.Equal([-1, -1, faces[2], -1, faces[2], -1], faces);
+        Assert.Empty(scene.TakeShapesToTessellate());
+
+        viewer.Forget();
+        brep.Paint([2, 4], null);
+        scene.Update();
+        Assert.Equal(["add mesh 2", "set instance 0", "set instance 1", "remove mesh 1"], viewer.Changes);
+        Assert.False(viewer.FaceMaterials.ContainsKey(2));
     }
 
     [Fact]

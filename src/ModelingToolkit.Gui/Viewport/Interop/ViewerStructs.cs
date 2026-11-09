@@ -59,6 +59,7 @@ internal unsafe struct NativeMesh
     public int* EdgeIndices;
     public double* ShapeVertices;
     public int ShapeVertexCount;
+    public int* FaceMaterials;
 }
 
 /// <summary>What a pick finds, as the viewer gives it.</summary>

@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 13
+#define MTK_OCCT_VIEWER_ABI_VERSION 14
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -143,6 +143,9 @@ typedef struct mtk_viewer_mesh {
     const int32_t* edge_indices;
     const double* shape_vertices;
     int32_t shape_vertex_count;
+    /* With faces, the material of each, face_count values: a material of the viewer, or -1 for the one of the
+     * instance; null for the material of the instance everywhere. Ignored without faces. */
+    const int32_t* face_materials;
 } mtk_viewer_mesh;
 
 /* A material of the metallic-roughness model of glTF. */

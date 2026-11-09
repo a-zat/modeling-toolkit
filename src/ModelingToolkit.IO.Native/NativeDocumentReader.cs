@@ -105,9 +105,10 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 throw new InvalidDataException(
                     $"Format version {manifest.Version} is newer than the supported one ({NativeFormat.Version}).");
             }
-            if (manifest.Version < 1)
+            if (manifest.Version < NativeFormat.Version)
             {
-                throw new InvalidDataException($"Format version {manifest.Version} does not exist.");
+                throw new InvalidDataException(
+                    $"Format version {manifest.Version} is no longer read: save the model again from its source.");
             }
             if (manifest.Units != NativeFormat.Units || manifest.UpAxis != NativeFormat.UpAxis)
             {
@@ -173,18 +174,17 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             {
                 Entity entity = entityEntry switch
                 {
-                    MeshEntry mesh => ReadMesh(mesh),
-                    BrepEntry shape => ReadShape(shape),
+                    MeshEntry mesh => ReadMesh(mesh, document.Materials),
+                    BrepEntry shape => ReadShape(shape, document.Materials),
                     BlockReferenceEntry reference => ToBlockReference(reference, document.Blocks),
                     _ => throw new InvalidDataException($"Unknown entity in block '{entry.Name}'."),
                 };
                 entity.Name = entityEntry.Name;
-                entity.Material = entityEntry.Material is int material ? At(document.Materials, material, "material") : null;
                 block.Entities.Add(entity);
             }
         }
 
-        private MeshEntity ReadMesh(MeshEntry entry)
+        private MeshEntity ReadMesh(MeshEntry entry, IList<Material> materials)
         {
             _steps.Next();
             ZipArchiveEntry file = Entry(entry.Path);
@@ -212,7 +212,10 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                     stream.ReadExactly(MemoryMarshal.AsBytes(textureCoordinates.AsSpan()));
                 }
             }
-            return new MeshEntity(vertices, triangles, normals, textureCoordinates);
+            return new MeshEntity(vertices, triangles, normals, textureCoordinates)
+            {
+                Material = entry.Material is int material ? At(materials, material, "material") : null,
+            };
         }
 
         // The bytes of a mesh file with the counts and the arrays of a manifest entry; see NativeFormat.
@@ -224,13 +227,22 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             return perVertex * entry.VertexCount + (long)Unsafe.SizeOf<Triangle>() * entry.TriangleCount;
         }
 
-        private BrepEntity ReadShape(BrepEntry entry)
+        private BrepEntity ReadShape(BrepEntry entry, IList<Material> materials)
         {
             _steps.Next();
             using Stream stream = Entry(entry.Path).Open();
             using var data = new MemoryStream();
             stream.CopyTo(data);
-            return new BrepEntity(kernel, kernel.Deserialize(data.ToArray()));
+            var faceMaterials = new Dictionary<int, Material>();
+            foreach (FaceMaterialEntry face in entry.FaceMaterials ?? [])
+            {
+                if (face.Face < 0)
+                {
+                    throw new InvalidDataException($"'{entry.Path}' paints a face of negative index.");
+                }
+                faceMaterials[face.Face] = At(materials, face.Material, "material");
+            }
+            return new BrepEntity(kernel, kernel.Deserialize(data.ToArray()), faceMaterials);
         }
 
         private static BlockReference ToBlockReference(BlockReferenceEntry entry, IList<Block> blocks)

@@ -14,7 +14,11 @@ internal interface IViewerScene
 {
     /// <exception cref="ArgumentException">The viewer refuses the mesh: positions that are not finite, for example.</exception>
     /// <param name="shape">The tessellation the mesh is part of, whose elements are picked; null for a plain mesh.</param>
-    int AddMesh(MeshEntity mesh, Polylines? edges, ShapeTessellation? shape);
+    /// <param name="faceMaterials">
+    /// With a shape, the material of each of its faces, as returned by <see cref="AddMaterial"/>, or -1 for the one of
+    /// the instance; null for that one everywhere.
+    /// </param>
+    int AddMesh(MeshEntity mesh, Polylines? edges, ShapeTessellation? shape, int[]? faceMaterials);
 
     void RemoveMesh(int mesh);
 

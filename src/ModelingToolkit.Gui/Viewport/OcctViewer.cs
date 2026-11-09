@@ -111,8 +111,13 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
     /// mesh picked as a whole.
     /// </param>
     /// <exception cref="ArgumentException">The mesh has no triangles, or positions that are not finite.</exception>
-    public unsafe int AddMesh(MeshEntity mesh, Polylines? edges = null, ShapeTessellation? shape = null)
+    public unsafe int AddMesh(
+        MeshEntity mesh, Polylines? edges = null, ShapeTessellation? shape = null, int[]? faceMaterials = null)
     {
+        if (faceMaterials is not null && (shape is null || faceMaterials.Length != shape.FaceCount))
+        {
+            throw new ArgumentException("The materials of the faces need one per face of the shape.", nameof(faceMaterials));
+        }
         int[]? faces = shape is null
             ? null
             : [.. Enumerable.Range(0, shape.FaceCount).Select(face => shape.TrianglesOf(face).Start.Value),
@@ -127,6 +132,7 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         fixed (int* faceFirstTriangles = faces)
         fixed (int* edgeIndices = shape is null ? default : shape.EdgeIndices)
         fixed (Point3d* shapeVertices = shape is null ? default : shape.Vertices)
+        fixed (int* materials = faceMaterials)
         {
             var native = new NativeMesh
             {
@@ -146,6 +152,7 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
                 EdgeIndices = edgeIndices,
                 ShapeVertices = (double*)shapeVertices,
                 ShapeVertexCount = shape?.Vertices.Length ?? 0,
+                FaceMaterials = materials,
             };
             NativeMethods.AddMesh(_handle, in native, out int index).ThrowIfFailed();
             return index;

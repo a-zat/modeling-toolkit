@@ -126,7 +126,7 @@ public sealed class NativeFormatTests : IDisposable
         using Stream stream = archive.GetEntry("manifest.json")!.Open();
         using JsonDocument manifest = JsonDocument.Parse(stream);
         Assert.Equal("modeling-toolkit", manifest.RootElement.GetProperty("format").GetString());
-        Assert.Equal(2, manifest.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(3, manifest.RootElement.GetProperty("version").GetInt32());
         Assert.Equal("mm", manifest.RootElement.GetProperty("units").GetString());
     }
 
@@ -137,10 +137,10 @@ public sealed class NativeFormatTests : IDisposable
         var document = new Document();
         document.Materials.Add(steel);
         using var cylinder = _kernel.MakeCylinder(10, 40);
-        var shaftEntity = new BrepEntity(_kernel, _kernel.Place(cylinder, RotatedAndMoved))
+        var shaftEntity = new BrepEntity(
+            _kernel, _kernel.Place(cylinder, RotatedAndMoved), new Dictionary<int, Material> { [0] = steel, [2] = steel })
         {
             Name = "Shaft",
-            Material = steel,
         };
         var pin = new Block("Pin") { Entities = { shaftEntity } };
         document.Blocks.Add(pin);
@@ -154,14 +154,15 @@ public sealed class NativeFormatTests : IDisposable
         Material material = Assert.Single(copy.Materials);
         BrepEntity box = Assert.IsType<BrepEntity>(copy.Root.Entities[0]);
         Assert.Null(box.Name);
-        Assert.Null(box.Material);
+        Assert.Empty(box.FaceMaterials);
         Assert.Equal(6000, _kernel.ComputeVolume(box.Shape), precision: 6);
         Assert.Equal(new Point3d(10, 20, 30), box.GetBoundingBox().Max);
 
         BlockReference reference = Assert.IsType<BlockReference>(copy.Root.Entities[1]);
         BrepEntity shaft = Assert.IsType<BrepEntity>(Assert.Single(reference.Block.Entities));
         Assert.Equal("Shaft", shaft.Name);
-        Assert.Same(material, shaft.Material);
+        Assert.Equal([0, 2], shaft.FaceMaterials.Keys.Order());
+        Assert.All(shaft.FaceMaterials.Values, painted => Assert.Same(material, painted));
         Assert.Equal(Math.PI * 10 * 10 * 40, _kernel.ComputeVolume(shaft.Shape), precision: 3);
         BoundingBox expected = shaftEntity.GetBoundingBox();
         BoundingBox actual = shaft.GetBoundingBox();
@@ -175,15 +176,16 @@ public sealed class NativeFormatTests : IDisposable
         Assert.Null(archive.GetEntry("shapes/2.brep"));
     }
 
-    [Fact]
-    public void Files_of_version_one_are_still_read()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)] // the materials were of entities
+    public void Files_of_older_versions_are_no_longer_read(int version)
     {
-        string path = Archive("old.mtk", """
-            {"format": "modeling-toolkit", "version": 1, "units": "mm", "upAxis": "Z", "textures": [],
-             "materials": [], "root": {"name": "Old", "entities": []}, "blocks": []}
-            """);
+        string path = Archive("old.mtk", Manifest($$"""{"version": {{version}}}"""));
 
-        Assert.Equal("Old", _reader.Read(path, []).Root.Name);
+        var exception = Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+
+        Assert.Contains($"version {version} is no longer read", exception.Message);
     }
 
     [Fact]
@@ -203,6 +205,32 @@ public sealed class NativeFormatTests : IDisposable
         var exception = Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
 
         Assert.Contains("not a shape", exception.Message);
+    }
+
+    [Fact]
+    public void A_face_painted_with_a_material_that_the_file_lacks_makes_it_invalid()
+    {
+        var document = new Document();
+        var paint = new Material("Paint");
+        document.Materials.Add(paint);
+        document.Root.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(1, 1, 1), new Dictionary<int, Material> { [3] = paint }));
+        string path = PathOf("unpainted.mtk");
+        _writer.Write(document, path);
+        using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Update))
+        {
+            ZipArchiveEntry entry = archive.GetEntry("manifest.json")!;
+            JsonNode manifest;
+            using (Stream stream = entry.Open())
+            {
+                manifest = JsonNode.Parse(stream)!;
+            }
+            manifest["materials"] = new JsonArray();
+            entry.Delete();
+            using var writer = new StreamWriter(archive.CreateEntry("manifest.json").Open());
+            writer.Write(manifest.ToJsonString());
+        }
+
+        Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
     }
 
     [Fact]
@@ -226,7 +254,7 @@ public sealed class NativeFormatTests : IDisposable
     }
 
     [Theory]
-    [InlineData(3)] // newer than this reader
+    [InlineData(4)] // newer than this reader
     [InlineData(0)]
     [InlineData(-1)]
     public void Versions_that_this_reader_does_not_know_are_rejected(int version)
@@ -355,7 +383,6 @@ public sealed class NativeFormatTests : IDisposable
     [InlineData("""{"root": {"name": "Model", "entities": [{"type": "brep", "path": "shapes/9.brep"}]}}""")]
     [InlineData("""{"root": {"name": "Model", "entities": [{"type": "blockReference", "block": 0, "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}]}}""")]
     [InlineData("""{"root": {"name": "Model", "entities": [{"type": "blockReference", "block": 0, "transform": [1, 0, 0]}]}, "blocks": [{"name": "b", "entities": []}]}""")]
-    [InlineData("""{"root": {"name": "Model", "entities": [{"type": "blockReference", "block": 0, "material": 0, "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}]}, "blocks": [{"name": "b", "entities": []}]}""")]
     [InlineData("""{"materials": [{"name": "m", "baseColor": [1, 1, 1, 1], "metallic": 0, "roughness": 1, "baseColorTexture": 0}]}""")]
     [InlineData("""{"materials": [{"name": "m", "baseColor": [1, 1, 1], "metallic": 0, "roughness": 1}]}""")]
     [InlineData("""{"blocks": [{"name": "b", "entities": [{"type": "blockReference", "block": 0, "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}]}]}""")]
@@ -391,7 +418,7 @@ public sealed class NativeFormatTests : IDisposable
     private static string Manifest(string changes)
     {
         var manifest = (JsonObject)JsonNode.Parse("""
-            {"format": "modeling-toolkit", "version": 2, "units": "mm", "upAxis": "Z", "textures": [],
+            {"format": "modeling-toolkit", "version": 3, "units": "mm", "upAxis": "Z", "textures": [],
              "materials": [], "root": {"name": "Model", "entities": []}, "blocks": []}
             """)!;
         foreach ((string name, JsonNode? value) in

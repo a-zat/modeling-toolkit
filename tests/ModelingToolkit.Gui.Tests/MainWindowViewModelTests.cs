@@ -212,7 +212,9 @@ public sealed class MainWindowViewModelTests
         var kernel = new OcctKernel();
         var document = new Document();
         var steel = new Material("Steel");
-        document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(100, 200, 300)) { Material = steel });
+        // All the faces of the first box painted with steel: its material.
+        document.Root.Entities.Add(new BrepEntity(
+            kernel, kernel.MakeBox(100, 200, 300), Enumerable.Range(0, 6).ToDictionary(face => face, _ => steel)));
         document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(10, 10, 10)) { Name = "Cube" });
         viewModel.ModelTree.Show(document);
 

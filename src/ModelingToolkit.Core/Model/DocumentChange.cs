@@ -36,8 +36,8 @@ public sealed record BlockAdded(Block Block) : DocumentChange;
 public sealed record BlockRemoved(Block Block) : DocumentChange;
 
 /// <summary>
-/// A property of an entity or a block changed: <see cref="Entity.Name"/>, <see cref="Entity.Material"/>,
-/// <see cref="BlockReference.Transform"/> or <see cref="Block.Name"/>.
+/// A property of an entity or a block changed: <see cref="Entity.Name"/>, <see cref="MeshEntity.Material"/>,
+/// <see cref="BrepEntity.FaceMaterials"/>, <see cref="BlockReference.Transform"/> or <see cref="Block.Name"/>.
 /// </summary>
 /// <param name="Target">The entity or the block.</param>
 /// <param name="Property">The name of the property, as <c>nameof</c> gives it.</param>

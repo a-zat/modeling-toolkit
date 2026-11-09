@@ -334,6 +334,28 @@ TEST(Viewer, HighlightsTheElementsOfTheShapesOfItsInstances) {
     EXPECT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
 }
 
+TEST(Viewer, ShowsTheFacesOfAShapeInMaterialsOfTheirOwn) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t grey_material = add_material(viewer.get(), grey());
+    const int32_t red = add_material(viewer.get(), grey());
+    const std::array<int32_t, 2> face_materials{red, -1}; // the second face takes the material of the instance
+    mtk_viewer_mesh mesh = SquareShape().mesh();
+    mesh.face_materials = face_materials.data();
+    const int32_t shape = add_mesh(viewer.get(), mesh);
+    const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    add_instance(viewer.get(), shape, grey_material, identity);
+    add_instance(viewer.get(), shape, grey_material, stretched);
+    EXPECT_EQ(mtk_viewer_set_render_style(viewer.get(), MTK_VIEWER_RENDER_CAD), MTK_STATUS_OK);
+
+    for (const int32_t wrong : {2, -2}) {
+        const std::array<int32_t, 2> unknown{wrong, -1};
+        mesh.face_materials = unknown.data();
+        int32_t index = -1;
+        EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), &mesh, &index), MTK_STATUS_INVALID_ARGUMENT) << wrong;
+    }
+}
+
 TEST(Viewer, RejectsElementsItCannotShow) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);

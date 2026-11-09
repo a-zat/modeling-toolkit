@@ -6,6 +6,8 @@
 #include <Graphic3d_AspectMarker3d.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <Graphic3d_Group.hxx>
+#include <Graphic3d_IndexBuffer.hxx>
+#include <Graphic3d_BoundBuffer.hxx>
 #include <Graphic3d_MaterialAspect.hxx>
 #include <Graphic3d_PBRMaterial.hxx>
 #include <Graphic3d_ShaderObject.hxx>
@@ -217,8 +219,9 @@ void mtk::apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges) {
     aspects.faded->SetInteriorColor(Quantity_ColorRGBA(edges.color, faded_opacity));
 }
 
-mtk::MeshObject::MeshObject(const Mesh& mesh, const MaterialAspects& aspects, const EdgeAspects& edge_aspects)
-    : mesh_(mesh), aspects_(aspects), edge_aspects_(edge_aspects) {}
+mtk::MeshObject::MeshObject(const Mesh& mesh, const MaterialAspects& aspects, const EdgeAspects& edge_aspects,
+                            const std::vector<MaterialAspects>& materials)
+    : mesh_(mesh), aspects_(aspects), edge_aspects_(edge_aspects), materials_(&materials) {}
 
 void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
                               const occ::handle<Prs3d_Presentation>& presentation, const int mode) {
@@ -226,13 +229,48 @@ void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
         return;
     }
     const bool faded = mode == faded_mode;
-    const occ::handle<Graphic3d_Group> faces = presentation->NewGroup();
-    if (mesh_.has_own_edges) {
-        faces->SetGroupPrimitivesAspect(faded ? aspects_.faded_faces : aspects_.shaded_faces);
+    if (mesh_.face_materials.empty() || !mesh_.elements) {
+        const occ::handle<Graphic3d_Group> faces = presentation->NewGroup();
+        if (mesh_.has_own_edges) {
+            faces->SetGroupPrimitivesAspect(faded ? aspects_.faded_faces : aspects_.shaded_faces);
+        } else {
+            faces->SetGroupPrimitivesAspect(faded ? aspects_.faded : aspects_.shaded);
+        }
+        faces->AddPrimitiveArray(mesh_.triangles);
     } else {
-        faces->SetGroupPrimitivesAspect(faded ? aspects_.faded : aspects_.shaded);
+        // A group per material, of the triangles of its faces, which share the vertices of the mesh. Made from the
+        // triangles as they are, as those of a reflected copy have their corners swapped.
+        std::map<int32_t, std::vector<int32_t>> triangles_of;
+        const std::vector<int32_t>& first = mesh_.elements->first_triangles;
+        for (size_t face = 0; face < mesh_.face_materials.size(); ++face) {
+            std::vector<int32_t>& triangles = triangles_of[mesh_.face_materials[face]];
+            for (int32_t triangle = first[face]; triangle < first[face + 1]; ++triangle) {
+                triangles.push_back(triangle);
+            }
+        }
+        const Graphic3d_ArrayOfTriangles& all = *mesh_.triangles;
+        const bool indexed = all.EdgeNumber() > 0;
+        for (const auto& [material, triangles] : triangles_of) {
+            if (triangles.empty()) {
+                continue;
+            }
+            const MaterialAspects& aspects = material < 0 ? aspects_ : (*materials_)[material];
+            occ::handle<Graphic3d_IndexBuffer> indices = new Graphic3d_IndexBuffer(Graphic3d_Buffer::DefaultAllocator());
+            if (!indices->Init<int32_t>(static_cast<int>(3 * triangles.size()))) {
+                throw kernel_error("The memory for the triangles of a material could not be allocated.");
+            }
+            int index = 0;
+            for (const int32_t triangle : triangles) {
+                for (int corner = 1; corner <= 3; ++corner) {
+                    const int rank = 3 * triangle + corner; // from 1
+                    indices->SetIndex(index++, (indexed ? all.Edge(rank) : rank) - 1);
+                }
+            }
+            const occ::handle<Graphic3d_Group> faces = presentation->NewGroup();
+            faces->SetGroupPrimitivesAspect(faded ? aspects.faded_faces : aspects.shaded_faces);
+            faces->AddPrimitiveArray(Graphic3d_TOPA_TRIANGLES, indices, all.Attributes(), occ::handle<Graphic3d_BoundBuffer>());
+        }
     }
-    faces->AddPrimitiveArray(mesh_.triangles);
 
     if (!mesh_.edges.IsNull()) {
         const occ::handle<Graphic3d_Group> edges = presentation->NewGroup();
@@ -591,7 +629,12 @@ mtk::Mesh mtk::make_mesh(const mtk_viewer_mesh& mesh) {
             elements->vertices.emplace_back(xyz[0], xyz[1], xyz[2]);
         }
     }
-    return Mesh{make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh), std::move(elements)};
+    std::vector<int32_t> face_materials;
+    if (elements && mesh.face_materials != nullptr) {
+        face_materials.assign(mesh.face_materials, mesh.face_materials + mesh.face_count);
+    }
+    return Mesh{make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh), std::move(elements),
+                std::move(face_materials)};
 }
 
 mtk::Mesh mtk::transform_mesh(const Mesh& mesh, const double* matrix) {
@@ -605,7 +648,7 @@ mtk::Mesh mtk::transform_mesh(const Mesh& mesh, const double* matrix) {
         }
     }
     return Mesh{transform_triangles(mesh.triangles, matrix), mesh.has_own_edges, transform_edges(mesh.edges, matrix),
-                std::move(elements)};
+                std::move(elements), mesh.face_materials};
 }
 
 occ::handle<Graphic3d_Texture2D> mtk::make_texture(const uint8_t* pixels, int width, int height) {

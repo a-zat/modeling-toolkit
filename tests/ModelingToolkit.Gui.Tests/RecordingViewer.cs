@@ -30,9 +30,16 @@ internal sealed class RecordingViewer : IViewerScene
 
     public void Forget() => Changes.Clear();
 
-    public int AddMesh(MeshEntity mesh, Polylines? edges, ShapeTessellation? shape)
+    /// <summary>The materials of the faces of each mesh added with them.</summary>
+    public Dictionary<int, int[]> FaceMaterials { get; } = [];
+
+    public int AddMesh(MeshEntity mesh, Polylines? edges, ShapeTessellation? shape, int[]? faceMaterials)
     {
         Meshes[_nextMesh] = mesh;
+        if (faceMaterials is not null)
+        {
+            FaceMaterials[_nextMesh] = faceMaterials;
+        }
         Changes.Add($"add mesh {_nextMesh}");
         return _nextMesh++;
     }

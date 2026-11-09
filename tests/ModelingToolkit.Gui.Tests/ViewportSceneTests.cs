@@ -56,25 +56,30 @@ public sealed class ViewportSceneTests
     }
 
     [Fact]
-    public void AShapeTakesTheMaterialOfItsReferenceLikeAMesh()
+    public void AShapeTakesTheDefaultMaterialAndItsPaintedFacesTheirOwn()
     {
         var kernel = new OcctKernel();
-        var red = new Material("Red");
         var own = new Material("Own");
         var inner = new Block("Inner")
         {
             Entities =
             {
                 new BrepEntity(kernel, kernel.MakeBox(1, 1, 1)),
-                new BrepEntity(kernel, kernel.MakeSphere(1)) { Material = own },
+                new BrepEntity(kernel, kernel.MakeBox(2, 2, 2), new Dictionary<int, Material> { [1] = own }),
             },
         };
         var document = new Document();
-        document.Root.Entities.Add(new BlockReference(inner, Transform.Identity) { Material = red });
-
+        document.Root.Entities.Add(new BlockReference(inner, Transform.Identity));
         var scene = ViewportScene.Of(document);
+        var viewer = new RecordingViewer();
 
-        Assert.Equal([red, own], scene.Instances.Select(instance => scene.Materials[instance.Material]));
+        scene.ShowIn(viewer, []);
+
+        Assert.All(scene.Instances, instance => Assert.Same(ViewportScene.DefaultMaterial, scene.Materials[instance.Material]));
+        int[] faces = Assert.Single(viewer.FaceMaterials).Value; // of the second box only
+        Assert.Equal(6, faces.Length);
+        Assert.Same(own, viewer.Materials[faces[1]]);
+        Assert.Equal(5, faces.Count(material => material == -1));
     }
 
     [Fact]
@@ -192,25 +197,22 @@ public sealed class ViewportSceneTests
     }
 
     [Fact]
-    public void MeshesWithoutMaterialTakeTheOneOfTheClosestReferenceThatHasOne()
+    public void MeshesWithoutMaterialTakeTheDefaultOneWhateverTheirReferences()
     {
-        var red = new Material("Red");
-        var blue = new Material("Blue");
         var own = new Material("Own");
         var inner = new Block("Inner") { Entities = { Square(), Square(own) } };
         var outer = new Block("Outer")
         {
-            Entities = { new BlockReference(inner, Transform.Identity), new BlockReference(inner, Transform.Identity) { Material = blue } },
+            Entities = { new BlockReference(inner, Transform.Identity), new BlockReference(inner, Transform.Identity) },
         };
         var document = new Document();
-        document.Root.Entities.Add(new BlockReference(outer, Transform.Identity) { Material = red });
+        document.Root.Entities.Add(new BlockReference(outer, Transform.Identity));
         document.Root.Entities.Add(Square());
 
         var scene = ViewportScene.Of(document);
 
-        Assert.Equal(
-            [red, own, blue, own, ViewportScene.DefaultMaterial],
-            scene.Instances.Select(instance => scene.Materials[instance.Material]));
+        Material none = ViewportScene.DefaultMaterial;
+        Assert.Equal([none, own, none, own, none], scene.Instances.Select(instance => scene.Materials[instance.Material]));
     }
 
     [Fact]

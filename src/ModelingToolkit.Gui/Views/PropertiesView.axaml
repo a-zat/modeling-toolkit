@@ -18,14 +18,19 @@
             <Border Height="1" Background="{DynamicResource Mtk.Separator}" />
             <!-- An edit is made when the field loses the focus, or with Enter: one command, not one per key. -->
             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="6" ColumnSpacing="14"
-                  IsVisible="{Binding IsEditable}">
-              <TextBlock Text="Name" Classes="secondary" FontSize="12" VerticalAlignment="Center" />
+                  IsVisible="{Binding HasFields}">
+              <TextBlock Text="Name" Classes="secondary" FontSize="12" VerticalAlignment="Center"
+                         IsVisible="{Binding IsEditable}" />
               <TextBox x:Name="NameBox" Grid.Column="1" FontSize="12" PlaceholderText="{Binding Title}"
-                       Text="{Binding EditedName, UpdateSourceTrigger=LostFocus}" KeyDown="OnNameKeyDown" />
-              <TextBlock Grid.Row="1" Text="Material" Classes="secondary" FontSize="12" VerticalAlignment="Center" />
+                       Text="{Binding EditedName, UpdateSourceTrigger=LostFocus}" KeyDown="OnNameKeyDown"
+                       IsVisible="{Binding IsEditable}" />
+              <!-- The material of the surfaces selected: a mesh, a shape or faces. -->
+              <TextBlock Grid.Row="1" Text="Material" Classes="secondary" FontSize="12" VerticalAlignment="Center"
+                         IsVisible="{Binding HasMaterial}" />
               <ComboBox Grid.Row="1" Grid.Column="1" FontSize="12" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding MaterialChoices}" SelectedItem="{Binding SelectedMaterial}"
-                        DisplayMemberBinding="{Binding Name}" />
+                        DisplayMemberBinding="{Binding Name}" PlaceholderText="Mixed"
+                        IsVisible="{Binding HasMaterial}" />
             </Grid>
             <ItemsControl ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
               <ItemsControl.ItemTemplate>

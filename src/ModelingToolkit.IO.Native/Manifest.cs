@@ -29,7 +29,7 @@ internal sealed record BlockEntry(string Name, List<EntityEntry> Entities);
 [JsonDerivedType(typeof(MeshEntry), "mesh")]
 [JsonDerivedType(typeof(BrepEntry), "brep")]
 [JsonDerivedType(typeof(BlockReferenceEntry), "blockReference")]
-internal abstract record EntityEntry(string? Name, int? Material);
+internal abstract record EntityEntry(string? Name);
 
 internal sealed record MeshEntry(
     string? Name,
@@ -38,12 +38,14 @@ internal sealed record MeshEntry(
     int VertexCount,
     int TriangleCount,
     bool HasNormals,
-    bool HasTextureCoordinates) : EntityEntry(Name, Material);
+    bool HasTextureCoordinates) : EntityEntry(Name);
 
-internal sealed record BrepEntry(string? Name, int? Material, string Path) : EntityEntry(Name, Material);
+/// <param name="FaceMaterials">The faces painted, by their index in the shape; null for none.</param>
+internal sealed record BrepEntry(string? Name, string Path, List<FaceMaterialEntry>? FaceMaterials) : EntityEntry(Name);
 
-internal sealed record BlockReferenceEntry(string? Name, int? Material, int Block, double[] Transform)
-    : EntityEntry(Name, Material);
+internal sealed record FaceMaterialEntry(int Face, int Material);
+
+internal sealed record BlockReferenceEntry(string? Name, int Block, double[] Transform) : EntityEntry(Name);
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

@@ -19,13 +19,13 @@ public sealed class EditSessionTests
         var oak = new Material("Oak");
 
         session.Execute(new RenameCommand(mesh, "Deck"));
-        session.Execute(new SetMaterialCommand(mesh, oak));
-        Assert.Equal("Change Material", session.UndoName);
+        session.Execute(new SetMeshMaterialCommand(mesh, oak));
+        Assert.Equal("Paint", session.UndoName);
 
         session.Undo();
         Assert.Null(mesh.Material);
         Assert.Equal("Deck", mesh.Name);
-        Assert.Equal("Change Material", session.RedoName);
+        Assert.Equal("Paint", session.RedoName);
 
         session.Undo();
         Assert.Equal("Floor", mesh.Name);
