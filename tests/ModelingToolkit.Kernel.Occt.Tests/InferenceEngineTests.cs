@@ -130,4 +130,42 @@ public sealed class InferenceEngineTests
         Assert.Equal(InferenceKind.Perpendicular, perpendicular.Kind);
         Assert.Equal(-(perpendicular.Point.X - from.X), perpendicular.Point.Y - from.Y, precision: 9);
     }
+
+    [Fact]
+    public void On_a_face_a_line_snaps_only_along_directions_in_its_plane()
+    {
+        int top = Find(ElementKind.Face, f => _kernel.GetFaceInfo(_box.Shape, f).Plane is { Normal.Z: > 0.5 });
+        var from = new Point3d(1030, 50, 100);
+        // A ray that passes right over the vertical through the point, 200 mm above the face, and lands on the face.
+        var origin = new Point3d(910, -40, 700);
+        var landing = new Point3d(1090, 95, 100);
+        var ray = new PointerRay(origin, (landing - origin).Normalized(), 1, 0);
+        var pick = new ToolPick(_path, new ElementReference(_path, ElementKind.Face, top), landing, default, ray);
+
+        Inference inferred = _engine.Infer(pick, Transform.Identity, from);
+
+        Assert.Equal(InferenceKind.OnFace, inferred.Kind);
+        Assert.Equal(100, inferred.Point.Z, precision: 9);
+        Assert.Equal(InferenceKind.AxisZ, _engine.Infer(Nothing(ray), Transform.Identity, from).Kind); // in the air
+    }
+
+    [Fact]
+    public void Vertices_near_the_pointer_are_snapped_to_unless_hidden()
+    {
+        Point3d[] vertices = [new(100, 100, 0), new(1050, 50, 0)];
+
+        Inference near = _engine.Infer(Nothing(Down(104, 97)), Transform.Identity, vertices: vertices);
+        Assert.Equal(new Inference(InferenceKind.Endpoint, new Point3d(100, 100, 0)), near);
+        Assert.Equal(InferenceKind.Ground, _engine.Infer(Nothing(Down(120, 100)), Transform.Identity, vertices: vertices).Kind);
+
+        // At a grazing angle, a vertex a few units away on the screen is much deeper than the point under the pointer.
+        var grazing = new PointerRay(new Point3d(100, -20000, 300), (new Point3d(100, 103, 0) - new Point3d(100, -20000, 300)).Normalized(), 1, 0);
+        Assert.Equal(InferenceKind.Endpoint, _engine.Infer(Nothing(grazing), Transform.Identity, vertices: vertices).Kind);
+
+        // Under the top of the box: hidden by it.
+        int top = Find(ElementKind.Face, f => _kernel.GetFaceInfo(_box.Shape, f).Plane is { Normal.Z: > 0.5 });
+        Inference onTop = _engine.Infer(On(ElementKind.Face, top, new Point3d(1051, 50, 100)), Transform.Identity,
+            vertices: vertices);
+        Assert.Equal(InferenceKind.OnFace, onTop.Kind);
+    }
 }

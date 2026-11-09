@@ -236,6 +236,53 @@ TEST(AddEdges, ManyCrossingEdgesKeepTheShapeValid) {
     EXPECT_NEAR(area_of(shape), 1e6, 1e-3);
 }
 
+// Two vertices at the same point that are not the same vertex: a drawing that looks connected but is not.
+int duplicated_vertices(const ShapePtr& shape) {
+    std::vector<Point> points;
+    for (int32_t vertex = 0; vertex < counts_of(shape).vertices; ++vertex) {
+        Point point{};
+        EXPECT_EQ(mtk_shape_vertex_point(shape.get(), vertex, point.data()), MTK_STATUS_OK);
+        points.push_back(point);
+    }
+    int duplicates = 0;
+    for (size_t i = 0; i < points.size(); ++i) {
+        for (size_t j = i + 1; j < points.size(); ++j) {
+            const double dx = points[i][0] - points[j][0], dy = points[i][1] - points[j][1],
+                         dz = points[i][2] - points[j][2];
+            duplicates += std::sqrt(dx * dx + dy * dy + dz * dz) < 1e-6 ? 1 : 0;
+        }
+    }
+    return duplicates;
+}
+
+// Lines between the points of a grid in space close loops in many planes: the parts left out of the fuse must keep
+// sharing their vertices with those that take part, which the fuse copies.
+TEST(AddEdges, ADrawingInSpaceKeepsItsVerticesShared) {
+    for (unsigned seed : {1u, 2u, 5u}) {
+        ShapePtr shape;
+        unsigned state = seed;
+        const auto next = [&] { return (state = state * 1103515245u + 12345u) >> 16; };
+        for (int i = 0; i < 45; ++i) {
+            const Point a{500.0 * (next() % 4), 500.0 * (next() % 4), 500.0 * (next() % 3)};
+            const Point b{500.0 * (next() % 4), 500.0 * (next() % 4), 500.0 * (next() % 3)};
+            if (a == b) {
+                continue;
+            }
+            const std::vector<mtk_curve> curves{line(a, b)};
+            mtk_edit* edit = nullptr;
+            if (mtk_shape_add_edges(shape.get(), curves.data(), 1, &edit) != MTK_STATUS_OK) {
+                continue; // refused, as the editor refuses a result that is not valid
+            }
+            mtk_shape* made = nullptr;
+            ASSERT_EQ(mtk_edit_get_shape(edit, &made), MTK_STATUS_OK);
+            mtk_edit_release(edit);
+            shape.reset(made);
+            ASSERT_EQ(duplicated_vertices(shape), 0) << "seed " << seed << ", line " << i;
+        }
+        EXPECT_GT(counts_of(shape).faces, 3) << "seed " << seed;
+    }
+}
+
 TEST(AddEdges, RejectsDegenerateCurvesAndNullArguments) {
     mtk_edit* edit = reinterpret_cast<mtk_edit*>(1);
     const mtk_curve point = line({1, 1, 1}, {1, 1, 1});

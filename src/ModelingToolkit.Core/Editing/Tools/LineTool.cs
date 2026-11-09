@@ -21,6 +21,7 @@ public sealed class LineTool(IGeometryKernel kernel) : Tool
     private Inference? _last; // the point under the pointer, as last inferred
     private Vector3d? _locked;
     private InferenceKind _lockedKind = InferenceKind.None;
+    private readonly Dictionary<IKernelShape, Point3d[]> _vertices = []; // of each shape, in its coordinates
 
     public override string Name => "Line";
 
@@ -40,14 +41,14 @@ public sealed class LineTool(IGeometryKernel kernel) : Tool
     public override void Hover(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        _last = _inference.Infer(input.Pick, Host.Context.Placement, _start, _locked);
+        _last = Infer(input.Pick);
         Show();
     }
 
     public override void Click(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        Inference point = _inference.Infer(input.Pick, Host.Context.Placement, _start, _locked);
+        Inference point = Infer(input.Pick);
         _last = point;
         if (point.Kind == InferenceKind.None)
         {
@@ -91,6 +92,42 @@ public sealed class LineTool(IGeometryKernel kernel) : Tool
         }
         DrawTo(start, start + direction * length);
         return true;
+    }
+
+    private Inference Infer(ToolPick pick) =>
+        _inference.Infer(pick, Host.Context.Placement, _start, _locked, SnapVertices(pick));
+
+    // The vertices the pointer snaps to near them: those of the geometry being edited, and of the shape it is on.
+    private List<Point3d> SnapVertices(ToolPick pick)
+    {
+        var points = new List<Point3d>();
+        Transform placement = Host.Context.Placement;
+        List<BrepEntity> edited = [.. Host.Context.Block.Entities.OfType<BrepEntity>()];
+        foreach (BrepEntity entity in edited)
+        {
+            points.AddRange(VerticesOf(entity).Select(placement.Apply));
+        }
+        if (pick.Element is { } element && !edited.Contains(element.Entity))
+        {
+            Transform shown = InferenceEngine.PlacementOf(element.Path);
+            points.AddRange(VerticesOf(element.Entity).Select(shown.Apply));
+        }
+        return points;
+    }
+
+    private Point3d[] VerticesOf(BrepEntity entity)
+    {
+        if (!_vertices.TryGetValue(entity.Shape, out Point3d[]? vertices))
+        {
+            if (_vertices.Count > 64)
+            {
+                _vertices.Clear(); // of shapes replaced since
+            }
+            int count = entity.Kernel.CountElements(entity.Shape).Vertices;
+            vertices = [.. Enumerable.Range(0, count).Select(vertex => entity.Kernel.GetVertexPoint(entity.Shape, vertex))];
+            _vertices[entity.Shape] = vertices;
+        }
+        return vertices;
     }
 
     private void Lock(ToolKey key)

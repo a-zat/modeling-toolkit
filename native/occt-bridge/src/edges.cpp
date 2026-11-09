@@ -127,9 +127,10 @@ std::vector<TopoDS_Shape> items_of(const TopoDS_Shape& shape) {
     return items;
 }
 
-// General Fuse of shapes added to a shape, with only the items of the shape whose box meets them: an item that holds
-// a sub-shape the fuse changes holds the point where it changes, so the others stay as they are. Only the items that
-// took part are checked.
+// General Fuse of shapes added to a shape, with only the items of the shape whose box meets them and those connected to
+// them through shared vertices; the others stay as they are. The fuse leaves its arguments unchanged, copying the
+// vertices and edges it changes, so an item that shares one with an argument must be an argument too, or the copy and
+// the original would both remain, at the same place but no longer shared. Only the items that took part are checked.
 Step fuse_into(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& added) {
     Bnd_Box reach;
     for (const TopoDS_Shape& part : added) {
@@ -137,15 +138,41 @@ Step fuse_into(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& added
     }
     reach.Enlarge(Precision::Confusion());
 
+    const std::vector<TopoDS_Shape> items = items_of(shape);
+    std::vector<bool> taking_part(items.size(), false);
+    ShapeMap reached_vertices;
+    for (size_t i = 0; i < items.size(); ++i) {
+        Bnd_Box box;
+        BRepBndLib::Add(items[i], box);
+        taking_part[i] = !box.IsOut(reach);
+        if (taking_part[i]) {
+            TopExp::MapShapes(items[i], TopAbs_VERTEX, reached_vertices);
+        }
+    }
+    for (bool grew = true; grew;) {
+        grew = false;
+        for (size_t i = 0; i < items.size(); ++i) {
+            if (taking_part[i]) {
+                continue;
+            }
+            for (TopExp_Explorer vertex(items[i], TopAbs_VERTEX); vertex.More(); vertex.Next()) {
+                if (reached_vertices.Contains(vertex.Current())) {
+                    taking_part[i] = true;
+                    TopExp::MapShapes(items[i], TopAbs_VERTEX, reached_vertices);
+                    grew = true;
+                    break;
+                }
+            }
+        }
+    }
+
     ShapeList arguments;
     std::vector<TopoDS_Shape> kept;
-    for (const TopoDS_Shape& item : items_of(shape)) {
-        Bnd_Box box;
-        BRepBndLib::Add(item, box);
-        if (box.IsOut(reach)) {
-            kept.push_back(item);
+    for (size_t i = 0; i < items.size(); ++i) {
+        if (taking_part[i]) {
+            arguments.Append(items[i]);
         } else {
-            arguments.Append(item);
+            kept.push_back(items[i]);
         }
     }
     for (const TopoDS_Shape& part : added) {

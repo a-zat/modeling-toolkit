@@ -151,8 +151,8 @@ typedef struct mtk_edit mtk_edit;
  * not changed, and null stands for a shape without anything yet. Each curve becomes edges of the shape: it splits the
  * edges it meets and the faces it crosses, and lies on the faces it touches; a closed loop drawn on a face splits it in
  * two. Curves that are not on a face and close a planar loop with the edges of the shape make a face, as does a
- * circle on its own. Only the parts of the shape near the curves take part, so the time grows with what the curves
- * meet, not with the size of the shape. Points closer than 1e-7 mm are the same point: drawings snap to the points of
+ * circle on its own. Only the parts of the shape near the curves, and those connected to them, take part, so the time
+ * grows with the drawing the curves meet, not with the size of the shape. Points closer than 1e-7 mm are the same point: drawings snap to the points of
  * the shape. A curve that is degenerate (a line of no length, an arc through three points on a line, a circle without
  * a radius or a normal) or not finite is an invalid argument; a result that would not be valid is a kernel error.
  */

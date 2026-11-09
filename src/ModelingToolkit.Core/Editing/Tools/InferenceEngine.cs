@@ -71,7 +71,14 @@ public sealed class InferenceEngine
     /// <param name="placement">The placement of the edit context in the model.</param>
     /// <param name="from">The point drawn from, for the axes, parallels and perpendiculars; null for none.</param>
     /// <param name="locked">A direction the point must lie along from <paramref name="from"/>, as locked by a key.</param>
-    public Inference Infer(ToolPick pick, Transform placement, Point3d? from = null, Vector3d? locked = null)
+    /// <param name="vertices">
+    /// Points to snap to when the pointer passes within <see cref="SnapDistance"/> of them, even if the view does not
+    /// pick them, such as the vertices of the geometry being edited, in the model space; those hidden behind what the
+    /// pointer is on are left out.
+    /// </param>
+    public Inference Infer(
+        ToolPick pick, Transform placement, Point3d? from = null, Vector3d? locked = null,
+        IReadOnlyList<Point3d>? vertices = null)
     {
         ArgumentNullException.ThrowIfNull(pick);
         ArgumentNullException.ThrowIfNull(placement);
@@ -92,6 +99,10 @@ public sealed class InferenceEngine
         }
 
         Inference found = OnGeometry(pick) ?? OnGround(pick, ground);
+        if (found.Kind != InferenceKind.Endpoint && pick.Ray is { } near && Nearest(near, vertices, found) is { } vertex)
+        {
+            return new Inference(InferenceKind.Endpoint, vertex);
+        }
         if (found.Kind is InferenceKind.Endpoint or InferenceKind.Midpoint)
         {
             return found;
@@ -105,8 +116,11 @@ public sealed class InferenceEngine
 
         if (from is { } drawnFrom && pick.Ray is { } pointer && found.Kind != InferenceKind.OnEdge)
         {
+            // On a flat face, only along it: a line that leaves the face would not split it.
+            bool onFace = found.Kind == InferenceKind.OnFace && found.Plane is not null;
             Plane plane = found.Plane ?? ground;
-            if (Along(pointer, drawnFrom, axes, plane) is { } aligned)
+            if ((!onFace || Math.Abs(plane.Normal.Dot(drawnFrom - Point3d.Origin) - plane.Offset) < 1e-6) &&
+                Along(pointer, drawnFrom, axes, plane, onFace) is { } aligned)
             {
                 return aligned with { Plane = found.Plane };
             }
@@ -114,8 +128,45 @@ public sealed class InferenceEngine
         return found;
     }
 
+    // The point closest to the ray within the snap distance, but not behind the face the pointer is on: on the other
+    // side of its plane from the camera.
+    private Point3d? Nearest(PointerRay ray, IReadOnlyList<Point3d>? vertices, Inference found)
+    {
+        if (vertices is null || vertices.Count == 0)
+        {
+            return null;
+        }
+        Plane? face = found.Kind == InferenceKind.OnFace ? found.Plane : null;
+        double eyeSide = face is { } plane ? plane.Normal.Dot(ray.Origin - Point3d.Origin) - plane.Offset : 0;
+        Point3d? best = null;
+        double bestUnits = SnapDistance;
+        foreach (Point3d vertex in vertices)
+        {
+            double depth = (vertex - ray.Origin).Dot(ray.Direction);
+            if (depth < 0)
+            {
+                continue;
+            }
+            if (face is { } covering)
+            {
+                double side = covering.Normal.Dot(vertex - Point3d.Origin) - covering.Offset;
+                if (Math.Abs(side) > 1e-6 && Math.Sign(side) != Math.Sign(eyeSide))
+                {
+                    continue;
+                }
+            }
+            double units = vertex.DistanceTo(ray.At(depth)) / ray.UnitSizeAt(vertex);
+            if (units < bestUnits)
+            {
+                best = vertex;
+                bestUnits = units;
+            }
+        }
+        return best;
+    }
+
     // Along an axis, the reference line or its perpendicular in the plane, from a point, if the ray passes close.
-    private Inference? Along(PointerRay ray, Point3d from, Vector3d[] axes, Plane plane)
+    private Inference? Along(PointerRay ray, Point3d from, Vector3d[] axes, Plane plane, bool inPlaneOnly)
     {
         var directions = new List<(InferenceKind Kind, Vector3d Direction)>
         {
@@ -132,6 +183,11 @@ public sealed class InferenceEngine
             {
                 directions.Add((InferenceKind.Perpendicular, perpendicular));
             }
+        }
+
+        if (inPlaneOnly)
+        {
+            directions.RemoveAll(entry => Math.Abs(entry.Direction.Normalized().Dot(plane.Normal)) > 1e-9);
         }
 
         Inference? best = null;
