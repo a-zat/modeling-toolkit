@@ -341,7 +341,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         public void SelectEntity(IReadOnlyList<Entity>? path) => owner.ModelTree.SelectCommand.Execute(path);
 
-        public void ShowPreview(ToolPreview preview) => owner.Overlay = ToolOverlay.Of(preview, owner.IsDark);
+        public void ShowPreview(ToolPreview preview) => owner.Overlay = ToolOverlay.Of(preview, owner.IsDark, owner.RenderStyle == RenderStyle.Cad);
 
         public void Report(string message) => owner.StatusMessage = message;
     }
@@ -716,6 +716,78 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (path is not null)
         {
             await LoadAsync(path);
+        }
+    }
+
+    /// <summary>
+    /// Brings a model from a file into the open one, as a block placed at the origin of the block being edited, in
+    /// place of opening it: see <see cref="ImportCommand"/>.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private async Task Import()
+    {
+        if (FileDialogs is null)
+        {
+            return;
+        }
+
+        List<FileType> types =
+        [
+            new("3D models", [.. _formats.Readers.SelectMany(reader => reader.Extensions)]),
+            .. _formats.Readers.Select(reader => new FileType(reader.FormatName, reader.Extensions)),
+        ];
+        string? path = await FileDialogs.OpenAsync("Import a model", types);
+        if (path is not null)
+        {
+            await ImportAsync(path);
+        }
+    }
+
+    /// <summary>Imports a model from a file into the open one, starting an empty one if there is none.</summary>
+    public async Task ImportAsync(string path)
+    {
+        if (Session is null || Context is null || Document is null)
+        {
+            New();
+        }
+
+        string name = Path.GetFileName(path);
+        StatusMessage = $"Importing {name}…";
+        using CancellationTokenSource cancellation = BeginOperation(saving: false);
+        try
+        {
+            IDocumentReader reader = _formats.ReaderFor(path);
+            var warnings = new List<string>();
+            IProgress<double> progress = OperationProgressReporter();
+            Document imported = await Task.Run(() => reader.Read(path, warnings, progress, cancellation.Token),
+                cancellation.Token);
+            var command = new ImportCommand(Document!, Context!.Block, imported, Path.GetFileNameWithoutExtension(path));
+            EndOperation(); // the edit is refused while busy
+            if (Edit(command))
+            {
+                ModelTree.SelectCommand.Execute((IReadOnlyList<Entity>)[.. Context.Path, command.Reference]);
+                StatusMessage = warnings.Count switch
+                {
+                    0 => $"Imported {name} ({reader.FormatName}).",
+                    _ => $"Imported {name} ({reader.FormatName}), with {warnings.Count} warning(s): {warnings[0]}",
+                };
+                StatusDetails = warnings.Count > 0 ? string.Join(Environment.NewLine, warnings) : null;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = $"Importing {name} was cancelled.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Cannot import {name}: {exception.Message}";
+        }
+        finally
+        {
+            if (IsBusy)
+            {
+                EndOperation();
+            }
         }
     }
 

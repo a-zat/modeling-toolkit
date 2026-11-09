@@ -52,8 +52,9 @@ static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_overlay) == 48);
 namespace {
 
 // Sizes in device-independent units, like the rest of the interface; the viewer multiplies them by the scale.
-// The outlines of the CAD render style, in device-independent units.
+// The outlines of the CAD render style, and the edges of shapes in the standard one, in device-independent units.
 constexpr double outline_width = 1.5;
+constexpr double edge_width = 1.0;
 // The edges highlighted, hovered or selected, in device-independent units.
 constexpr double highlighted_edge_width = 3.0;
 constexpr double view_cube_size = 42.0;
@@ -502,9 +503,10 @@ mtk::EdgeStyle mtk::Viewer::edge_style() const {
                          wireframe ? edge_color_ : outline_color_};
     }
     // The edges of their own, those of shapes, are drawn in every mode, as lines drawn without faces would otherwise
-    // not show; those of the triangles only in the modes with edges.
+    // not show, one unit wide, as the lines that the tools draw over the view; those of the triangles only in the modes
+    // with edges.
     const bool edges = display_mode_ != MTK_VIEWER_DISPLAY_SHADED;
-    return EdgeStyle{edges, true, false, 1.0f, edge_color_};
+    return EdgeStyle{edges, true, true, static_cast<float>(edge_width * scale_), edge_color_};
 }
 
 // The CAD render style lights the faces from the upper left of the camera, so that faces turned differently take

@@ -17,12 +17,18 @@ internal static class ToolOverlay
     private static readonly Color Cyan = Color.FromRgb(0x14, 0xA3, 0xB8);
     private static readonly Color Gold = Color.FromRgb(0xE0, 0xA8, 0x16);
 
-    public static ViewOverlay Of(ToolPreview preview, bool dark)
+    /// <param name="dark">Whether the theme is dark.</param>
+    /// <param name="cad">Whether the view draws in the CAD render style, on white.</param>
+    public static ViewOverlay Of(ToolPreview preview, bool dark, bool cad)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        Color plain = dark ? Color.FromRgb(0xF2, 0xF3, 0xF5) : Color.FromRgb(0x1C, 0x1F, 0x24);
-        List<OverlayLine> lines = [.. preview.Lines.Select(line =>
-            new OverlayLine([line.Start, line.End], ColorOf(line.Along) ?? plain, 2))];
+        // A plain line looks as the edge it will be: as Mtk.Viewport.Edge, one pixel wide, or as the outlines of the
+        // CAD style (Mtk.Viewport.Outline, 1.5 wide); lines along an axis or an edge stand out, wider, in its colour.
+        (Color plain, double width) = cad ? (Color.FromRgb(0x16, 0x18, 0x1C), 1.5)
+            : dark ? (Color.FromRgb(0x7D, 0x86, 0x93), 1.0) : (Color.FromRgb(0x4B, 0x55, 0x63), 1.0);
+        List<OverlayLine> lines = [.. preview.Lines.Select(line => ColorOf(line.Along) is { } color
+            ? new OverlayLine([line.Start, line.End], color, 2)
+            : new OverlayLine([line.Start, line.End], plain, width))];
         List<OverlayMarker> markers = [];
         List<OverlayLabel> labels = [];
         if (preview.Inference is { } inference && MarkerOf(inference.Kind) is { } marker)

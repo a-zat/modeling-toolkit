@@ -14,6 +14,7 @@
   <Window.KeyBindings>
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+N, macOS=Cmd+N}" Command="{Binding NewCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+O, macOS=Cmd+O}" Command="{Binding OpenCommand}" />
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+Shift+I, macOS=Cmd+Shift+I}" Command="{Binding ImportCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+S, macOS=Cmd+S}" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+Shift+S, macOS=Cmd+Shift+S}" Command="{Binding SaveAsCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+K, macOS=Cmd+K}" Command="{Binding Palette.OpenCommand}" />
@@ -40,6 +41,8 @@
                           Gesture="{OnPlatform Default=Ctrl+N, macOS=Cmd+N}" />
           <NativeMenuItem Header="Open…" Command="{Binding OpenCommand}"
                           Gesture="{OnPlatform Default=Ctrl+O, macOS=Cmd+O}" />
+          <NativeMenuItem Header="Import…" Command="{Binding ImportCommand}"
+                          Gesture="{OnPlatform Default=Ctrl+Shift+I, macOS=Cmd+Shift+I}" />
           <NativeMenuItem Header="Save" Command="{Binding SaveCommand}"
                           Gesture="{OnPlatform Default=Ctrl+S, macOS=Cmd+S}" />
           <NativeMenuItem Header="Save As…" Command="{Binding SaveAsCommand}"
