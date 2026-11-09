@@ -115,18 +115,27 @@
 
     <Grid x:Name="Panels" ColumnDefinitions="Auto,260,Auto,*,Auto,280">
       <Border Grid.Column="0" Classes="activityBar">
-        <StackPanel Spacing="4">
-          <ToggleButton Classes="tool activity" IsChecked="{Binding IsModelPanelActive, Mode=OneWay}"
-                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Model}"
-                        ToolTip.Tip="Model">
-            <PathIcon Data="{StaticResource Icon.CubeTree}" />
+        <DockPanel>
+          <!-- The settings at the bottom, as in VS Code. -->
+          <ToggleButton DockPanel.Dock="Bottom" Classes="tool activity"
+                        IsChecked="{Binding IsSettingsPanelActive, Mode=OneWay}"
+                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Settings}"
+                        ToolTip.Tip="Settings">
+            <PathIcon Data="{StaticResource Icon.Settings}" />
           </ToggleButton>
-          <ToggleButton Classes="tool activity" IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
-                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}"
-                        ToolTip.Tip="Materials">
-            <PathIcon Data="{StaticResource Icon.Color}" />
-          </ToggleButton>
-        </StackPanel>
+          <StackPanel Spacing="4">
+            <ToggleButton Classes="tool activity" IsChecked="{Binding IsModelPanelActive, Mode=OneWay}"
+                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Model}"
+                          ToolTip.Tip="Model">
+              <PathIcon Data="{StaticResource Icon.CubeTree}" />
+            </ToggleButton>
+            <ToggleButton Classes="tool activity" IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
+                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}"
+                          ToolTip.Tip="Materials">
+              <PathIcon Data="{StaticResource Icon.Color}" />
+            </ToggleButton>
+          </StackPanel>
+        </DockPanel>
       </Border>
 
       <Border Grid.Column="1" Classes="sidePanel" IsVisible="{Binding IsSidePanelOpen}">
@@ -139,6 +148,10 @@
             <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="MATERIALS" />
             <views:MaterialsView DataContext="{Binding Materials}" />
           </DockPanel>
+          <DockPanel IsVisible="{Binding IsSettingsPanelActive}">
+            <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="SETTINGS" />
+            <views:SettingsView />
+          </DockPanel>
         </Panel>
       </Border>
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
@@ -147,7 +160,8 @@
                              Selection="{Binding ModelTree.SelectedNode.Path}"
                              PickCommand="{Binding ModelTree.SelectCommand}"
                              WarningsCommand="{Binding ReportViewWarningsCommand}"
-                             DisplayMode="{Binding DisplayMode}" IsPerspective="{Binding IsPerspective}"
+                             DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
+                             IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}" />
 
       <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />

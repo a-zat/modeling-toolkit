@@ -31,6 +31,7 @@
       </LinearGradientBrush>
       <Color x:Key="Mtk.Viewport.Grid">#FFCDD3DB</Color>
       <Color x:Key="Mtk.Viewport.Edge">#FF4B5563</Color>
+      <Color x:Key="Mtk.Viewport.Outline">#FF16181C</Color>
       <Color x:Key="Mtk.ViewCube.Face">#FFFFFFFF</Color>
       <Color x:Key="Mtk.ViewCube.Edge">#FFC9D0D9</Color>
       <Color x:Key="Mtk.ViewCube.Text">#FF4B5563</Color>
@@ -75,6 +76,7 @@
       </LinearGradientBrush>
       <Color x:Key="Mtk.Viewport.Grid">#FF363B42</Color>
       <Color x:Key="Mtk.Viewport.Edge">#FF7D8693</Color>
+      <Color x:Key="Mtk.Viewport.Outline">#FF0B0C0E</Color>
       <Color x:Key="Mtk.ViewCube.Face">#FF3E434B</Color>
       <Color x:Key="Mtk.ViewCube.Edge">#FF545B66</Color>
       <Color x:Key="Mtk.ViewCube.Text">#FFE3E6EA</Color>

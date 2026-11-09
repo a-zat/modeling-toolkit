@@ -51,7 +51,7 @@ mtk_viewer_colors colors(float value) {
     mtk_viewer_colors result{};
     for (float(*color)[3] : {&result.background_top, &result.background_bottom, &result.grid, &result.axis_x,
                              &result.axis_y, &result.axis_z, &result.cube_face, &result.cube_edge, &result.cube_text,
-                             &result.highlight, &result.edges}) {
+                             &result.highlight, &result.edges, &result.outlines}) {
         for (float& component : *color) {
             component = value;
         }
@@ -166,6 +166,10 @@ TEST(Viewer, ChangesHowItShowsTheScene) {
             EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), mode), MTK_STATUS_OK)
                 << mtk_viewer_last_error_message();
         }
+        for (int32_t style : {MTK_VIEWER_RENDER_CAD, MTK_VIEWER_RENDER_STANDARD}) {
+            EXPECT_EQ(mtk_viewer_set_render_style(viewer.get(), style), MTK_STATUS_OK)
+                << mtk_viewer_last_error_message();
+        }
         for (int32_t view = MTK_VIEWER_VIEW_TOP; view <= MTK_VIEWER_VIEW_ISOMETRIC; ++view) {
             EXPECT_EQ(mtk_viewer_show_view(viewer.get(), view), MTK_STATUS_OK) << mtk_viewer_last_error_message();
         }
@@ -175,6 +179,7 @@ TEST(Viewer, ChangesHowItShowsTheScene) {
         EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 1), MTK_STATUS_OK);
 
         ASSERT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_WIREFRAME), MTK_STATUS_OK);
+        ASSERT_EQ(mtk_viewer_set_render_style(viewer.get(), MTK_VIEWER_RENDER_CAD), MTK_STATUS_OK);
         add_mesh(viewer.get(), Square().mesh());
         add_material(viewer.get(), grey());
         add_instance(viewer.get(), 0, 0, identity);
@@ -183,6 +188,8 @@ TEST(Viewer, ChangesHowItShowsTheScene) {
     EXPECT_EQ(mtk_viewer_show_view(viewer.get(), 7), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_show_view(viewer.get(), -1), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), 3), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_render_style(viewer.get(), 2), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_render_style(viewer.get(), -1), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_STRNE(mtk_viewer_last_error_message(), "");
 }
 

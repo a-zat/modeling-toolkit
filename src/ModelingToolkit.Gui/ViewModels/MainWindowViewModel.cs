@@ -62,9 +62,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Shaded", SetDisplayModeCommand, DisplayMode.Shaded),
             new("Shaded with Edges", SetDisplayModeCommand, DisplayMode.ShadedWithEdges),
             new("Wireframe", SetDisplayModeCommand, DisplayMode.Wireframe),
+            new("Standard Rendering", SetRenderStyleCommand, RenderStyle.Standard),
+            new("CAD Rendering", SetRenderStyleCommand, RenderStyle.Cad),
             new("Toggle Perspective", TogglePerspectiveCommand),
             new("Toggle Grid", ToggleGridCommand),
             new("Toggle Dark Theme", ToggleDarkCommand),
+            new("Settings", ShowPanelCommand, SidePanel.Settings),
         ];
         _initialized = true;
     }
@@ -209,7 +212,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // One side panel at a time, chosen in the activity bar.
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSidePanelOpen), nameof(IsModelPanelActive), nameof(IsMaterialsPanelActive))]
+    [NotifyPropertyChangedFor(nameof(IsSidePanelOpen), nameof(IsModelPanelActive), nameof(IsMaterialsPanelActive),
+        nameof(IsSettingsPanelActive))]
     public partial SidePanel ActivePanel { get; set; }
 
     public bool IsSidePanelOpen => ActivePanel != SidePanel.None;
@@ -217,6 +221,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool IsModelPanelActive => ActivePanel == SidePanel.Model;
 
     public bool IsMaterialsPanelActive => ActivePanel == SidePanel.Materials;
+
+    public bool IsSettingsPanelActive => ActivePanel == SidePanel.Settings;
 
     [ObservableProperty]
     public partial bool IsDark { get; set; }
@@ -232,6 +238,33 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool IsShadedWithEdges => DisplayMode == DisplayMode.ShadedWithEdges;
 
     public bool IsWireframe => DisplayMode == DisplayMode.Wireframe;
+
+    /// <summary>How the 3D view shades the faces, chosen in the settings.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsStandardRenderStyle), nameof(IsCadRenderStyle))]
+    public partial RenderStyle RenderStyle { get; set; }
+
+    // For the radio buttons of the settings: unchecking one, as the other is checked, changes nothing.
+
+    public bool IsStandardRenderStyle
+    {
+        get => RenderStyle == RenderStyle.Standard;
+        set => SetRenderStyleIf(value, RenderStyle.Standard);
+    }
+
+    public bool IsCadRenderStyle
+    {
+        get => RenderStyle == RenderStyle.Cad;
+        set => SetRenderStyleIf(value, RenderStyle.Cad);
+    }
+
+    private void SetRenderStyleIf(bool chosen, RenderStyle style)
+    {
+        if (chosen)
+        {
+            RenderStyle = style;
+        }
+    }
 
     /// <summary>Perspective, or orthographic (parallel) projection.</summary>
     [ObservableProperty]
@@ -423,6 +456,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void SetDisplayMode(DisplayMode mode) => DisplayMode = mode;
+
+    [RelayCommand]
+    private void SetRenderStyle(RenderStyle style) => RenderStyle = style;
 
     [RelayCommand]
     private void TogglePerspective() => IsPerspective = !IsPerspective;

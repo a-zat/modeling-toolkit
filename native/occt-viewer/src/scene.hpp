@@ -77,12 +77,14 @@ void add_element_sensitives(const occ::handle<SelectMgr_Selection>& selection,
                             const occ::handle<SelectMgr_SelectableObject>& object, const Mesh& mesh);
 
 // The aspects of the triangles of a material: shaded, and faded around a selection; with the edges of the triangles in
-// the display modes that draw edges, or only faces, for the meshes with edges of their own.
+// the display modes that draw edges, or only faces, for the meshes with edges of their own. The material they were made
+// from shades them again in another render style.
 struct MaterialAspects {
     occ::handle<Graphic3d_AspectFillArea3d> shaded;
     occ::handle<Graphic3d_AspectFillArea3d> faded;
     occ::handle<Graphic3d_AspectFillArea3d> shaded_faces;
     occ::handle<Graphic3d_AspectFillArea3d> faded_faces;
+    mtk_viewer_material material;
 };
 
 // The aspects of the edges of their own of the meshes, shaded and faded: hidden in the display mode without edges.
@@ -136,15 +138,28 @@ Mesh transform_mesh(const Mesh& mesh, const double* matrix);
 // A texture from checked pixels, as in mtk_viewer_add_texture.
 occ::handle<Graphic3d_Texture2D> make_texture(const uint8_t* pixels, int width, int height);
 
-// The aspects of the triangles of a checked material, shaded; texture may be null.
-MaterialAspects make_aspects(const mtk_viewer_material& material, const occ::handle<Graphic3d_Texture2D>& texture);
+// The aspects of the triangles of a checked material, shaded in a render style; texture may be null.
+MaterialAspects make_aspects(const mtk_viewer_material& material, const occ::handle<Graphic3d_Texture2D>& texture,
+                             mtk_viewer_render_style style);
 
-// Changes the aspects to a display mode, with edges of the given colour where it draws them. The presentations that use
+// Shades the aspects in a render style; as for apply_display_mode, the presentations show it once synchronized.
+void apply_render_style(MaterialAspects& aspects, mtk_viewer_render_style style);
+
+// Which edges the display mode and the render style draw, and how.
+struct EdgeStyle {
+    bool triangle_edges = false; // those of the triangles, for the meshes without edges of their own
+    bool own_edges = false;      // the edges of their own of the meshes
+    bool outlines = false;       // drawn thick, over the faces, as in the CAD render style
+    float outline_width = 1.0f;  // in pixels
+    Quantity_Color color;
+};
+
+// Changes the aspects to a display mode, with the edges of the triangles as the style says. The presentations that use
 // the aspects show the change once their aspects are synchronized (PrsMgr_PresentableObject::SynchronizeAspects).
-void apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges);
+void apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const EdgeStyle& edges);
 
 EdgeAspects make_edge_aspects();
-void apply_display_mode(EdgeAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges);
+void apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges);
 
 // The matrix as a placement that OpenCASCADE can apply to a shared presentation: a rotation, possibly with a
 // reflection, a uniform scale and a translation. Other affine matrices have no such placement.

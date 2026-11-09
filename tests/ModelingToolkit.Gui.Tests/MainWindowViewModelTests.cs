@@ -376,6 +376,25 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.IsGridVisible);
     }
 
+    [Fact]
+    public void TheSettingsChooseTheRenderStyle()
+    {
+        MainWindowViewModel viewModel = Create();
+        Assert.Equal(RenderStyle.Standard, viewModel.RenderStyle);
+
+        viewModel.ShowPanelCommand.Execute(SidePanel.Settings);
+        viewModel.IsCadRenderStyle = true;
+        viewModel.IsStandardRenderStyle = false; // the other radio button, unchecked
+
+        Assert.True(viewModel.IsSettingsPanelActive);
+        Assert.Equal(RenderStyle.Cad, viewModel.RenderStyle);
+        Assert.False(viewModel.IsStandardRenderStyle);
+
+        viewModel.SetRenderStyleCommand.Execute(RenderStyle.Standard);
+
+        Assert.Equal((true, false), (viewModel.IsStandardRenderStyle, viewModel.IsCadRenderStyle));
+    }
+
     private sealed class RecordingAppearance : IAppearance
     {
         public List<bool> Applied { get; } = [];

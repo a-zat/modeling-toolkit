@@ -58,6 +58,9 @@
           <NativeMenuItem Header="Materials Panel" ToggleType="CheckBox"
                           IsChecked="{Binding IsMaterialsPanelActive, Mode=OneWay}"
                           Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Materials}" />
+          <NativeMenuItem Header="Settings" ToggleType="CheckBox"
+                          IsChecked="{Binding IsSettingsPanelActive, Mode=OneWay}"
+                          Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:SidePanel.Settings}" />
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Fit All" Command="{Binding FitAllCommand}" />
           <NativeMenuItem Header="Standard Views">

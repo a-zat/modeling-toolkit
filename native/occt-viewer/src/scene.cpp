@@ -8,6 +8,8 @@
 #include <Graphic3d_Group.hxx>
 #include <Graphic3d_MaterialAspect.hxx>
 #include <Graphic3d_PBRMaterial.hxx>
+#include <Graphic3d_ShaderObject.hxx>
+#include <Graphic3d_ShaderProgram.hxx>
 #include <Graphic3d_TextureSet.hxx>
 #include <Image_PixMap.hxx>
 #include <Prs3d_Presentation.hxx>
@@ -23,6 +25,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
 
 namespace {
 
@@ -45,11 +48,10 @@ gp_Mat linear_part(const double* matrix) {
 // opacity.
 constexpr float faded_opacity = 0.25f;
 
-// In the CAD render style the faces are lit mostly by the ambient light, and a little by the light at the camera, so
-// that they keep about the colour of their material, faces at an angle a little darker, without highlights: a
-// face towards the camera gets the whole colour, one seen edge-on two thirds of it.
-constexpr float cad_ambient = 0.65f;
-constexpr float cad_diffuse = 0.35f;
+// In the CAD render style the faces have no highlights: a face turned to the light of the viewer gets about the whole
+// colour of its material, one turned away from it a little more than half (see Viewer::apply_lights).
+constexpr float cad_ambient = 0.55f;
+constexpr float cad_diffuse = 0.5f;
 
 Quantity_Color scaled(const Quantity_Color& color, float factor) {
     return Quantity_Color(color.Red() * factor, color.Green() * factor, color.Blue() * factor, Quantity_TOC_RGB);
@@ -110,6 +112,63 @@ occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& m
     return aspect;
 }
 
+// OpenGL draws lines one pixel wide at most in its core profile, as on macOS: a geometry shader draws the outlines
+// instead as quads of a width in pixels. OpenCASCADE does not give the width of lines to the shaders of line aspects
+// (occLineWidth stays 0), so each width has a program of its own. The outlines are drawn a little closer to the camera
+// than they are, a fraction of their distance, so that the faces they bound do not cover half of them; a depth offset
+// would not do, as the depth of perspective is far from linear.
+occ::handle<Graphic3d_ShaderProgram> make_outline_program(float width) {
+    occ::handle<Graphic3d_ShaderProgram> program = new Graphic3d_ShaderProgram();
+    program->SetId(TCollection_AsciiString("mtk_outlines_") + TCollection_AsciiString(static_cast<int>(width * 100)));
+    program->SetHeader("#version 150");
+    program->SetNbLightsMax(0);
+    program->SetNbClipPlanesMax(0);
+    program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(Graphic3d_TOS_VERTEX, R"(
+void main() {
+    vec4 position = occWorldViewMatrix * occModelWorldMatrix * occVertex;
+    position.z += 0.002 * abs(position.z);
+    gl_Position = occProjectionMatrix * position;
+})"));
+    program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(
+        Graphic3d_TOS_GEOMETRY, TCollection_AsciiString("const float width = ") + TCollection_AsciiString(width) + ";" + R"(
+layout(lines) in;
+layout(triangle_strip, max_vertices = 4) out;
+uniform vec4 occViewport;
+void main() {
+    vec4 start = gl_in[0].gl_Position;
+    vec4 end = gl_in[1].gl_Position;
+    vec2 half_size = 0.5 * occViewport.zw;
+    vec2 along = (end.xy / end.w - start.xy / start.w) * half_size;
+    float length = max(length(along), 1.0e-6);
+    // Half the width across the segment, and as much beyond its ends, so that the segments of a polyline join.
+    vec2 forward = along / length * 0.5 * width / half_size;
+    vec2 across = vec2(-along.y, along.x) / length * 0.5 * width / half_size;
+    gl_Position = vec4(start.xy + (-forward + across) * start.w, start.zw);
+    EmitVertex();
+    gl_Position = vec4(start.xy + (-forward - across) * start.w, start.zw);
+    EmitVertex();
+    gl_Position = vec4(end.xy + (forward + across) * end.w, end.zw);
+    EmitVertex();
+    gl_Position = vec4(end.xy + (forward - across) * end.w, end.zw);
+    EmitVertex();
+    EndPrimitive();
+})"));
+    program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(Graphic3d_TOS_FRAGMENT, R"(
+void main() {
+    occSetFragColor(occColor);
+})"));
+    return program;
+}
+
+occ::handle<Graphic3d_ShaderProgram> outline_program(float width) {
+    static std::map<float, occ::handle<Graphic3d_ShaderProgram>> programs;
+    occ::handle<Graphic3d_ShaderProgram>& program = programs[width];
+    if (program.IsNull()) {
+        program = make_outline_program(width);
+    }
+    return program;
+}
+
 void apply_display_mode_to(Graphic3d_AspectFillArea3d& aspect, mtk_viewer_display_mode mode,
                            const Quantity_ColorRGBA& edges, bool triangle_edges) {
     const bool wireframe = mode == MTK_VIEWER_DISPLAY_WIREFRAME;
@@ -119,17 +178,17 @@ void apply_display_mode_to(Graphic3d_AspectFillArea3d& aspect, mtk_viewer_displa
     aspect.SetTextureMapOn(!wireframe && !aspect.TextureSet().IsNull());
     aspect.SetShadingModel(wireframe ? Graphic3d_TypeOfShadingModel_Unlit : Graphic3d_TypeOfShadingModel_DEFAULT);
     aspect.SetInteriorColor(edges);
-    aspect.SetDrawEdges(triangle_edges && mode != MTK_VIEWER_DISPLAY_SHADED);
+    aspect.SetDrawEdges(triangle_edges);
     aspect.SetEdgeColor(edges);
     aspect.SetEdgeWidth(1.0);
 }
 
 } // namespace
 
-void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges) {
-    const Quantity_ColorRGBA shaded(edges, 1.0f), faded(edges, faded_opacity);
-    apply_display_mode_to(*aspects.shaded, mode, shaded, true);
-    apply_display_mode_to(*aspects.faded, mode, faded, true);
+void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const EdgeStyle& edges) {
+    const Quantity_ColorRGBA shaded(edges.color, 1.0f), faded(edges.color, faded_opacity);
+    apply_display_mode_to(*aspects.shaded, mode, shaded, edges.triangle_edges);
+    apply_display_mode_to(*aspects.faded, mode, faded, edges.triangle_edges);
     apply_display_mode_to(*aspects.shaded_faces, mode, shaded, false);
     apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
 }
@@ -140,15 +199,17 @@ mtk::EdgeAspects mtk::make_edge_aspects() {
     return aspects;
 }
 
-void mtk::apply_display_mode(EdgeAspects& aspects, mtk_viewer_display_mode mode, const Quantity_Color& edges) {
+void mtk::apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges) {
     // An empty line type draws nothing: the same presentations serve all the display modes.
-    const Aspect_TypeOfLine type = mode == MTK_VIEWER_DISPLAY_SHADED ? Aspect_TOL_EMPTY : Aspect_TOL_SOLID;
+    const Aspect_TypeOfLine type = edges.own_edges ? Aspect_TOL_SOLID : Aspect_TOL_EMPTY;
     for (const occ::handle<Graphic3d_AspectLine3d>& aspect : {aspects.shaded, aspects.faded}) {
         aspect->SetLineType(type);
         aspect->SetLineWidth(1.0f);
+        aspect->SetShaderProgram(edges.outlines ? outline_program(edges.outline_width)
+                                                : occ::handle<Graphic3d_ShaderProgram>());
     }
-    aspects.shaded->SetInteriorColor(Quantity_ColorRGBA(edges, 1.0f));
-    aspects.faded->SetInteriorColor(Quantity_ColorRGBA(edges, faded_opacity));
+    aspects.shaded->SetInteriorColor(Quantity_ColorRGBA(edges.color, 1.0f));
+    aspects.faded->SetInteriorColor(Quantity_ColorRGBA(edges.color, faded_opacity));
 }
 
 mtk::MeshObject::MeshObject(const Mesh& mesh, const MaterialAspects& aspects, const EdgeAspects& edge_aspects)

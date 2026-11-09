@@ -1,0 +1,35 @@
+<!-- The settings of the application: how it looks, and how the 3D view shades the model. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
+             x:Class="ModelingToolkit.Gui.Views.SettingsView"
+             x:DataType="vm:MainWindowViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="14,0,14,14" Spacing="16">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="label" Text="APPEARANCE" />
+        <CheckBox Content="Dark theme" IsChecked="{Binding IsDark}" />
+      </StackPanel>
+
+      <StackPanel Spacing="8">
+        <TextBlock Classes="label" Text="RENDER STYLE" />
+        <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsStandardRenderStyle}">
+          <StackPanel>
+            <TextBlock Text="Standard" />
+            <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                       Text="Lit by the materials, with their highlights." />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsCadRenderStyle}">
+          <StackPanel>
+            <TextBlock Text="CAD" />
+            <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                       Text="As in technical drawings: on white, flat shades without highlights, thick dark outlines." />
+          </StackPanel>
+        </RadioButton>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+
+</UserControl>

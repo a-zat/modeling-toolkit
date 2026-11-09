@@ -38,6 +38,7 @@ internal unsafe struct ViewerColors
     public fixed float CubeText[3];
     public fixed float Highlight[3];
     public fixed float Edges[3];
+    public fixed float Outlines[3];
 }
 
 /// <summary>A triangle mesh; the arrays are read during the call only.</summary>

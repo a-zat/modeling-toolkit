@@ -48,6 +48,9 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<DisplayMode> DisplayModeProperty =
         AvaloniaProperty.Register<ViewportView, DisplayMode>(nameof(DisplayMode));
 
+    public static readonly StyledProperty<RenderStyle> RenderStyleProperty =
+        AvaloniaProperty.Register<ViewportView, RenderStyle>(nameof(RenderStyle));
+
     public static readonly StyledProperty<bool> IsPerspectiveProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsPerspective), defaultValue: true);
 
@@ -154,6 +157,12 @@ public sealed class ViewportView : Border, IViewCamera
         set => SetValue(DisplayModeProperty, value);
     }
 
+    public RenderStyle RenderStyle
+    {
+        get => GetValue(RenderStyleProperty);
+        set => SetValue(RenderStyleProperty, value);
+    }
+
     /// <summary>Perspective, or orthographic (parallel) projection.</summary>
     public bool IsPerspective
     {
@@ -191,9 +200,10 @@ public sealed class ViewportView : Border, IViewCamera
                Find("Mtk.Viewport.AxisX", out Color axisX) && Find("Mtk.Viewport.AxisY", out Color axisY) &&
                Find("Mtk.Viewport.AxisZ", out Color axisZ) && Find("Mtk.ViewCube.Face", out Color cubeFace) &&
                Find("Mtk.ViewCube.Edge", out Color cubeEdge) && Find("Mtk.ViewCube.Text", out Color cubeText) &&
-               Find("SystemAccentColor", out Color highlight) && Find("Mtk.Viewport.Edge", out Color edges)
+               Find("SystemAccentColor", out Color highlight) && Find("Mtk.Viewport.Edge", out Color edges) &&
+               Find("Mtk.Viewport.Outline", out Color outlines)
             ? new ViewportColors(gradient.GradientStops[0].Color, gradient.GradientStops[^1].Color, grid, axisX,
-                axisY, axisZ, cubeFace, cubeEdge, cubeText, highlight, edges)
+                axisY, axisZ, cubeFace, cubeEdge, cubeText, highlight, edges, outlines)
             : null;
 
         bool Find(string key, out Color color)
@@ -227,6 +237,11 @@ public sealed class ViewportView : Border, IViewCamera
                 scene.ShowSelectionIn(viewer, Selection);
                 return true;
             });
+        }
+        else if (change.Property == RenderStyleProperty)
+        {
+            ApplyColors();
+            Send(ApplySettings);
         }
         else if (change.Property == DisplayModeProperty || change.Property == IsPerspectiveProperty
                  || change.Property == IsGridVisibleProperty)
@@ -470,16 +485,21 @@ public sealed class ViewportView : Border, IViewCamera
     private bool ApplySettings(OcctViewer viewer)
     {
         viewer.SetDisplayMode(DisplayMode);
+        viewer.SetRenderStyle(RenderStyle);
         viewer.SetPerspective(IsPerspective);
         viewer.SetGridVisible(IsGridVisible);
         return true;
     }
 
-    // The native view takes its colours from the same resources as the rest of the interface, in the current theme.
+    // The native view takes its colours from the same resources as the rest of the interface, in the current theme; the
+    // CAD render style draws on white, as on paper, whatever the theme.
     private void ApplyColors()
     {
-        if (ReadColors(ActualThemeVariant) is { } colors)
+        bool cad = RenderStyle == RenderStyle.Cad;
+        if (ReadColors(cad ? ThemeVariant.Light : ActualThemeVariant) is { } themed)
         {
+            ViewportColors colors = cad ? themed with { BackgroundTop = Colors.White, BackgroundBottom = Colors.White }
+                                        : themed;
             Send(viewer =>
             {
                 viewer.SetColors(colors);

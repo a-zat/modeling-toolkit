@@ -87,6 +87,7 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         Copy(colors.CubeEdge, native.CubeEdge);
         Copy(colors.CubeText, native.CubeText);
         Copy(colors.Highlight, native.Highlight);
+        Copy(colors.Outlines, native.Outlines);
         Copy(colors.Edges, native.Edges);
         NativeMethods.SetColors(_handle, in native).ThrowIfFailed();
 
@@ -249,6 +250,8 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
     public void ShowView(StandardView view) => NativeMethods.ShowView(_handle, (int)view).ThrowIfFailed();
 
     public void SetDisplayMode(DisplayMode mode) => NativeMethods.SetDisplayMode(_handle, (int)mode).ThrowIfFailed();
+
+    public void SetRenderStyle(RenderStyle style) => NativeMethods.SetRenderStyle(_handle, (int)style).ThrowIfFailed();
 
     public void SetPerspective(bool perspective) =>
         NativeMethods.SetPerspective(_handle, perspective ? 1 : 0).ThrowIfFailed();

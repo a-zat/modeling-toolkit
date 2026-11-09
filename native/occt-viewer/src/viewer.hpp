@@ -87,6 +87,7 @@ public:
     // How the view shows the scene: the camera turns to a standard view with an animation, which redraw() plays.
     void show_view(mtk_viewer_view view);
     void set_display_mode(mtk_viewer_display_mode mode);
+    void set_render_style(mtk_viewer_render_style style);
     void set_perspective(bool perspective);
     void set_grid_visible(bool visible);
     int mesh_count() const { return static_cast<int>(meshes_.size()); }
@@ -128,6 +129,9 @@ private:
     void handleViewRedraw(const occ::handle<AIS_InteractiveContext>& context,
                           const occ::handle<V3d_View>& view) override;
 
+    // The edges that the display mode and the render style draw.
+    EdgeStyle edge_style() const;
+    void apply_lights();
     bool is_attached() const { return !window_.IsNull(); }
     void attach();
     void update_size();
@@ -150,7 +154,9 @@ private:
     bool grid_visible_ = true;
     double grid_step_ = 1000.0; // millimetres
     mtk_viewer_display_mode display_mode_ = MTK_VIEWER_DISPLAY_SHADED;
+    mtk_viewer_render_style render_style_ = MTK_VIEWER_RENDER_STANDARD;
     Quantity_Color edge_color_ = Quantity_NOC_GRAY30;
+    Quantity_Color outline_color_ = Quantity_NOC_BLACK;
     occ::handle<Aspect_NeutralWindow> window_;
     std::vector<Mesh> meshes_;
     EdgeAspects edge_aspects_ = make_edge_aspects();

@@ -6,4 +6,5 @@ public enum SidePanel
     None,
     Model,
     Materials,
+    Settings,
 }

@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 11
+#define MTK_OCCT_VIEWER_ABI_VERSION 12
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -72,6 +72,7 @@ typedef struct mtk_viewer_colors {
     float cube_text[3];
     float highlight[3]; /* the part of the ViewCube under the pointer */
     float edges[3];     /* the edges, in the display modes that draw them */
+    float outlines[3];  /* the edges over the faces in the CAD render style, in place of edges */
 } mtk_viewer_colors;
 
 /* The views of the faces of the ViewCube, and the view from its front right top corner, the initial one. */
@@ -196,8 +197,18 @@ MTK_VIEWER_API mtk_status mtk_viewer_fit_all(mtk_viewer* viewer);
 /* Turns the camera to a standard view, fitting the instances, with the animation of the ViewCube. */
 MTK_VIEWER_API mtk_status mtk_viewer_show_view(mtk_viewer* viewer, int32_t view /* mtk_viewer_view */);
 
+/* How the faces are shaded, in the display modes that draw them. */
+typedef enum mtk_viewer_render_style {
+    MTK_VIEWER_RENDER_STANDARD = 0, /* lit by the materials, with their highlights */
+    MTK_VIEWER_RENDER_CAD = 1       /* flat shades without highlights, lit from the upper left of the camera, and the
+                                       edges of the meshes drawn thick in the outline colour, also in the shaded mode */
+} mtk_viewer_render_style;
+
 /* Shaded is the initial mode. */
 MTK_VIEWER_API mtk_status mtk_viewer_set_display_mode(mtk_viewer* viewer, int32_t mode /* mtk_viewer_display_mode */);
+
+/* Standard is the initial style. */
+MTK_VIEWER_API mtk_status mtk_viewer_set_render_style(mtk_viewer* viewer, int32_t style /* mtk_viewer_render_style */);
 
 /* Perspective (1), the initial projection, or orthographic (0). */
 MTK_VIEWER_API mtk_status mtk_viewer_set_perspective(mtk_viewer* viewer, int32_t perspective);

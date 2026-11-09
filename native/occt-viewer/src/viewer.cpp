@@ -23,6 +23,8 @@
 #include <SelectMgr_SortCriterion.hxx>
 #include <StdSelect_ViewerSelector3d.hxx>
 #include <TCollection_AsciiString.hxx>
+#include <V3d_AmbientLight.hxx>
+#include <V3d_DirectionalLight.hxx>
 #include <V3d_Trihedron.hxx>
 
 #include <algorithm>
@@ -36,7 +38,7 @@ struct mtk_viewer : mtk::Viewer {
 };
 
 // The managed side declares the same layouts: these sizes must match the ones it checks in its tests.
-static_assert(sizeof(mtk_viewer_colors) == 132);
+static_assert(sizeof(mtk_viewer_colors) == 144);
 static_assert(sizeof(mtk_viewer_material) == 28);
 static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 112);
 static_assert(sizeof(mtk_viewer_element) == 12);
@@ -45,6 +47,8 @@ static_assert(sizeof(mtk_viewer_pick) == 56);
 namespace {
 
 // Sizes in device-independent units, like the rest of the interface; the viewer multiplies them by the scale.
+// The outlines of the CAD render style, in device-independent units.
+constexpr double outline_width = 1.5;
 constexpr double view_cube_size = 42.0;
 constexpr double view_cube_offset = 70.0; // from the upper right corner to the centre of the cube
 constexpr double view_cube_bevel = 0.08;  // width of the edges and corners, relative to the size
@@ -293,6 +297,7 @@ void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     }
 
     edge_color_ = to_color(colors.edges);
+    outline_color_ = to_color(colors.outlines);
     set_display_mode(display_mode_);
     view_->Invalidate();
 }
@@ -310,8 +315,8 @@ int mtk::Viewer::add_texture(const uint8_t* pixels, int width, int height) {
 int mtk::Viewer::add_material(const mtk_viewer_material& material) {
     const occ::handle<Graphic3d_Texture2D> texture =
         material.base_color_texture >= 0 ? textures_[material.base_color_texture] : nullptr;
-    MaterialAspects aspects = make_aspects(material, texture);
-    apply_display_mode(aspects, display_mode_, edge_color_);
+    MaterialAspects aspects = make_aspects(material, texture, render_style_);
+    apply_display_mode(aspects, display_mode_, edge_style());
     materials_.push_back(std::move(aspects));
     return material_count() - 1;
 }
@@ -465,12 +470,54 @@ void mtk::Viewer::show_view(mtk_viewer_view view) {
     view_->Invalidate();
 }
 
+mtk::EdgeStyle mtk::Viewer::edge_style() const {
+    const bool wireframe = display_mode_ == MTK_VIEWER_DISPLAY_WIREFRAME;
+    if (render_style_ == MTK_VIEWER_RENDER_CAD) {
+        // The edges of their own outline the faces in every mode; without faces, they keep the colour that stands out
+        // from the ground, and the meshes without edges show those of their triangles.
+        return EdgeStyle{wireframe, true, !wireframe, static_cast<float>(outline_width * scale_),
+                         wireframe ? edge_color_ : outline_color_};
+    }
+    const bool edges = display_mode_ != MTK_VIEWER_DISPLAY_SHADED;
+    return EdgeStyle{edges, edges, false, 1.0f, edge_color_};
+}
+
+// The CAD render style lights the faces from the upper left of the camera, so that faces turned differently take
+// different shades, and much from all around, so that none is dark.
+void mtk::Viewer::apply_lights() {
+    if (render_style_ != MTK_VIEWER_RENDER_CAD) {
+        viewer_->SetDefaultLights();
+        viewer_->SetLightOn();
+        return;
+    }
+    while (!viewer_->DefinedLights().IsEmpty()) {
+        viewer_->DelLight(viewer_->DefinedLights().First());
+    }
+    occ::handle<V3d_AmbientLight> ambient = new V3d_AmbientLight(Quantity_NOC_WHITE);
+    ambient->SetIntensity(1.0f);
+    occ::handle<V3d_DirectionalLight> key = new V3d_DirectionalLight(gp_Dir(0.45, -0.6, -0.66), Quantity_NOC_WHITE);
+    key->SetHeadlight(true);
+    viewer_->AddLight(ambient);
+    viewer_->AddLight(key);
+    viewer_->SetLightOn();
+}
+
+void mtk::Viewer::set_render_style(mtk_viewer_render_style style) {
+    render_style_ = style;
+    for (MaterialAspects& aspects : materials_) {
+        apply_render_style(aspects, style);
+    }
+    apply_lights();
+    set_display_mode(display_mode_); // with the edges, and the presentations synchronized
+}
+
 void mtk::Viewer::set_display_mode(mtk_viewer_display_mode mode) {
     display_mode_ = mode;
+    const EdgeStyle edges = edge_style();
     for (MaterialAspects& aspects : materials_) {
-        apply_display_mode(aspects, mode, edge_color_);
+        apply_display_mode(aspects, mode, edges);
     }
-    apply_display_mode(edge_aspects_, mode, edge_color_);
+    apply_display_mode(edge_aspects_, edges);
     // The instances placed by a transformation show the presentations of the shared meshes.
     for (const auto& [key, mesh] : shared_meshes_) {
         mesh->SynchronizeAspects();
@@ -709,6 +756,7 @@ void mtk::Viewer::apply_scale(double scale) {
     if (context_->IsDisplayed(view_cube_)) {
         context_->Redisplay(view_cube_, false);
     }
+    set_display_mode(display_mode_); // the width of the outlines
 }
 
 NCollection_Vec2<int> mtk::Viewer::to_pixels(double x, double y) const {
@@ -892,7 +940,7 @@ mtk_status mtk_viewer_set_colors(mtk_viewer* viewer, const mtk_viewer_colors* co
         for (const float(*color)[3] : {&colors->background_top, &colors->background_bottom, &colors->grid,
                                        &colors->axis_x, &colors->axis_y, &colors->axis_z, &colors->cube_face,
                                        &colors->cube_edge, &colors->cube_text, &colors->highlight,
-                                       &colors->edges}) {
+                                       &colors->edges, &colors->outlines}) {
             if (!is_color(*color)) {
                 return mtk::invalid_argument("Colour components must be between 0 and 1.");
             }
@@ -1072,6 +1120,19 @@ mtk_status mtk_viewer_set_display_mode(mtk_viewer* viewer, int32_t mode) {
             return mtk::invalid_argument("mode is not a display mode.");
         }
         viewer->set_display_mode(static_cast<mtk_viewer_display_mode>(mode));
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_render_style(mtk_viewer* viewer, int32_t style) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (style < MTK_VIEWER_RENDER_STANDARD || style > MTK_VIEWER_RENDER_CAD) {
+            return mtk::invalid_argument("style is not a render style.");
+        }
+        viewer->set_render_style(static_cast<mtk_viewer_render_style>(style));
         return MTK_STATUS_OK;
     });
 }

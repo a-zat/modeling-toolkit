@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 11;
+    public const int AbiVersion = 12;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -63,6 +63,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_display_mode")]
     public static partial NativeStatus SetDisplayMode(ViewerHandle viewer, int mode);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_render_style")]
+    public static partial NativeStatus SetRenderStyle(ViewerHandle viewer, int style);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_perspective")]
     public static partial NativeStatus SetPerspective(ViewerHandle viewer, int perspective);
