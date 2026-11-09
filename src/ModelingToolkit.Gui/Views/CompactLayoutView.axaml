@@ -157,7 +157,7 @@
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
 
       <viewport:ViewportView x:Name="Viewport" Grid.Column="3" Document="{Binding Document}"
-                             Selection="{Binding ModelTree.SelectedNode.Path}"
+                             Selection="{Binding EmphasizedPath}"
                              PickCommand="{Binding PickCommand}"
                              HighlightedElements="{Binding SelectedElements}"
                              WarningsCommand="{Binding ReportViewWarningsCommand}"

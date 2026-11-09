@@ -98,6 +98,21 @@ public sealed class EditContextTests : IDisposable
         Assert.Equal([_left], _viewModel.ModelTree.SelectedNode?.Path);
     }
 
+    [Fact]
+    public async Task TheViewEmphasizesTheSelectedNodeOrElseTheBlockBeingEdited()
+    {
+        await OpenParts();
+        Assert.Null(_viewModel.EmphasizedPath);
+
+        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
+        Assert.Equal([_left], _viewModel.EmphasizedPath);
+        _viewModel.ModelTree.SelectCommand.Execute(new Entity[] { _left, _box });
+        Assert.Equal([_left, _box], _viewModel.EmphasizedPath);
+
+        _viewModel.LeaveContextCommand.Execute(null);
+        Assert.Null(_viewModel.EmphasizedPath);
+    }
+
     private ElementReference Face(BlockReference reference) => new([reference, _box], ElementKind.Face, 0);
 
     private ViewportPick Click(BlockReference reference, int clicks = 1) =>

@@ -49,6 +49,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 }
                 ShowProperties();
                 OnEditingChanged();
+                OnPropertyChanged(nameof(EmphasizedPath));
             }
         };
         Palette.Commands =
@@ -155,6 +156,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Whether a block is being edited rather than the model.</summary>
     public bool IsEditingBlock => Context is { IsModel: false };
+
+    /// <summary>
+    /// The entities that the 3D view shows in front of the rest, which it fades: the node selected, or else the reference
+    /// whose block is being edited; null for none.
+    /// </summary>
+    public IReadOnlyList<Entity>? EmphasizedPath =>
+        ModelTree.SelectedNode?.Path ?? (Context is { IsModel: false } context ? context.Path : null);
 
     /// <summary>The references entered, by name, from the model: "Car › Front wheel".</summary>
     public string ContextName => Context is null
@@ -273,6 +281,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Elements?.Clear();
         OnPropertyChanged(nameof(IsEditingBlock));
         OnPropertyChanged(nameof(ContextName));
+        OnPropertyChanged(nameof(EmphasizedPath));
     }
 
     private void OnElementsChanged(object? sender, EventArgs e)
