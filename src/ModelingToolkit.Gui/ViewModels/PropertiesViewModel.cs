@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ModelingToolkit.Core.Editing;
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.ViewModels;
@@ -14,7 +15,7 @@ public sealed record MaterialChoice(string Name, Material? Material)
     public static MaterialChoice ByBlock { get; } = new("By block", null);
 }
 
-/// <summary>The properties of the selected node of the model tree.</summary>
+/// <summary>The properties of the selected node of the model tree, or of the faces, edges and vertices selected.</summary>
 public sealed partial class PropertiesViewModel : ObservableObject
 {
     public PropertiesViewModel()
@@ -139,6 +140,83 @@ public sealed partial class PropertiesViewModel : ObservableObject
             { Entity: BrepEntity brep } => BrepRows(brep),
             _ => [],
         };
+    }
+
+    /// <summary>
+    /// Shows the kind and the measures of a selected element, in the coordinates of its shape; for several, how many
+    /// of each kind, and their total length or area when all are edges or all faces. None shows nothing.
+    /// </summary>
+    public void ShowElements(IReadOnlyList<ElementReference> elements)
+    {
+        ArgumentNullException.ThrowIfNull(elements);
+        Show(null);
+        if (elements.Count == 0)
+        {
+            return;
+        }
+
+        HasSelection = true;
+        if (elements.Count == 1)
+        {
+            ElementReference element = elements[0];
+            Title = element.Kind.ToString();
+            Kind = $"of {element.Entity.Name ?? "a B-rep shape"}";
+            Rows = ElementRows(element);
+            return;
+        }
+
+        Title = Formatting.Count(elements.Count, "element", "elements");
+        Kind = "Selection";
+        List<PropertyRow> rows = [];
+        foreach (IGrouping<ElementKind, ElementReference> group in elements.GroupBy(element => element.Kind))
+        {
+            rows.Add(new(group.Key switch
+            {
+                ElementKind.Face => "Faces",
+                ElementKind.Edge => "Edges",
+                _ => "Vertices",
+            }, Formatting.Count(group.Count())));
+        }
+        if (elements.All(element => element.Kind == ElementKind.Edge))
+        {
+            rows.Add(new("Total length", $"{Formatting.Length(elements.Sum(Length))} mm"));
+        }
+        else if (elements.All(element => element.Kind == ElementKind.Face))
+        {
+            rows.Add(new("Total area", Formatting.Area(elements.Sum(element => FaceOf(element).Area))));
+        }
+        Rows = rows;
+    }
+
+    private static double Length(ElementReference edge) =>
+        edge.Entity.Kernel.GetEdgeLength(edge.Entity.Shape, edge.Index);
+
+    private static FaceInfo FaceOf(ElementReference face) => face.Entity.Kernel.GetFaceInfo(face.Entity.Shape, face.Index);
+
+    private static List<PropertyRow> ElementRows(ElementReference element)
+    {
+        switch (element.Kind)
+        {
+            case ElementKind.Face:
+                FaceInfo face = FaceOf(element);
+                List<PropertyRow> rows = [new("Area", Formatting.Area(face.Area))];
+                if (face.Plane is { } plane)
+                {
+                    rows.Add(new("Surface", "Plane"));
+                    rows.Add(new("Plane", Formatting.Plane(plane)));
+                    rows.Add(new("Normal", Formatting.Direction(plane.Normal)));
+                }
+                else
+                {
+                    rows.Add(new("Surface", "Curved"));
+                }
+                return rows;
+            case ElementKind.Edge:
+                return [new("Length", $"{Formatting.Length(Length(element))} mm")];
+            default:
+                Point3d point = element.Entity.Kernel.GetVertexPoint(element.Entity.Shape, element.Index);
+                return [new("Position", Formatting.Point(point.X, point.Y, point.Z))];
+        }
     }
 
     private static List<PropertyRow> ModelRows(DocumentStatistics statistics)

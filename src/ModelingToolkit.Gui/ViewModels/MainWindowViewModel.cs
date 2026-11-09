@@ -1,3 +1,4 @@
+using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModelingToolkit.Core.Editing;
@@ -39,7 +40,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(ModelTreeViewModel.SelectedNode))
             {
-                Properties.Show(ModelTree.SelectedNode);
+                // A node and elements are not selected together.
+                if (ModelTree.SelectedNode is not null)
+                {
+                    Elements?.Clear();
+                }
+                ShowProperties();
                 OnEditingChanged();
             }
         };
@@ -132,6 +138,61 @@ public sealed partial class MainWindowViewModel : ObservableObject
         catch (EditRefusedException exception)
         {
             StatusMessage = exception.Message;
+        }
+    }
+
+    /// <summary>The faces, edges and vertices selected in the open document; null without a document.</summary>
+    public ElementSelection? Elements { get; private set; }
+
+    /// <summary>The elements of <see cref="Elements"/>, which the 3D view highlights.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<ElementReference> SelectedElements { get; private set; } = [];
+
+    /// <summary>
+    /// Selects what a click of the 3D view picks: the face, edge or vertex of a shape, Shift adding it to the elements
+    /// selected or taking it out; the node of a mesh; nothing, on the ground.
+    /// </summary>
+    [RelayCommand]
+    private void Pick(ViewportPick pick)
+    {
+        if (pick.Element is { } element && Elements is { } elements)
+        {
+            ModelTree.SelectedNode = null;
+            if (pick.Modifiers.HasFlag(KeyModifiers.Shift))
+            {
+                elements.Toggle(element);
+            }
+            else
+            {
+                elements.Select(element);
+            }
+            return;
+        }
+
+        Elements?.Clear();
+        ModelTree.SelectCommand.Execute(pick.Path);
+    }
+
+    private void OnElementsChanged(object? sender, EventArgs e)
+    {
+        SelectedElements = Elements!.Elements;
+        ShowProperties();
+    }
+
+    // The elements selected, or else the node.
+    private void ShowProperties(bool refresh = false)
+    {
+        if (SelectedElements.Count > 0)
+        {
+            Properties.ShowElements(SelectedElements);
+        }
+        else if (refresh)
+        {
+            Properties.Refresh(ModelTree.SelectedNode);
+        }
+        else
+        {
+            Properties.Show(ModelTree.SelectedNode);
         }
     }
 
@@ -486,7 +547,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private void OnDocumentEdited(object? sender, DocumentChange change) => Properties.Refresh(ModelTree.SelectedNode);
+    private void OnDocumentEdited(object? sender, DocumentChange change) => ShowProperties(refresh: true);
 
     private void Show(Document document, DocumentStatistics statistics, string path)
     {
@@ -518,6 +579,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         Session = new EditSession(document);
         Session.Changed += OnSessionChanged;
+        if (Elements is not null)
+        {
+            Elements.Changed -= OnElementsChanged;
+        }
+        // Before the properties, which show the elements that remain after a change.
+        Elements = new ElementSelection(document);
+        Elements.Changed += OnElementsChanged;
+        SelectedElements = [];
 
         Properties.Know(document, statistics);
         ModelTree.Show(document);

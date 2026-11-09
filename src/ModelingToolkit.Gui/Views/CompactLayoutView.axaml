@@ -158,7 +158,8 @@
 
       <viewport:ViewportView x:Name="Viewport" Grid.Column="3" Document="{Binding Document}"
                              Selection="{Binding ModelTree.SelectedNode.Path}"
-                             PickCommand="{Binding ModelTree.SelectCommand}"
+                             PickCommand="{Binding PickCommand}"
+                             HighlightedElements="{Binding SelectedElements}"
                              WarningsCommand="{Binding ReportViewWarningsCommand}"
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
                              IsPerspective="{Binding IsPerspective}"

@@ -39,9 +39,6 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<IReadOnlyList<ElementReference>?> HighlightedElementsProperty =
         AvaloniaProperty.Register<ViewportView, IReadOnlyList<ElementReference>?>(nameof(HighlightedElements));
 
-    public static readonly StyledProperty<ICommand?> ElementPickCommandProperty =
-        AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(ElementPickCommand));
-
     public static readonly StyledProperty<ICommand?> WarningsCommandProperty =
         AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(WarningsCommand));
 
@@ -115,8 +112,9 @@ public sealed class ViewportView : Border, IViewCamera
     }
 
     /// <summary>
-    /// Executed when the view is clicked, with the path of the mesh under the pointer, a leaf of the model tree, or
-    /// null when there is none. Clicks on the ViewCube turn the view instead.
+    /// Executed when the view is clicked, with all that the click picks (a <see cref="ViewportPick"/>): the path of the
+    /// mesh or shape under the pointer, a leaf of the model tree, the element of a shape, the point, and the modifier
+    /// keys. Clicks on the ViewCube turn the view instead.
     /// </summary>
     public ICommand? PickCommand
     {
@@ -129,16 +127,6 @@ public sealed class ViewportView : Border, IViewCamera
     {
         get => GetValue(HighlightedElementsProperty);
         set => SetValue(HighlightedElementsProperty, value);
-    }
-
-    /// <summary>
-    /// Executed when the view is clicked, after <see cref="PickCommand"/>, with all that the click picks (a
-    /// <see cref="ViewportPick"/>): the element of a shape under the pointer, the point, and the modifier keys.
-    /// </summary>
-    public ICommand? ElementPickCommand
-    {
-        get => GetValue(ElementPickCommandProperty);
-        set => SetValue(ElementPickCommandProperty, value);
     }
 
     /// <summary>
@@ -335,17 +323,11 @@ public sealed class ViewportView : Border, IViewCamera
             });
             if (picked is { } pick)
             {
-                IReadOnlyList<Entity>? path = _shownScene?.PathOfShown(pick.Instance);
-                if (PickCommand is { } command && command.CanExecute(path))
+                var detailed = new ViewportPick(_shownScene?.PathOfShown(pick.Instance), _shownScene?.ElementOf(pick),
+                    pick.Point, pick.Normal, _clickModifiers);
+                if (PickCommand is { } command && command.CanExecute(detailed))
                 {
-                    command.Execute(path);
-                }
-
-                var detailed = new ViewportPick(
-                    path, _shownScene?.ElementOf(pick), pick.Point, pick.Normal, _clickModifiers);
-                if (ElementPickCommand is { } elementCommand && elementCommand.CanExecute(detailed))
-                {
-                    elementCommand.Execute(detailed);
+                    command.Execute(detailed);
                 }
             }
         });
