@@ -32,11 +32,11 @@
   <Style Selector=":is(Button).tool:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <Style Selector="ToggleButton.tool:checked /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="ToggleButton.tool:checked /template/ ContentPresenter#PART_ContentPresenter, Button.tool.active /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Mtk.Selection}" />
     <Setter Property="Foreground" Value="{DynamicResource Mtk.AccentForeground}" />
   </Style>
-  <Style Selector="ToggleButton.tool:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="ToggleButton.tool:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tool.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Mtk.SelectionHover}" />
   </Style>
 

@@ -162,11 +162,12 @@
         <ItemsControl ItemsSource="{Binding Tools}">
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="vm:ToolItemViewModel">
-              <ToggleButton Classes="tool" IsChecked="{Binding IsActive, Mode=OneWay}"
-                            Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ActivateToolCommand}"
-                            CommandParameter="{Binding}" ToolTip.Tip="{Binding Name}">
+              <!-- A button rather than a toggle, which would turn itself off when clicked while its tool stays on. -->
+              <Button Classes="tool" Classes.active="{Binding IsActive}"
+                      Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ActivateToolCommand}"
+                      CommandParameter="{Binding}" ToolTip.Tip="{Binding Name}">
                 <PathIcon Data="{Binding Icon, Converter={x:Static views:ResourceConverter.Instance}}" />
-              </ToggleButton>
+              </Button>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
