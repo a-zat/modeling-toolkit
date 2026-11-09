@@ -22,6 +22,9 @@
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+Y, macOS=Cmd+Shift+Z}" Command="{Binding RedoCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+Shift+Z, macOS=Cmd+Y}" Command="{Binding RedoCommand}" />
     <!-- The fields that take text handle these keys first. -->
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+X, macOS=Cmd+X}" Command="{Binding CutCommand}" />
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+C, macOS=Cmd+C}" Command="{Binding CopyCommand}" />
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+V, macOS=Cmd+V}" Command="{Binding PasteCommand}" />
     <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" Command="{Binding DeleteCommand}" />
     <KeyBinding Gesture="Back" Command="{Binding DeleteCommand}" />
@@ -57,6 +60,12 @@
           <NativeMenuItem Header="Redo" Command="{Binding RedoCommand}"
                           Gesture="{OnPlatform Default=Ctrl+Y, macOS=Cmd+Shift+Z}" />
           <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Cut" Command="{Binding CutCommand}"
+                          Gesture="{OnPlatform Default=Ctrl+X, macOS=Cmd+X}" />
+          <NativeMenuItem Header="Copy" Command="{Binding CopyCommand}"
+                          Gesture="{OnPlatform Default=Ctrl+C, macOS=Cmd+C}" />
+          <NativeMenuItem Header="Paste" Command="{Binding PasteCommand}"
+                          Gesture="{OnPlatform Default=Ctrl+V, macOS=Cmd+V}" />
           <NativeMenuItem Header="Delete" Command="{Binding DeleteCommand}"
                           Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" />
         </NativeMenu>

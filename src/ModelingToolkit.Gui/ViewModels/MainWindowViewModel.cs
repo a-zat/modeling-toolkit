@@ -85,6 +85,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Save As…", SaveAsCommand, Gesture: Shortcut("S", shift: true)),
             new("Undo", UndoCommand, Gesture: Shortcut("Z")),
             new("Redo", RedoCommand, Gesture: OperatingSystem.IsMacOS() ? Shortcut("Z", shift: true) : Shortcut("Y")),
+            new("Cut", CutCommand, Gesture: Shortcut("X")),
+            new("Copy", CopyCommand, Gesture: Shortcut("C")),
+            new("Paste", PasteCommand, Gesture: Shortcut("V")),
             new("Delete", DeleteCommand),
             new("Fit All", FitAllCommand),
             new("Top View", ShowViewCommand, StandardView.Top),
@@ -126,6 +129,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string RedoTip =>
         $"Redo{(CanRedo ? " " + Session!.RedoName : "")} ({(OperatingSystem.IsMacOS() ? Shortcut("Z", shift: true) : Shortcut("Y"))})";
+
+    private readonly EntityClipboard _clipboard = new();
+
+    /// <summary>Whether an entity is selected, which can be cut or copied.</summary>
+    public bool CanCopy => Session is not null && !IsBusy && ModelTree.SelectedNode?.Entity is not null;
+
+    /// <summary>Whether an entity was cut or copied in the open document, which can be pasted.</summary>
+    public bool CanPaste => Session is not null && !IsBusy && _clipboard.CanPaste(Session.Document);
 
     /// <summary>Whether faces or edges are selected, which can be erased, or else an entity, which can be deleted.</summary>
     public bool CanDelete => Session is not null && !IsBusy &&
@@ -446,6 +457,42 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanCopy))]
+    private void Copy()
+    {
+        _clipboard.Copy(Session!.Document, ModelTree.SelectedNode!.Path);
+        OnEditingChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCopy))]
+    private void Cut()
+    {
+        Entity entity = ModelTree.SelectedNode!.Entity!;
+        _clipboard.Copy(Session!.Document, ModelTree.SelectedNode.Path);
+        Edit(new CompositeCommand("Cut", [new DeleteCommand(entity)]));
+        OnEditingChanged();
+    }
+
+    /// <summary>Pastes what was cut or copied where it was, in the block being edited, selected for the move tool.</summary>
+    [RelayCommand(CanExecute = nameof(CanPaste))]
+    private void Paste()
+    {
+        if (_clipboard.Paste(Session!.Document, Context!) is not { } paste)
+        {
+            StatusMessage = "A block cannot be pasted into itself.";
+            return;
+        }
+        if (!Edit(paste.Command))
+        {
+            return;
+        }
+        ModelTree.SelectCommand.Execute((IReadOnlyList<Entity>)[.. Context!.Path, paste.Pasted]);
+        if (Tools.FirstOrDefault(item => item.Tool is MoveTool) is { } move)
+        {
+            ActivateTool(move);
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanDelete))]
     private void Delete()
     {
@@ -475,6 +522,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(UndoTip));
         OnPropertyChanged(nameof(RedoTip));
         OnPropertyChanged(nameof(CanDelete));
+        OnPropertyChanged(nameof(CanCopy));
+        OnPropertyChanged(nameof(CanPaste));
+        CutCommand.NotifyCanExecuteChanged();
+        CopyCommand.NotifyCanExecuteChanged();
+        PasteCommand.NotifyCanExecuteChanged();
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();

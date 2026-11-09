@@ -30,9 +30,18 @@ public static class TransformCommands
             return new ReplaceShapeCommand(
                 name, brep, Placed(brep, transform), new Dictionary<int, Material>(brep.FaceMaterials));
         }
+        Entity made = Duplicate(entity, transform);
+        return copy ? new AddEntityCommand(name, block, made) : new ReplaceEntityCommand(name, entity, made);
+    }
+
+    /// <summary>A new entity, in no block, like another but transformed, with its name, materials and geometry.</summary>
+    public static Entity Duplicate(Entity entity, Transform transform)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(transform);
         Entity made = Transformed(entity, transform);
         made.Name = entity.Name;
-        return copy ? new AddEntityCommand(name, block, made) : new ReplaceEntityCommand(name, entity, made);
+        return made;
     }
 
     private static Entity Transformed(Entity entity, Transform transform) => entity switch
