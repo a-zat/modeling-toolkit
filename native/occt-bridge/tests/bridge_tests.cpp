@@ -652,6 +652,63 @@ TEST(Tessellation, GivesTheEdgesOfABooleanResultWherePlaced) {
     }
 }
 
+std::vector<int32_t> edge_indices_of(const TessellationPtr& tessellation) {
+    const int32_t* indices = nullptr;
+    EXPECT_EQ(mtk_tessellation_get_edge_indices(tessellation.get(), &indices), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    return std::vector<int32_t>(indices, indices + edges_of(tessellation).size());
+}
+
+std::vector<std::array<double, 3>> vertices_of(const TessellationPtr& tessellation) {
+    const double* points = nullptr;
+    int32_t count = 0;
+    EXPECT_EQ(mtk_tessellation_get_vertices(tessellation.get(), &points, &count), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    std::vector<std::array<double, 3>> vertices;
+    for (int32_t vertex = 0; vertex < count; ++vertex) {
+        vertices.push_back({points[3 * vertex], points[3 * vertex + 1], points[3 * vertex + 2]});
+    }
+    return vertices;
+}
+
+TEST(Tessellation, NumbersTheEdgesAndVerticesInTheOrderOfTheShape) {
+    // Every edge of a box has a polyline, in the order of the shape; its vertices are its eight corners.
+    TessellationPtr box = tessellate(make_box(10.0, 20.0, 30.0), 1.0);
+    EXPECT_EQ(edge_indices_of(box), (std::vector<int32_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}));
+    const std::vector<std::array<double, 3>> corners = vertices_of(box);
+    ASSERT_EQ(corners.size(), 8u);
+    for (const std::array<double, 3>& corner : corners) {
+        EXPECT_TRUE(corner[0] == 0.0 || corner[0] == 10.0);
+        EXPECT_TRUE(corner[1] == 0.0 || corner[1] == 20.0);
+        EXPECT_TRUE(corner[2] == 0.0 || corner[2] == 30.0);
+    }
+
+    // A cylinder has three edges, the seam of its side among them, which has no polyline: the two circles keep the
+    // indices they have in the shape. Its two vertices are the ends of the seam.
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(5.0, 10.0, &made), MTK_STATUS_OK);
+    TessellationPtr cylinder = tessellate(ShapePtr(made), 0.1);
+    const std::vector<int32_t> circles = edge_indices_of(cylinder);
+    ASSERT_EQ(circles.size(), 2u);
+    EXPECT_LT(circles[0], circles[1]);
+    EXPECT_LE(circles[1], 2);
+    const std::vector<std::array<double, 3>> ends = vertices_of(cylinder);
+    ASSERT_EQ(ends.size(), 2u);
+    for (size_t end = 0; end < 2; ++end) {
+        EXPECT_NEAR(ends[end][0], 5.0, 1e-9);
+        EXPECT_NEAR(ends[end][1], 0.0, 1e-9);
+        EXPECT_NEAR(ends[end][2], end == 0 ? 10.0 : 0.0, 1e-9);
+    }
+}
+
+TEST(Tessellation, GivesTheVerticesWherePlaced) {
+    ShapePtr box = place(make_box(1.0, 1.0, 1.0), {1, 0, 0, 1000, 0, 1, 0, 0, 0, 0, 1, 0});
+
+    for (const std::array<double, 3>& vertex : vertices_of(tessellate(box, 0.1))) {
+        EXPECT_TRUE(vertex[0] == 1000.0 || vertex[0] == 1001.0);
+    }
+}
+
 TEST(Tessellation, RejectsNullArgumentsForFacesAndEdges) {
     TessellationPtr tessellation = tessellate(make_box(1.0, 1.0, 1.0), 1.0);
     const int32_t* indices = nullptr;
@@ -664,6 +721,11 @@ TEST(Tessellation, RejectsNullArgumentsForFacesAndEdges) {
     EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), nullptr, &indices, &count), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, nullptr, &count), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_tessellation_get_edges(tessellation.get(), &points, &indices, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_edge_indices(nullptr, &indices), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_edge_indices(tessellation.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_vertices(nullptr, &points, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_vertices(tessellation.get(), nullptr, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_tessellation_get_vertices(tessellation.get(), &points, nullptr), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(Tessellation, ClearsTheOutputsOfACallThatFails) {

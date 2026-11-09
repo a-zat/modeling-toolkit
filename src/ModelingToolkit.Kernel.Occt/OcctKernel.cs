@@ -146,12 +146,17 @@ public sealed class OcctKernel : IGeometryKernel
             NativeMethods.TessellationGetEdges(handle, out double* points, out int* firstPoints, out int edgeCount)
                 .ThrowIfFailed();
 
+            NativeMethods.TessellationGetEdgeIndices(handle, out int* edgeIndices).ThrowIfFailed();
+            NativeMethods.TessellationGetVertices(handle, out double* vertexPoints, out int vertexCount).ThrowIfFailed();
+
             int pointCount = firstPoints[edgeCount];
             var edges = new Polylines(
                 MemoryMarshal.Cast<double, Point3d>(new ReadOnlySpan<double>(points, 3 * pointCount)).ToArray(),
                 new ReadOnlySpan<int>(firstPoints, edgeCount + 1).ToArray());
             return new ShapeTessellation(
-                mesh.ToMeshEntity(), new ReadOnlySpan<int>(firstTriangles, faceCount + 1).ToArray(), edges);
+                mesh.ToMeshEntity(), new ReadOnlySpan<int>(firstTriangles, faceCount + 1).ToArray(), edges,
+                new ReadOnlySpan<int>(edgeIndices, edgeCount).ToArray(),
+                MemoryMarshal.Cast<double, Point3d>(new ReadOnlySpan<double>(vertexPoints, 3 * vertexCount)).ToArray());
         }
     }
 

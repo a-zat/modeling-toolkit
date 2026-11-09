@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 10
+#define MTK_OCCT_BRIDGE_ABI_VERSION 11
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -215,7 +215,8 @@ MTK_API mtk_status mtk_tessellation_get_mesh(const mtk_tessellation* tessellatio
 /*
  * The triangles of each face of the shape, which follow one another in the mesh: face i has the triangles from
  * out_first_triangles[i] to out_first_triangles[i + 1] - 1. The array has out_face_count + 1 values, the last one being
- * the number of triangles, and is valid until mtk_tessellation_release. The faces come in the order of the shape.
+ * the number of triangles, and is valid until mtk_tessellation_release. The faces come in the order of the shape, that
+ * of TopExp::MapShapes, each once.
  */
 MTK_API mtk_status mtk_tessellation_get_faces(const mtk_tessellation* tessellation, const int32_t** out_first_triangles,
                                               int32_t* out_face_count);
@@ -230,6 +231,20 @@ MTK_API mtk_status mtk_tessellation_get_faces(const mtk_tessellation* tessellati
  */
 MTK_API mtk_status mtk_tessellation_get_edges(const mtk_tessellation* tessellation, const double** out_points,
                                               const int32_t** out_first_points, int32_t* out_edge_count);
+/*
+ * The index in the shape of each edge of mtk_tessellation_get_edges, in the order of TopExp::MapShapes: the edges left
+ * out, such as seams, have no polyline, so edge i of the tessellation is not always edge i of the shape. The array has
+ * one value per edge and is valid until mtk_tessellation_release.
+ */
+MTK_API mtk_status mtk_tessellation_get_edge_indices(const mtk_tessellation* tessellation, const int32_t** out_indices);
+
+/*
+ * The vertices of the shape, all of them, in the order of TopExp::MapShapes: x, y, z per vertex, valid until
+ * mtk_tessellation_release.
+ */
+MTK_API mtk_status mtk_tessellation_get_vertices(const mtk_tessellation* tessellation, const double** out_points,
+                                                 int32_t* out_vertex_count);
+
 MTK_API void mtk_tessellation_release(mtk_tessellation* tessellation);
 
 #ifdef __cplusplus

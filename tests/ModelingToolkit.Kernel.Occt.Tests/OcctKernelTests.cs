@@ -297,6 +297,21 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void Tessellation_numbers_the_edges_and_vertices_as_the_shape()
+    {
+        using IKernelShape cylinder = _kernel.MakeCylinder(5, 10);
+
+        ShapeTessellation tessellation = _kernel.Tessellate(cylinder, 0.1);
+
+        // Three edges, the seam left out; two vertices, the ends of the seam.
+        Assert.Equal(2, tessellation.EdgeIndices.Length);
+        Assert.All(tessellation.EdgeIndices.ToArray(), index => Assert.InRange(index, 0, 2));
+        Assert.Equal(2, tessellation.Vertices.Length);
+        Assert.Equal(10, tessellation.Vertices[0].Z, 1e-9);
+        Assert.Equal(0, tessellation.Vertices[1].Z, 1e-9);
+    }
+
+    [Fact]
     public void Shapes_can_be_used_from_several_threads_at_the_same_time()
     {
         using IKernelShape box = _kernel.MakeBox(100, 100, 100);

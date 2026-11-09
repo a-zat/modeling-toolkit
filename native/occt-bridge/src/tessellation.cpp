@@ -9,6 +9,7 @@
 #include <BRep_Tool.hxx>
 #include <GCPnts_TangentialDeflection.hxx>
 #include <NCollection_IndexedDataMap.hxx>
+#include <NCollection_IndexedMap.hxx>
 #include <NCollection_List.hxx>
 #include <Poly_PolygonOnTriangulation.hxx>
 #include <Poly_Triangulation.hxx>
@@ -19,6 +20,7 @@
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Trsf.hxx>
@@ -38,6 +40,8 @@ struct mtk_tessellation {
     std::vector<int32_t> first_triangles; // of each face, then the number of triangles
     std::vector<double> edge_points;
     std::vector<int32_t> first_points; // of each edge, then the number of points
+    std::vector<int32_t> edge_indices; // of each edge in the shape
+    std::vector<double> vertex_points; // of each vertex of the shape
 };
 
 namespace {
@@ -101,7 +105,7 @@ bool is_drawn(const TopoDS_Edge& edge, const NCollection_List<TopoDS_Shape>& fac
 
 // Appends the polyline of an edge, in the coordinates of the shape: the vertices of the mesh along it where it bounds a
 // meshed face, so that it lies on the triangles, otherwise points of its curve within the deflection.
-void append_edge(const TopoDS_Edge& edge, const NCollection_List<TopoDS_Shape>& faces, double linear_deflection,
+bool append_edge(const TopoDS_Edge& edge, const NCollection_List<TopoDS_Shape>& faces, double linear_deflection,
                  double angular_deflection, mtk_tessellation& mesh) {
     std::vector<gp_Pnt> points;
     for (const TopoDS_Shape& face : faces) {
@@ -129,13 +133,14 @@ void append_edge(const TopoDS_Edge& edge, const NCollection_List<TopoDS_Shape>& 
         }
     }
     if (points.size() < 2) {
-        return;
+        return false;
     }
 
     mesh.first_points.push_back(static_cast<int32_t>(mesh.edge_points.size() / 3));
     for (const gp_Pnt& point : points) {
         mesh.edge_points.insert(mesh.edge_points.end(), {point.X(), point.Y(), point.Z()});
     }
+    return true;
 }
 
 // Too many vertices or points to count with 32 bits, three values each.
@@ -174,10 +179,14 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
         BRepMesh_IncrementalMesh mesher(copy, parameters, indicator->start());
         indicator->finish();
 
+        // Faces, edges and vertices are numbered in the order of TopExp::MapShapes, each once however many times the
+        // shape holds it; the copy has the same order as the shape.
         auto result = std::make_unique<mtk_tessellation>();
-        for (TopExp_Explorer faces(copy, TopAbs_FACE); faces.More(); faces.Next()) {
+        NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> faces;
+        TopExp::MapShapes(copy, TopAbs_FACE, faces);
+        for (int index = 1; index <= faces.Extent(); ++index) {
             result->first_triangles.push_back(static_cast<int32_t>(result->triangles.size() / 3));
-            append_face(TopoDS::Face(faces.Current()), *result);
+            append_face(TopoDS::Face(faces.FindKey(index)), *result);
             if (too_many(result->vertices.size())) {
                 return mtk::invalid_argument("The shape has too many triangles for this deflection.");
             }
@@ -188,18 +197,31 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
         result->first_triangles.push_back(static_cast<int32_t>(result->triangles.size() / 3));
 
         // Each edge once, with the faces it bounds.
+        NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> edge_order;
+        TopExp::MapShapes(copy, TopAbs_EDGE, edge_order);
         NCollection_IndexedDataMap<TopoDS_Shape, NCollection_List<TopoDS_Shape>, TopTools_ShapeMapHasher> edges;
         TopExp::MapShapesAndAncestors(copy, TopAbs_EDGE, TopAbs_FACE, edges);
-        for (int index = 1; index <= edges.Extent(); ++index) {
-            const TopoDS_Edge& edge = TopoDS::Edge(edges.FindKey(index));
-            if (is_drawn(edge, edges.FindFromIndex(index))) {
-                append_edge(edge, edges.FindFromIndex(index), linear_deflection, angular_deflection, *result);
+        for (int index = 1; index <= edge_order.Extent(); ++index) {
+            const TopoDS_Edge& edge = TopoDS::Edge(edge_order.FindKey(index));
+            const NCollection_List<TopoDS_Shape>* bounded = edges.Seek(edge);
+            const NCollection_List<TopoDS_Shape> none;
+            const NCollection_List<TopoDS_Shape>& edge_faces = bounded != nullptr ? *bounded : none;
+            if (is_drawn(edge, edge_faces) &&
+                append_edge(edge, edge_faces, linear_deflection, angular_deflection, *result)) {
+                result->edge_indices.push_back(index - 1);
                 if (too_many(result->edge_points.size())) {
                     return mtk::invalid_argument("The shape has too many edge points for this deflection.");
                 }
             }
         }
         result->first_points.push_back(static_cast<int32_t>(result->edge_points.size() / 3));
+
+        NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> vertices;
+        TopExp::MapShapes(copy, TopAbs_VERTEX, vertices);
+        for (int index = 1; index <= vertices.Extent(); ++index) {
+            const gp_Pnt point = BRep_Tool::Pnt(TopoDS::Vertex(vertices.FindKey(index)));
+            result->vertex_points.insert(result->vertex_points.end(), {point.X(), point.Y(), point.Z()});
+        }
 
         *out_tessellation = result.release();
         return MTK_STATUS_OK;
@@ -247,6 +269,30 @@ mtk_status mtk_tessellation_get_edges(const mtk_tessellation* tessellation, cons
         *out_points = tessellation->edge_points.data();
         *out_first_points = tessellation->first_points.data();
         *out_edge_count = static_cast<int32_t>(tessellation->first_points.size() - 1);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_tessellation_get_edge_indices(const mtk_tessellation* tessellation, const int32_t** out_indices) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_indices);
+        if (tessellation == nullptr || out_indices == nullptr) {
+            return mtk::invalid_argument("tessellation and out_indices must not be null.");
+        }
+        *out_indices = tessellation->edge_indices.data();
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_tessellation_get_vertices(const mtk_tessellation* tessellation, const double** out_points,
+                                         int32_t* out_vertex_count) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_points, out_vertex_count);
+        if (tessellation == nullptr || out_points == nullptr || out_vertex_count == nullptr) {
+            return mtk::invalid_argument("tessellation, out_points and out_vertex_count must not be null.");
+        }
+        *out_points = tessellation->vertex_points.data();
+        *out_vertex_count = static_cast<int32_t>(tessellation->vertex_points.size() / 3);
         return MTK_STATUS_OK;
     });
 }

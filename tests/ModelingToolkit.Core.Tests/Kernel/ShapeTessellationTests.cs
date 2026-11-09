@@ -30,4 +30,15 @@ public sealed class ShapeTessellationTests
     {
         Assert.Throws<ArgumentException>(() => new ShapeTessellation(TwoTriangles, firstTriangles, Polylines.Empty));
     }
+
+    [Fact]
+    public void Edges_are_numbered_as_the_shape_unless_told_otherwise()
+    {
+        var line = new Polylines([new(0, 0, 0), new(1, 0, 0)], [0, 2]);
+
+        Assert.Equal([0], new ShapeTessellation(TwoTriangles, [0, 2], line).EdgeIndices.ToArray());
+        Assert.Equal([4], new ShapeTessellation(TwoTriangles, [0, 2], line, [4]).EdgeIndices.ToArray());
+        Assert.Throws<ArgumentException>(() => new ShapeTessellation(TwoTriangles, [0, 2], line, [1, 2]));
+        Assert.True(new ShapeTessellation(TwoTriangles, [0, 2], line).Vertices.IsEmpty);
+    }
 }
