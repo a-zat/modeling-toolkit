@@ -54,6 +54,46 @@ public sealed class OcctKernelTests
     }
 
     [Fact]
+    public void The_elements_are_measured_as_tessellate_numbers_them()
+    {
+        using IKernelShape box = _kernel.MakeBox(10, 20, 30);
+        using IKernelShape placed = _kernel.Place(box, Transform.Translation(100, 0, 0));
+        ShapeTessellation tessellation = _kernel.Tessellate(placed, 0.1);
+
+        // The plane of each face goes through its triangles, with the normal of its first one.
+        for (int face = 0; face < 6; face++)
+        {
+            FaceInfo info = _kernel.GetFaceInfo(placed, face);
+            Core.Geometry.Plane plane = Assert.NotNull(info.Plane);
+            Triangle first = tessellation.Mesh.Triangles[tessellation.TrianglesOf(face).Start];
+            Point3d a = tessellation.Mesh.Vertices[first.A], b = tessellation.Mesh.Vertices[first.B];
+            Point3d c = tessellation.Mesh.Vertices[first.C];
+            (double X, double Y, double Z) normal = (plane.Normal.X, plane.Normal.Y, plane.Normal.Z);
+            Assert.Equal(plane.Offset, Dot(normal, (a.X, a.Y, a.Z)), precision: 9);
+            Assert.True(Dot(normal, Cross(Minus(b, a), Minus(c, a))) > 0);
+        }
+        Assert.Equal(2 * (10 * 20 + 20 * 30 + 10 * 30),
+            Enumerable.Range(0, 6).Sum(face => _kernel.GetFaceInfo(placed, face).Area), precision: 6);
+        Assert.Equal(4 * (10 + 20 + 30),
+            Enumerable.Range(0, 12).Sum(edge => _kernel.GetEdgeLength(placed, edge)), precision: 9);
+        Assert.Equal(tessellation.Vertices.ToArray(), Enumerable.Range(0, 8).Select(v => _kernel.GetVertexPoint(placed, v)));
+    }
+
+    [Fact]
+    public void A_curved_face_has_no_plane_and_an_element_must_be_of_the_shape()
+    {
+        using IKernelShape cylinder = _kernel.MakeCylinder(5, 10);
+
+        FaceInfo side = _kernel.GetFaceInfo(cylinder, 0);
+
+        Assert.Null(side.Plane);
+        Assert.Equal(2 * Math.PI * 5 * 10, side.Area, precision: 6);
+        Assert.Throws<ArgumentOutOfRangeException>(() => _kernel.GetFaceInfo(cylinder, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _kernel.GetEdgeLength(cylinder, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _kernel.GetVertexPoint(cylinder, 2));
+    }
+
+    [Fact]
     public void Primitives_have_the_volumes_of_their_formulas()
     {
         using IKernelShape cylinder = _kernel.MakeCylinder(10, 40);

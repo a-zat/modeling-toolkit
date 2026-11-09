@@ -214,6 +214,97 @@ TEST(Shape, TellsAValidShapeFromAnInvalidOne) {
     EXPECT_EQ(mtk_shape_is_valid(box.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
 }
 
+struct FaceInfo {
+    double area = 0.0;
+    int32_t planar = -1;
+    std::array<double, 3> origin{}, normal{};
+};
+
+FaceInfo face_info(const ShapePtr& shape, int32_t face) {
+    FaceInfo info;
+    EXPECT_EQ(mtk_shape_face_info(shape.get(), face, &info.area, &info.planar, info.origin.data(), info.normal.data()),
+              MTK_STATUS_OK)
+        << mtk_last_error_message();
+    return info;
+}
+
+TEST(Shape, MeasuresTheFacesEdgesAndVerticesWherePlaced) {
+    // The box from (100, 0, 0) to (110, 20, 30).
+    ShapePtr box = place(make_box(10.0, 20.0, 30.0), {1, 0, 0, 100, 0, 1, 0, 0, 0, 0, 1, 0});
+
+    // Each face on its plane, the normal out of the box: the plane x = 110 from the face at the largest x, say.
+    double area = 0.0;
+    for (int32_t face = 0; face < 6; ++face) {
+        const FaceInfo info = face_info(box, face);
+        area += info.area;
+        EXPECT_EQ(info.planar, 1);
+        int axis = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (std::abs(info.normal[i]) > 0.5) {
+                axis = i;
+            }
+        }
+        EXPECT_NEAR(std::abs(info.normal[axis]), 1.0, 1e-12);
+        const std::array<double, 3> low{100, 0, 0}, high{110, 20, 30};
+        EXPECT_NEAR(info.origin[axis], info.normal[axis] > 0 ? high[axis] : low[axis], 1e-9) << "face " << face;
+        EXPECT_NEAR(info.origin[(axis + 1) % 3], 0.0, 1e-9);
+        EXPECT_NEAR(info.origin[(axis + 2) % 3], 0.0, 1e-9);
+    }
+    EXPECT_NEAR(area, 2 * (10 * 20 + 20 * 30 + 10 * 30), 1e-6);
+
+    double length = 0.0;
+    for (int32_t edge = 0; edge < 12; ++edge) {
+        double edge_length = 0.0;
+        ASSERT_EQ(mtk_shape_edge_length(box.get(), edge, &edge_length), MTK_STATUS_OK) << mtk_last_error_message();
+        length += edge_length;
+    }
+    EXPECT_NEAR(length, 4 * (10 + 20 + 30), 1e-9);
+
+    for (int32_t vertex = 0; vertex < 8; ++vertex) {
+        std::array<double, 3> point{};
+        ASSERT_EQ(mtk_shape_vertex_point(box.get(), vertex, point.data()), MTK_STATUS_OK) << mtk_last_error_message();
+        EXPECT_TRUE(point[0] == 100 || point[0] == 110) << point[0];
+        EXPECT_TRUE(point[1] == 0 || point[1] == 20) << point[1];
+        EXPECT_TRUE(point[2] == 0 || point[2] == 30) << point[2];
+    }
+}
+
+TEST(Shape, MeasuresACurvedFaceWithoutAPlane) {
+    mtk_shape* cylinder = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(5.0, 10.0, &cylinder), MTK_STATUS_OK) << mtk_last_error_message();
+    ShapePtr shape(cylinder);
+
+    // The side, then the top and the bottom.
+    const FaceInfo side = face_info(shape, 0);
+    EXPECT_EQ(side.planar, 0);
+    EXPECT_NEAR(side.area, 2 * M_PI * 5 * 10, 1e-6);
+    EXPECT_EQ(side.normal, (std::array<double, 3>{0, 0, 0}));
+    const FaceInfo top = face_info(shape, 1), bottom = face_info(shape, 2);
+    EXPECT_EQ(top.planar + bottom.planar, 2);
+    EXPECT_NEAR(top.normal[2] * bottom.normal[2], -1.0, 1e-12);
+    EXPECT_NEAR(top.area, M_PI * 25, 1e-6);
+}
+
+TEST(Shape, RejectsElementsThatTheShapeDoesNotHave) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+    double value = 0.0;
+    int32_t planar = 0;
+    std::array<double, 3> origin{}, normal{}, point{};
+
+    for (int32_t face : {-1, 6}) {
+        EXPECT_EQ(mtk_shape_face_info(box.get(), face, &value, &planar, origin.data(), normal.data()),
+                  MTK_STATUS_INVALID_ARGUMENT);
+    }
+    EXPECT_EQ(mtk_shape_edge_length(box.get(), 12, &value), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_vertex_point(box.get(), 8, point.data()), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_face_info(nullptr, 0, &value, &planar, origin.data(), normal.data()),
+              MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_face_info(box.get(), 0, &value, &planar, origin.data(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_edge_length(box.get(), 0, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_vertex_point(nullptr, 0, point.data()), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_STRNE(mtk_last_error_message(), "");
+}
+
 TEST(Shape, MakeBoxRejectsInvalidDimensions) {
     const double invalid[] = {0.0, -1.0, std::numeric_limits<double>::quiet_NaN(),
                               std::numeric_limits<double>::infinity()};

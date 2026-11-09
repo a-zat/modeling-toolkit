@@ -42,6 +42,12 @@ internal sealed class FailingKernel : IGeometryKernel
 
     public bool IsValid(IKernelShape shape) => throw new NotSupportedException();
 
+        public FaceInfo GetFaceInfo(IKernelShape shape, int face) => throw new NotSupportedException();
+
+        public double GetEdgeLength(IKernelShape shape, int edge) => throw new NotSupportedException();
+
+        public Point3d GetVertexPoint(IKernelShape shape, int vertex) => throw new NotSupportedException();
+
     public byte[] Serialize(IKernelShape shape) => throw new NotSupportedException();
 
     public IKernelShape Deserialize(ReadOnlySpan<byte> data) => throw new NotSupportedException();

@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 11
+#define MTK_OCCT_BRIDGE_ABI_VERSION 12
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -86,6 +86,25 @@ MTK_API mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume);
  * consistent, so that further operations can rely on them, 0 otherwise.
  */
 MTK_API mtk_status mtk_shape_is_valid(const mtk_shape* shape, int32_t* out_valid);
+
+/*
+ * Measures of the faces, edges and vertices of a shape, in its coordinates. They are numbered from 0 in the order of
+ * TopExp::MapShapes, as mtk_shape_tessellate numbers them; an index that the shape does not have is an invalid
+ * argument.
+ */
+
+/*
+ * The area of a face and, when the face lies on a plane, the plane: out_planar 1, out_origin the point of the plane
+ * closest to the origin and out_normal its normal of unit length, out of the solid the face bounds. Otherwise
+ * out_planar is 0 and the point and the normal are zero. out_origin and out_normal hold 3 values.
+ */
+MTK_API mtk_status mtk_shape_face_info(const mtk_shape* shape, int32_t face, double* out_area, int32_t* out_planar,
+                                       double* out_origin, double* out_normal);
+
+MTK_API mtk_status mtk_shape_edge_length(const mtk_shape* shape, int32_t edge, double* out_length);
+
+/* The point of a vertex: x, y, z in out_point. */
+MTK_API mtk_status mtk_shape_vertex_point(const mtk_shape* shape, int32_t vertex, double* out_point);
 
 typedef enum mtk_boolean_operation {
     MTK_BOOLEAN_UNION = 0,        /* what is in either shape */

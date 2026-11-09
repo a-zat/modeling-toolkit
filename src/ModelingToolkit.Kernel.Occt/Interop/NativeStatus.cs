@@ -31,4 +31,17 @@ internal static class NativeStatusExtensions
             _ => new GeometryKernelException(message),
         };
     }
+
+    /// <summary>
+    /// As <see cref="ThrowIfFailed"/>, for a call whose only argument that the bridge can refuse is an index: an
+    /// <see cref="ArgumentOutOfRangeException"/> for it.
+    /// </summary>
+    public static void ThrowIfOutOfRange(this NativeStatus status, string paramName)
+    {
+        if (status == NativeStatus.InvalidArgument)
+        {
+            throw new ArgumentOutOfRangeException(paramName, NativeMethods.LastErrorMessage());
+        }
+        status.ThrowIfFailed();
+    }
 }

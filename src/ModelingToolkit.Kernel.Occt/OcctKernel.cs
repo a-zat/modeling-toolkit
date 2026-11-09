@@ -110,6 +110,35 @@ public sealed class OcctKernel : IGeometryKernel
         return valid != 0;
     }
 
+    public FaceInfo GetFaceInfo(IKernelShape shape, int face)
+    {
+        Span<double> origin = stackalloc double[3];
+        Span<double> normal = stackalloc double[3];
+        NativeMethods.ShapeFaceInfo(Unwrap(shape), face, out double area, out int planar, origin, normal)
+            .ThrowIfOutOfRange(nameof(face));
+        if (planar == 0)
+        {
+            return new FaceInfo(area, null);
+        }
+
+        // The point of the plane closest to the origin is the normal times the offset.
+        double offset = origin[0] * normal[0] + origin[1] * normal[1] + origin[2] * normal[2];
+        return new FaceInfo(area, new Plane(new Vector3d(normal[0], normal[1], normal[2]), offset));
+    }
+
+    public double GetEdgeLength(IKernelShape shape, int edge)
+    {
+        NativeMethods.ShapeEdgeLength(Unwrap(shape), edge, out double length).ThrowIfOutOfRange(nameof(edge));
+        return length;
+    }
+
+    public Point3d GetVertexPoint(IKernelShape shape, int vertex)
+    {
+        Span<double> point = stackalloc double[3];
+        NativeMethods.ShapeVertexPoint(Unwrap(shape), vertex, point).ThrowIfOutOfRange(nameof(vertex));
+        return new Point3d(point[0], point[1], point[2]);
+    }
+
     public unsafe byte[] Serialize(IKernelShape shape)
     {
         NativeMethods.ShapeWrite(Unwrap(shape), out BytesHandle bytes).ThrowIfFailed();

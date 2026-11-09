@@ -1,6 +1,8 @@
 #include "internal.hpp"
 
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -10,11 +12,16 @@
 #include <BRepPrimAPI_MakeTorus.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
+#include <TopExp.hxx>
 #include <TopLoc_Location.hxx>
+#include <TopTools_ShapeMapHasher.hxx>
+#include <TopoDS.hxx>
+#include <gp_Pln.hxx>
 #include <gp_Mat.hxx>
 #include <gp_Trsf.hxx>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <optional>
@@ -53,6 +60,17 @@ std::optional<gp_Trsf> to_rigid_placement(const double* matrix) {
     placement.SetValues(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5], matrix[6], matrix[7],
                         matrix[8], matrix[9], matrix[10], matrix[11]);
     return placement;
+}
+
+// The face, edge or vertex of a shape with an index from 0, in the order of TopExp::MapShapes; null when the shape has
+// no such element.
+std::optional<TopoDS_Shape> element_of(const TopoDS_Shape& shape, TopAbs_ShapeEnum kind, int32_t index) {
+    NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> elements;
+    TopExp::MapShapes(shape, kind, elements);
+    if (index < 0 || index >= elements.Extent()) {
+        return std::nullopt;
+    }
+    return elements.FindKey(index + 1);
 }
 
 } // namespace
@@ -210,6 +228,86 @@ mtk_status mtk_shape_is_valid(const mtk_shape* shape, int32_t* out_valid) {
         }
 
         *out_valid = BRepCheck_Analyzer(shape->value).IsValid() ? 1 : 0;
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_shape_face_info(const mtk_shape* shape, int32_t face, double* out_area, int32_t* out_planar,
+                               double* out_origin, double* out_normal) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_area, out_planar);
+        for (double* values : {out_origin, out_normal}) {
+            if (values != nullptr) {
+                std::fill_n(values, 3, 0.0);
+            }
+        }
+        if (shape == nullptr || out_area == nullptr || out_planar == nullptr || out_origin == nullptr ||
+            out_normal == nullptr) {
+            return mtk::invalid_argument("shape, out_area, out_planar, out_origin and out_normal must not be null.");
+        }
+        const std::optional<TopoDS_Shape> element = element_of(shape->value, TopAbs_FACE, face);
+        if (!element) {
+            return mtk::invalid_argument("face is not a face of the shape.");
+        }
+
+        const TopoDS_Face& value = TopoDS::Face(*element);
+        GProp_GProps properties;
+        BRepGProp::SurfaceProperties(value, properties);
+        *out_area = properties.Mass();
+
+        // With the placement of the face; the normal of the surface turns with the orientation of the face.
+        const BRepAdaptor_Surface surface(value);
+        if (surface.GetType() == GeomAbs_Plane) {
+            const gp_Pln plane = surface.Plane();
+            gp_Dir normal = plane.Axis().Direction();
+            if (value.Orientation() == TopAbs_REVERSED) {
+                normal.Reverse();
+            }
+            const double distance = gp_Vec(normal).Dot(gp_Vec(plane.Location().XYZ()));
+            const gp_XYZ origin = normal.XYZ() * distance;
+            *out_planar = 1;
+            std::copy_n(std::array{origin.X(), origin.Y(), origin.Z()}.data(), 3, out_origin);
+            std::copy_n(std::array{normal.X(), normal.Y(), normal.Z()}.data(), 3, out_normal);
+        }
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_shape_edge_length(const mtk_shape* shape, int32_t edge, double* out_length) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_length);
+        if (shape == nullptr || out_length == nullptr) {
+            return mtk::invalid_argument("shape and out_length must not be null.");
+        }
+        const std::optional<TopoDS_Shape> element = element_of(shape->value, TopAbs_EDGE, edge);
+        if (!element) {
+            return mtk::invalid_argument("edge is not an edge of the shape.");
+        }
+
+        GProp_GProps properties;
+        BRepGProp::LinearProperties(*element, properties);
+        *out_length = properties.Mass();
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_shape_vertex_point(const mtk_shape* shape, int32_t vertex, double* out_point) {
+    return mtk::guarded([&] {
+        if (out_point != nullptr) {
+            std::fill_n(out_point, 3, 0.0);
+        }
+        if (shape == nullptr || out_point == nullptr) {
+            return mtk::invalid_argument("shape and out_point must not be null.");
+        }
+        const std::optional<TopoDS_Shape> element = element_of(shape->value, TopAbs_VERTEX, vertex);
+        if (!element) {
+            return mtk::invalid_argument("vertex is not a vertex of the shape.");
+        }
+
+        const gp_Pnt point = BRep_Tool::Pnt(TopoDS::Vertex(*element));
+        out_point[0] = point.X();
+        out_point[1] = point.Y();
+        out_point[2] = point.Z();
         return MTK_STATUS_OK;
     });
 }

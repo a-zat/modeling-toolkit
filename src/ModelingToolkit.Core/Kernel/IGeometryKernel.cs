@@ -88,6 +88,18 @@ public interface IGeometryKernel
     /// </summary>
     bool IsValid(IKernelShape shape);
 
+    // The faces, edges and vertices of a shape are numbered from 0, in the same order as Tessellate numbers them; an
+    // index that the shape does not have throws ArgumentOutOfRangeException.
+
+    /// <summary>The area of a face and its plane, if it has one, in the coordinates of the shape.</summary>
+    FaceInfo GetFaceInfo(IKernelShape shape, int face);
+
+    /// <summary>The length of an edge, in millimetres.</summary>
+    double GetEdgeLength(IKernelShape shape, int edge);
+
+    /// <summary>The point of a vertex, in the coordinates of the shape.</summary>
+    Point3d GetVertexPoint(IKernelShape shape, int vertex);
+
     /// <summary>
     /// The shape as bytes in a format of the kernel, that only the same kind of kernel reads back with
     /// <see cref="Deserialize"/>. The geometry, the placements and the topology are kept; triangles are not.
