@@ -111,6 +111,8 @@ public:
 
     // Whether the view was clicked since the last call, and on what.
     bool take_pick(mtk_viewer_pick& pick);
+    // What is under the pointer as of the last redraw; nothing on the ViewCube.
+    mtk_viewer_pick hovered() const;
 
     // Highlights checked elements as selected, in place of those highlighted before.
     void set_highlighted_elements(const mtk_viewer_element* elements, int count);
@@ -129,6 +131,7 @@ private:
     void handleViewRedraw(const occ::handle<AIS_InteractiveContext>& context,
                           const occ::handle<V3d_View>& view) override;
 
+    std::optional<mtk_viewer_pick> detected_pick() const;
     // The edges that the display mode and the render style draw.
     EdgeStyle edge_style() const;
     void apply_lights();

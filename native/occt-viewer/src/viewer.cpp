@@ -629,37 +629,49 @@ void mtk::Viewer::forget_highlighted(int instance) {
     });
 }
 
+// What the context detects under the pointer: an instance, possibly one of its elements, or nothing; no value for the
+// ViewCube, which is not part of the scene.
+std::optional<mtk_viewer_pick> mtk::Viewer::detected_pick() const {
+    const occ::handle<SelectMgr_EntityOwner>& detected = context_->DetectedOwner();
+    if (detected.IsNull()) {
+        return mtk_viewer_pick{-1, MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
+    }
+    const auto picked = std::find_if(instances_.begin(), instances_.end(), [&](const auto& instance) {
+        return !instance.IsNull() && instance.get() == detected->Selectable().get();
+    });
+    if (picked == instances_.end()) {
+        return std::nullopt;
+    }
+    mtk_viewer_pick pick{static_cast<int>(picked - instances_.begin()), MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
+    if (const occ::handle<ElementOwner> element = occ::down_cast<ElementOwner>(detected)) {
+        pick.kind = element->kind();
+        pick.index = element->index();
+    }
+    // The detected owner is the first picked.
+    if (context_->MainSelector()->NbPicked() > 0) {
+        const SelectMgr_SortCriterion& data = context_->MainSelector()->PickedData(1);
+        pick.point[0] = data.Point.X();
+        pick.point[1] = data.Point.Y();
+        pick.point[2] = data.Point.Z();
+        if (pick.kind == MTK_VIEWER_ELEMENT_FACE || pick.kind == MTK_VIEWER_ELEMENT_INSTANCE) {
+            pick.normal[0] = data.Normal.x();
+            pick.normal[1] = data.Normal.y();
+            pick.normal[2] = data.Normal.z();
+        }
+    }
+    return pick;
+}
+
+mtk_viewer_pick mtk::Viewer::hovered() const {
+    return detected_pick().value_or(mtk_viewer_pick{-1, MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}});
+}
+
 // Called by FlushViewEvents for each click: on an instance, on nothing, or on the ViewCube, which has turned the view
 // and leaves the pick as it is. The selection is shown by set_selection, not by the context.
 void mtk::Viewer::OnSelectionChanged(const occ::handle<AIS_InteractiveContext>& context,
                                      const occ::handle<V3d_View>&) {
-    const occ::handle<SelectMgr_EntityOwner>& detected = context->DetectedOwner();
-    if (detected.IsNull()) {
-        pick_ = mtk_viewer_pick{-1, MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
-    } else {
-        const auto picked = std::find_if(instances_.begin(), instances_.end(), [&](const auto& instance) {
-            return !instance.IsNull() && instance.get() == detected->Selectable().get();
-        });
-        if (picked != instances_.end()) {
-            mtk_viewer_pick pick{static_cast<int>(picked - instances_.begin()), MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
-            if (const occ::handle<ElementOwner> element = occ::down_cast<ElementOwner>(detected)) {
-                pick.kind = element->kind();
-                pick.index = element->index();
-            }
-            // The detected owner is the first picked.
-            if (context->MainSelector()->NbPicked() > 0) {
-                const SelectMgr_SortCriterion& data = context->MainSelector()->PickedData(1);
-                pick.point[0] = data.Point.X();
-                pick.point[1] = data.Point.Y();
-                pick.point[2] = data.Point.Z();
-                if (pick.kind == MTK_VIEWER_ELEMENT_FACE || pick.kind == MTK_VIEWER_ELEMENT_INSTANCE) {
-                    pick.normal[0] = data.Normal.x();
-                    pick.normal[1] = data.Normal.y();
-                    pick.normal[2] = data.Normal.z();
-                }
-            }
-            pick_ = pick;
-        }
+    if (const std::optional<mtk_viewer_pick> pick = detected_pick()) {
+        pick_ = *pick;
     }
     context->ClearSelected(false);
 }
@@ -1217,6 +1229,17 @@ mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, mtk_vie
         if (viewer->take_pick(*out_pick)) {
             *out_picked = 1;
         }
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_get_hovered(mtk_viewer* viewer, mtk_viewer_pick* out_pick) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_pick);
+        if (viewer == nullptr || out_pick == nullptr) {
+            return mtk::invalid_argument("viewer and out_pick must not be null.");
+        }
+        *out_pick = viewer->hovered();
         return MTK_STATUS_OK;
     });
 }

@@ -284,14 +284,23 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
     /// <see cref="Redraw"/>. The viewer shows no selection by itself: see <see cref="SetSelection"/>.
     /// </summary>
     /// <param name="pick">What is under the pointer: an instance of -1 for nothing.</param>
-    public unsafe bool TakePick(out ViewerPick pick)
+    public bool TakePick(out ViewerPick pick)
     {
         NativeMethods.TakePick(_handle, out int picked, out NativePick native).ThrowIfFailed();
-        pick = new ViewerPick(
-            native.Instance, native.Kind, native.Index, new Point3d(native.Point[0], native.Point[1], native.Point[2]),
-            new Vector3(native.Normal[0], native.Normal[1], native.Normal[2]));
+        pick = ToPick(native);
         return picked != 0;
     }
+
+    /// <summary>What is under the pointer, as the last <see cref="Redraw"/> detected it; instance -1 for nothing.</summary>
+    public ViewerPick GetHovered()
+    {
+        NativeMethods.GetHovered(_handle, out NativePick native).ThrowIfFailed();
+        return ToPick(native);
+    }
+
+    private static unsafe ViewerPick ToPick(NativePick native) => new(
+        native.Instance, native.Kind, native.Index, new Point3d(native.Point[0], native.Point[1], native.Point[2]),
+        new Vector3(native.Normal[0], native.Normal[1], native.Normal[2]));
 
     /// <summary>
     /// Highlights elements of the shapes of instances as selected, in place of those highlighted before. An element

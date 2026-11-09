@@ -135,6 +135,9 @@ TEST(Viewer, IgnoresInputUntilTheViewIsInAWindow) {
     mtk_viewer_pick pick{};
     EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &picked, &pick), MTK_STATUS_OK);
     EXPECT_EQ(picked, 0) << "the click was not applied";
+    pick.instance = 5;
+    EXPECT_EQ(mtk_viewer_get_hovered(viewer.get(), &pick), MTK_STATUS_OK);
+    EXPECT_EQ(pick.instance, -1) << "nothing under the pointer of a view never shown";
 }
 
 TEST(Viewer, AcceptsColoursBetweenZeroAndOne) {
@@ -618,6 +621,8 @@ TEST(Viewer, NullArgumentsAreRejected) {
     EXPECT_EQ(mtk_viewer_take_pick(nullptr, &flag, &pick), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), nullptr, &pick), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &flag, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_get_hovered(nullptr, &pick), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_get_hovered(viewer.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_highlighted_elements(nullptr, nullptr, 0), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_clear(nullptr), MTK_STATUS_INVALID_ARGUMENT);

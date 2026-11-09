@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 12
+#define MTK_OCCT_VIEWER_ABI_VERSION 13
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -258,6 +258,12 @@ typedef struct mtk_viewer_pick {
  * see mtk_viewer_set_selection and mtk_viewer_set_highlighted_elements.
  */
 MTK_VIEWER_API mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, mtk_viewer_pick* out_pick);
+
+/*
+ * What is under the pointer, as the last mtk_viewer_redraw detected it to highlight it, the same way as
+ * mtk_viewer_take_pick: instance -1 for nothing, and on the ViewCube.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_get_hovered(mtk_viewer* viewer, mtk_viewer_pick* out_pick);
 
 /*
  * Highlights count elements, in place of those highlighted before, as the selected ones; elements may be null when

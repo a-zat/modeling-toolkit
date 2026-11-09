@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 12;
+    public const int AbiVersion = 13;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -88,6 +88,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_take_pick")]
     public static partial NativeStatus TakePick(ViewerHandle viewer, out int picked, out NativePick pick);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_get_hovered")]
+    public static partial NativeStatus GetHovered(ViewerHandle viewer, out NativePick pick);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_highlighted_elements")]
     public static unsafe partial NativeStatus SetHighlightedElements(
