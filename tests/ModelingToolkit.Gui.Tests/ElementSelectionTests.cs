@@ -115,17 +115,17 @@ public sealed class ElementSelectionTests : IDisposable
         viewModel.ViewInputCommand.Execute(Click(new ElementReference([box], ElementKind.Edge, 0), KeyModifiers.Shift));
         PropertiesViewModel properties = viewModel.Properties;
         Assert.True(properties.HasMaterial); // the face, not the edge
-        Assert.Equal(["Default", "Red"], properties.MaterialChoices.Select(choice => choice.Name));
 
-        properties.SelectedMaterial = properties.MaterialChoices[1];
+        properties.Paint(red);
 
         Assert.Equal([top.Index], box.FaceMaterials.Keys);
         Assert.Same(red, box.MaterialOf(top.Index));
 
         viewModel.ModelTree.SelectCommand.Execute(new Entity[] { box });
         Assert.True(properties.IsMixedMaterial);
-        Assert.Null(properties.SelectedMaterial);
-        properties.SelectedMaterial = properties.MaterialChoices[1];
+        Assert.Equal("Mixed", properties.MaterialName);
+        Assert.Null(properties.Material);
+        properties.Paint(red);
         Assert.Equal(6, box.FaceMaterials.Count);
         Assert.False(properties.IsMixedMaterial);
 

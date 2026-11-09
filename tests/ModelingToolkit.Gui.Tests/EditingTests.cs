@@ -60,18 +60,85 @@ public sealed class EditingTests
         MainWindowViewModel viewModel = await OpenBox();
         var mesh = (MeshEntity)SelectMesh(viewModel).Entity!;
         Material own = mesh.Material!;
-        Assert.Equal(["Default", own.Name], viewModel.Properties.MaterialChoices.Select(choice => choice.Name));
-        Assert.Same(own, viewModel.Properties.SelectedMaterial!.Material);
+        PropertiesViewModel properties = viewModel.Properties;
+        Assert.Same(own, properties.Material);
+        Assert.Equal(own.Name, properties.MaterialName);
 
-        viewModel.Properties.SelectedMaterial = null; // as the list does when its items change
+        properties.OpenPickerCommand.Execute(null);
+        MaterialPickerViewModel picker = properties.Picker;
+        Assert.True(picker.IsOpen);
+        Assert.Equal(["Default", own.Name], picker.ModelItems.Select(swatch => swatch.Name));
+        picker.PickCommand.Execute(picker.ModelItems[1]); // the material it has
         Assert.False(viewModel.UndoCommand.CanExecute(null));
 
-        viewModel.Properties.SelectedMaterial = MaterialChoice.Default;
+        properties.OpenPickerCommand.Execute(null);
+        picker.PickCommand.Execute(picker.ModelItems[0]);
+        Assert.False(picker.IsOpen);
         Assert.Null(mesh.Material);
-        Assert.Same(MaterialChoice.Default, viewModel.Properties.SelectedMaterial);
+        Assert.Equal("Default", properties.MaterialName);
 
         viewModel.UndoCommand.Execute(null);
         Assert.Same(own, mesh.Material);
+    }
+
+    [Fact]
+    public async Task AMaterialOfTheLibraryIsAddedToTheDocumentWhenUsedAndReusedAfterwards()
+    {
+        MainWindowViewModel viewModel = await OpenBox();
+        var mesh = (MeshEntity)SelectMesh(viewModel).Entity!;
+        MaterialPickerViewModel picker = viewModel.Properties.Picker;
+        int before = viewModel.Document!.Materials.Count;
+
+        viewModel.Properties.OpenPickerCommand.Execute(null);
+        picker.ShowCategoryCommand.Execute("Metal");
+        MaterialSwatch brass = picker.LibraryItems.Single(swatch => swatch.Name == "Brass");
+        picker.PickCommand.Execute(brass);
+
+        Material added = viewModel.Document.Materials[^1];
+        Assert.Equal(before + 1, viewModel.Document.Materials.Count);
+        Assert.Same(added, mesh.Material);
+        Assert.Equal(("Brass", 1f), (added.Name, added.Metallic));
+
+        // Another brass of the document, of other values, keeps its name: the new one takes a number.
+        viewModel.Document.Materials.Add(new Material("Gold"));
+        viewModel.Properties.OpenPickerCommand.Execute(null);
+        picker.PickCommand.Execute(picker.LibraryItems.Single(swatch => swatch.Name == "Gold"));
+        Assert.Equal("Gold 2", mesh.Material!.Name);
+        viewModel.UndoCommand.Execute(null);
+        viewModel.Document.Materials.RemoveAt(viewModel.Document.Materials.Count - 1);
+
+        viewModel.Properties.OpenPickerCommand.Execute(null);
+        picker.PickCommand.Execute(picker.ModelItems[0]);
+        picker.PickCommand.Execute(brass); // made before: the same material
+        Assert.Same(added, mesh.Material);
+        Assert.Equal(before + 1, viewModel.Document.Materials.Count);
+
+        viewModel.UndoCommand.Execute(null);
+        viewModel.UndoCommand.Execute(null);
+        viewModel.UndoCommand.Execute(null);
+        Assert.Equal(before, viewModel.Document.Materials.Count); // the first painting undone, with the addition
+    }
+
+    [Fact]
+    public async Task ACustomColourMakesAMaterialOfItsOwn()
+    {
+        MainWindowViewModel viewModel = await OpenBox();
+        var mesh = (MeshEntity)SelectMesh(viewModel).Entity!;
+        MaterialPickerViewModel picker = viewModel.Properties.Picker;
+
+        picker.CustomColor = Avalonia.Media.Color.FromRgb(0x20, 0x80, 0xC0);
+        picker.Roughness = 0.3;
+        picker.Metallic = 1;
+        picker.PickCustomCommand.Execute(null);
+
+        Assert.Equal("Custom 2080C0", mesh.Material!.Name);
+        Assert.Equal((0.3f, 1f), (mesh.Material.Roughness, mesh.Material.Metallic));
+        Assert.Equal("#2080C0", picker.CustomHex);
+        picker.CustomHex = "not a colour";
+        Assert.Equal("#2080C0", picker.CustomHex);
+        picker.CustomHex = "#ff0000";
+        Assert.Equal(Avalonia.Media.Color.FromRgb(255, 0, 0), picker.CustomColor);
+        Assert.Equal(0.5271152f, mesh.Material.BaseColor.B, precision: 4); // 0xC0, linear
     }
 
     [Fact]

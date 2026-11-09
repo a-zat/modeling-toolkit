@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
+    <!-- Already brought by the theme tools; referenced for the colour of the custom materials. -->
+    <PackageReference Include="Avalonia.Controls.ColorPicker" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />

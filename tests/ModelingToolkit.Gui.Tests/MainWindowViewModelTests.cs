@@ -248,7 +248,7 @@ public sealed class MainWindowViewModelTests
                 new PropertyRow("Size", "100.0 × 200.0 × 300.0 mm"),
             ],
             viewModel.Properties.Rows);
-        Assert.Same(steel, viewModel.Properties.SelectedMaterial?.Material);
+        Assert.Same(steel, viewModel.Properties.Material);
 
         viewModel.ModelTree.SelectedNode = model;
 

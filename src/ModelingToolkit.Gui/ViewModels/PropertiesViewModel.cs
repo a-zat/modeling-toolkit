@@ -9,12 +9,6 @@ namespace ModelingToolkit.Gui.ViewModels;
 /// <summary>A row of the properties panel.</summary>
 public sealed record PropertyRow(string Name, string Value);
 
-/// <summary>A material that surfaces can take, or "Default" for none.</summary>
-public sealed record MaterialChoice(string Name, Material? Material)
-{
-    public static MaterialChoice Default { get; } = new("Default", null);
-}
-
 /// <summary>Surfaces that take a material: a whole mesh, or faces of a shape.</summary>
 internal readonly record struct Surfaces(MeshEntity? Mesh, BrepEntity? Shape, int[] Faces)
 {
@@ -30,6 +24,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
 {
     public PropertiesViewModel()
     {
+        Picker.Chosen = Paint;
         Title = string.Empty;
         Kind = string.Empty;
         Rows = [];
@@ -84,56 +79,59 @@ public sealed partial class PropertiesViewModel : ObservableObject
         }
     }
 
-    /// <summary>The materials of the document, after "Default".</summary>
-    [ObservableProperty]
-    public partial IReadOnlyList<MaterialChoice> MaterialChoices { get; private set; } = [];
+    /// <summary>The choice of a material for the surfaces selected.</summary>
+    public MaterialPickerViewModel Picker { get; } = new();
 
-    /// <summary>
-    /// The material of the surfaces selected; null when they have different ones. Choosing one paints them all.
-    /// </summary>
-    public MaterialChoice? SelectedMaterial
-    {
-        get
-        {
-            Material?[] materials = [.. _surfaces.SelectMany(surfaces => surfaces.Materials).Distinct()];
-            return materials.Length == 1
-                ? MaterialChoices.FirstOrDefault(choice => ReferenceEquals(choice.Material, materials[0]))
-                : null;
-        }
-        set
-        {
-            // The list clears its selection when its items change: that is not a choice.
-            if (value is not null && _surfaces.Length > 0 &&
-                _surfaces.SelectMany(surfaces => surfaces.Materials).Any(material => !ReferenceEquals(material, value.Material)))
-            {
-                IEditCommand[] commands = [.. _surfaces.Select(surfaces => surfaces.Paint(value.Material))];
-                Edit?.Invoke(commands.Length == 1 ? commands[0] : new CompositeCommand("Paint", commands));
-            }
-            OnPropertyChanged();
-        }
-    }
+    /// <summary>The material of the surfaces selected; null when they have none, or different ones.</summary>
+    public Material? Material { get; private set; }
 
     /// <summary>Whether the surfaces selected have different materials.</summary>
-    public bool IsMixedMaterial => _surfaces.SelectMany(surfaces => surfaces.Materials).Distinct().Skip(1).Any();
+    public bool IsMixedMaterial { get; private set; }
 
-    // The materials to choose from: those of the document, and those of the surfaces that it does not list.
+    /// <summary>The name of the material, "Default" or "Mixed".</summary>
+    [ObservableProperty]
+    public partial string MaterialName { get; private set; } = string.Empty;
+
+    /// <summary>The swatch of the material.</summary>
+    [ObservableProperty]
+    public partial Avalonia.Media.IBrush? MaterialBrush { get; private set; }
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void OpenPicker() => Picker.Open(_document);
+
+    /// <summary>
+    /// Paints the surfaces selected with a material, null for the default one; a material that the document does not
+    /// have yet is added to it, in the same command.
+    /// </summary>
+    public void Paint(Material? material)
+    {
+        if (_surfaces.Length == 0 ||
+            _surfaces.SelectMany(surfaces => surfaces.Materials).All(current => ReferenceEquals(current, material)))
+        {
+            return;
+        }
+
+        List<IEditCommand> commands = [];
+        if (material is not null && _document is { } document && !document.Materials.Contains(material))
+        {
+            commands.Add(new AddMaterialCommand(document, material));
+        }
+        commands.AddRange(_surfaces.Select(surfaces => surfaces.Paint(material)));
+        Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand("Paint", commands));
+    }
+
+    // The material of the surfaces, as the row shows it.
     private void ShowMaterials(Surfaces[] surfaces)
     {
         _surfaces = surfaces;
         HasMaterial = surfaces.Length > 0;
-        List<MaterialChoice> choices = [MaterialChoice.Default];
-        IEnumerable<Material> materials = _document?.Materials ?? [];
-        foreach (Material material in surfaces.SelectMany(surface => surface.Materials).OfType<Material>())
-        {
-            if (!materials.Contains(material))
-            {
-                materials = materials.Append(material);
-            }
-        }
-        choices.AddRange(materials.Select(material => new MaterialChoice(material.Name, material)));
-        MaterialChoices = choices;
-        OnPropertyChanged(nameof(SelectedMaterial));
-        OnPropertyChanged(nameof(IsMixedMaterial));
+        Material?[] materials = [.. surfaces.SelectMany(surface => surface.Materials).Distinct()];
+        IsMixedMaterial = materials.Length > 1;
+        Material = materials.Length == 1 ? materials[0] : null;
+        MaterialName = IsMixedMaterial ? "Mixed" : Material?.Name ?? "Default";
+        MaterialBrush = IsMixedMaterial
+            ? new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Avalonia.Media.Color.FromRgb(0xB4, 0xB9, 0xC2))
+            : MaterialSwatch.BrushOf(Material);
     }
 
     private ModelNodeViewModel? _node;

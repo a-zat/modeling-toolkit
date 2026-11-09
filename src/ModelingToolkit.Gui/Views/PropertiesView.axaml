@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
+             xmlns:views="using:ModelingToolkit.Gui.Views"
              x:Class="ModelingToolkit.Gui.Views.PropertiesView"
              x:DataType="vm:PropertiesViewModel">
 
@@ -27,10 +28,19 @@
               <!-- The material of the surfaces selected: a mesh, a shape or faces. -->
               <TextBlock Grid.Row="1" Text="Material" Classes="secondary" FontSize="12" VerticalAlignment="Center"
                          IsVisible="{Binding HasMaterial}" />
-              <ComboBox Grid.Row="1" Grid.Column="1" FontSize="12" HorizontalAlignment="Stretch"
-                        ItemsSource="{Binding MaterialChoices}" SelectedItem="{Binding SelectedMaterial}"
-                        DisplayMemberBinding="{Binding Name}" PlaceholderText="Mixed"
-                        IsVisible="{Binding HasMaterial}" />
+              <Button x:Name="MaterialButton" Grid.Row="1" Grid.Column="1" Classes="field"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                      Command="{Binding OpenPickerCommand}" IsVisible="{Binding HasMaterial}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Border Classes="swatch" Background="{Binding MaterialBrush}" />
+                  <TextBlock Text="{Binding MaterialName}" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Popup Grid.Row="1" IsOpen="{Binding Picker.IsOpen, Mode=TwoWay}"
+                     PlacementTarget="{Binding #MaterialButton}" Placement="LeftEdgeAlignedTop"
+                     HorizontalOffset="-8" IsLightDismissEnabled="True">
+                <views:MaterialPickerView DataContext="{Binding Picker}" />
+              </Popup>
             </Grid>
             <ItemsControl ItemsSource="{Binding Rows}" Grid.IsSharedSizeScope="True">
               <ItemsControl.ItemTemplate>
