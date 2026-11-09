@@ -1,6 +1,7 @@
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
+using ModelingToolkit.Gui.Viewport.Interop;
 
 namespace ModelingToolkit.Gui.Viewport;
 
@@ -30,6 +31,10 @@ internal interface IViewerScene
     void RemoveInstance(int instance);
 
     void SetSelection(ReadOnlySpan<int> instances);
+
+    /// <summary>Highlights elements of the shapes of instances as selected, in place of those highlighted before.</summary>
+    /// <exception cref="ArgumentException">An element is not one that an instance shows.</exception>
+    void SetHighlightedElements(ReadOnlySpan<ViewerElement> elements);
 
     void Clear();
 

@@ -13,7 +13,7 @@ namespace ModelingToolkit.Gui.Viewport;
 /// What a click of the view picks: an instance, -1 for none, and the element of its shape under the pointer, with the
 /// point picked and, on a face, its normal.
 /// </summary>
-internal readonly record struct ViewerPick(int Instance, ElementKind Kind, int Index, Point3d Point, Vector3 Normal);
+internal readonly record struct ViewerPick(int Instance, NativeElementKind Kind, int Index, Point3d Point, Vector3 Normal);
 
 /// <summary>
 /// The OpenCASCADE viewer of the native library (native/occt-viewer) and the native view it draws into. Every method

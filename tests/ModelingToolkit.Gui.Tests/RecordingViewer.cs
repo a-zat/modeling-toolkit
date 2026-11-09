@@ -2,6 +2,7 @@ using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
+using ModelingToolkit.Gui.Viewport.Interop;
 
 namespace ModelingToolkit.Gui.Tests;
 
@@ -80,6 +81,18 @@ internal sealed class RecordingViewer : IViewerScene
             Assert.True(Instances.ContainsKey(instance));
         }
         Selection = instances.ToArray();
+    }
+
+    /// <summary>The elements highlighted as selected.</summary>
+    public ViewerElement[] HighlightedElements { get; private set; } = [];
+
+    public void SetHighlightedElements(ReadOnlySpan<ViewerElement> elements)
+    {
+        foreach (ViewerElement element in elements)
+        {
+            Assert.True(Instances.ContainsKey(element.Instance));
+        }
+        HighlightedElements = elements.ToArray();
     }
 
     public void Clear()

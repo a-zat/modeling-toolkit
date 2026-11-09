@@ -65,7 +65,7 @@ internal unsafe struct NativeMesh
 internal unsafe struct NativePick
 {
     public int Instance;
-    public ElementKind Kind;
+    public NativeElementKind Kind;
     public int Index;
     public fixed double Point[3];
     public fixed float Normal[3];
@@ -82,7 +82,7 @@ internal unsafe struct NativeMaterial
 }
 
 /// <summary>What a pick finds: the whole instance, for a mesh picked as a whole, or an element of its shape.</summary>
-internal enum ElementKind
+internal enum NativeElementKind
 {
     Instance = 0,
     Face = 1,
@@ -92,4 +92,4 @@ internal enum ElementKind
 
 /// <summary>An element of the shape that an instance of the viewer shows, numbered as in the shape.</summary>
 [StructLayout(LayoutKind.Sequential)]
-internal readonly record struct ViewerElement(int Instance, ElementKind Kind, int Index);
+internal readonly record struct ViewerElement(int Instance, NativeElementKind Kind, int Index);

@@ -14,6 +14,7 @@ using ModelingToolkit.Core.Kernel;
 using BrepEntity = ModelingToolkit.Core.Model.BrepEntity;
 using Document = ModelingToolkit.Core.Model.Document;
 using DocumentChange = ModelingToolkit.Core.Model.DocumentChange;
+using ElementReference = ModelingToolkit.Core.Model.ElementReference;
 using Entity = ModelingToolkit.Core.Model.Entity;
 
 namespace ModelingToolkit.Gui.Viewport;
@@ -34,6 +35,12 @@ public sealed class ViewportView : Border, IViewCamera
 
     public static readonly StyledProperty<ICommand?> PickCommandProperty =
         AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(PickCommand));
+
+    public static readonly StyledProperty<IReadOnlyList<ElementReference>?> HighlightedElementsProperty =
+        AvaloniaProperty.Register<ViewportView, IReadOnlyList<ElementReference>?>(nameof(HighlightedElements));
+
+    public static readonly StyledProperty<ICommand?> ElementPickCommandProperty =
+        AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(ElementPickCommand));
 
     public static readonly StyledProperty<ICommand?> WarningsCommandProperty =
         AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(WarningsCommand));
@@ -56,6 +63,7 @@ public sealed class ViewportView : Border, IViewCamera
     private int _shownDocuments;
     private ViewportScene? _shownScene;
     private Document? _followedDocument;
+    private KeyModifiers _clickModifiers; // held when a button was last released, which ends a click
     private bool _updatePosted;
 
     public ViewportView()
@@ -111,6 +119,23 @@ public sealed class ViewportView : Border, IViewCamera
     {
         get => GetValue(PickCommandProperty);
         set => SetValue(PickCommandProperty, value);
+    }
+
+    /// <summary>The faces, edges and vertices of shapes shown as selected; null for none.</summary>
+    public IReadOnlyList<ElementReference>? HighlightedElements
+    {
+        get => GetValue(HighlightedElementsProperty);
+        set => SetValue(HighlightedElementsProperty, value);
+    }
+
+    /// <summary>
+    /// Executed when the view is clicked, after <see cref="PickCommand"/>, with all that the click picks (a
+    /// <see cref="ViewportPick"/>): the element of a shape under the pointer, the point, and the modifier keys.
+    /// </summary>
+    public ICommand? ElementPickCommand
+    {
+        get => GetValue(ElementPickCommandProperty);
+        set => SetValue(ElementPickCommandProperty, value);
     }
 
     /// <summary>
@@ -187,6 +212,14 @@ public sealed class ViewportView : Border, IViewCamera
             Follow(Document);
             _ = ShowDocumentAsync();
         }
+        else if (change.Property == HighlightedElementsProperty && _shownScene is { } shown)
+        {
+            Send(viewer =>
+            {
+                shown.ShowElementsIn(viewer, HighlightedElements);
+                return true;
+            });
+        }
         else if (change.Property == SelectionProperty && _shownScene is { } scene)
         {
             Send(viewer =>
@@ -211,6 +244,7 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        _clickModifiers = e.KeyModifiers;
         SendButtons(e);
     }
 
@@ -290,6 +324,13 @@ public sealed class ViewportView : Border, IViewCamera
                 if (PickCommand is { } command && command.CanExecute(path))
                 {
                     command.Execute(path);
+                }
+
+                var detailed = new ViewportPick(
+                    path, _shownScene?.ElementOf(pick), pick.Point, pick.Normal, _clickModifiers);
+                if (ElementPickCommand is { } elementCommand && elementCommand.CanExecute(detailed))
+                {
+                    elementCommand.Execute(detailed);
                 }
             }
         });
@@ -399,6 +440,8 @@ public sealed class ViewportView : Border, IViewCamera
         {
             scene.Update();
             scene.ShowSelectionIn(viewer, Selection);
+            // The instances changed or removed lost their highlighted elements.
+            scene.ShowElementsIn(viewer, HighlightedElements);
             return true;
         });
         foreach ((BrepEntity entity, IKernelShape shape) in scene.TakeShapesToTessellate())

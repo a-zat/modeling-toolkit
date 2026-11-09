@@ -2,6 +2,7 @@ using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
+using ModelingToolkit.Gui.Viewport.Interop;
 using ModelingToolkit.Kernel.Occt;
 
 namespace ModelingToolkit.Gui.Tests;
@@ -202,6 +203,67 @@ public sealed class ViewportSceneUpdateTests
         scene.ShowSelectionIn(viewer, [reference]);
 
         Assert.Equal([1], viewer.Selection);
+    }
+
+    [Fact]
+    public void APickOnAShapeIsAReferenceToItsElement()
+    {
+        var brep = new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10));
+        var block = new Block("Part") { Entities = { brep } };
+        var reference = new BlockReference(block, Transform.Translation(100, 0, 0));
+        MeshEntity square = Square();
+        var document = new Document();
+        document.Blocks.Add(block);
+        document.Root.Entities.Add(square);
+        document.Root.Entities.Add(reference);
+        (ViewportScene scene, RecordingViewer _) = Show(document);
+
+        ElementReference? edge = scene.ElementOf(new ViewerPick(1, NativeElementKind.Edge, 4, default, default));
+
+        Assert.Equal(new ElementReference([reference, brep], ElementKind.Edge, 4), edge);
+        Assert.Null(scene.ElementOf(new ViewerPick(0, NativeElementKind.Instance, 0, default, default))); // a mesh
+        Assert.Null(scene.ElementOf(new ViewerPick(-1, NativeElementKind.Instance, 0, default, default)));
+    }
+
+    [Fact]
+    public void TheHighlightedElementsAreThoseTheSceneShows()
+    {
+        var brep = new BrepEntity(_kernel, _kernel.MakeCylinder(5, 10)); // its seam has no polyline
+        var block = new Block("Part") { Entities = { brep } };
+        var left = new BlockReference(block, Transform.Identity);
+        var right = new BlockReference(block, Transform.Translation(100, 0, 0));
+        var document = new Document();
+        document.Blocks.Add(block);
+        document.Root.Entities.Add(left);
+        document.Root.Entities.Add(right);
+        (ViewportScene scene, RecordingViewer viewer) = Show(document);
+        ShapeTessellation tessellation = _kernel.Tessellate(brep.Shape, 0.1);
+        int seam = Enumerable.Range(0, 3).Single(index => !tessellation.EdgeIndices.Contains(index));
+        int circle = tessellation.EdgeIndices[0];
+
+        scene.ShowElementsIn(viewer,
+        [
+            new ElementReference([right, brep], ElementKind.Face, 1),
+            new ElementReference([left, brep], ElementKind.Edge, circle),
+            new ElementReference([left, brep], ElementKind.Edge, seam), // not shown
+            new ElementReference([left, brep], ElementKind.Vertex, 1),
+            new ElementReference([left, brep], ElementKind.Face, 9), // no such face
+            new ElementReference([new BlockReference(block, Transform.Identity), brep], ElementKind.Face, 0),
+        ]);
+
+        Assert.Equal(
+        [
+            new ViewerElement(1, NativeElementKind.Face, 1),
+            new ViewerElement(0, NativeElementKind.Edge, circle),
+            new ViewerElement(0, NativeElementKind.Vertex, 1),
+        ], viewer.HighlightedElements);
+
+        document.Root.Entities.Remove(left);
+        scene.Update();
+        scene.ShowElementsIn(viewer, [new ElementReference([left, brep], ElementKind.Face, 0)]);
+        Assert.Empty(viewer.HighlightedElements);
+        scene.ShowElementsIn(viewer, null);
+        Assert.Empty(viewer.HighlightedElements);
     }
 
     private static (ViewportScene Scene, RecordingViewer Viewer) Show(Document document)

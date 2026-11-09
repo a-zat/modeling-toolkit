@@ -1,6 +1,7 @@
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
+using ModelingToolkit.Gui.Viewport.Interop;
 
 namespace ModelingToolkit.Gui.Viewport;
 
@@ -245,6 +246,59 @@ internal sealed class ViewportScene
         ShowNewResources(viewer);
         _shownInstances = _instances.Select(instance => Show(viewer, instance)).ToList();
         viewer.FitAll();
+    }
+
+    /// <summary>
+    /// The element of a shape that a pick of the viewer that shows the scene finds; null when it finds no element, as
+    /// on a mesh, picked as a whole, or on nothing.
+    /// </summary>
+    public ElementReference? ElementOf(ViewerPick pick)
+    {
+        ElementKind? kind = pick.Kind switch
+        {
+            NativeElementKind.Face => ElementKind.Face,
+            NativeElementKind.Edge => ElementKind.Edge,
+            NativeElementKind.Vertex => ElementKind.Vertex,
+            _ => null,
+        };
+        return kind is { } known && PathOfShown(pick.Instance) is { } path && path[^1] is BrepEntity
+            ? new ElementReference(path, known, pick.Index)
+            : null;
+    }
+
+    /// <summary>
+    /// Highlights elements as selected in the viewer that shows the scene, in place of those highlighted before; null
+    /// for none. The elements that the scene does not show, as its shapes are being tessellated or no longer have them,
+    /// are left out.
+    /// </summary>
+    public void ShowElementsIn(IViewerScene viewer, IEnumerable<ElementReference>? elements)
+    {
+        var shown = new List<ViewerElement>();
+        foreach (ElementReference element in elements ?? [])
+        {
+            int instance = _instances.FindIndex(candidate => PathComparer.Instance.Equals(candidate.Path, element.Path));
+            if (instance < 0 || _shownInstances[instance] < 0 ||
+                _meshShapes[_instances[instance].Mesh] is not { } shape || !Has(shape, element))
+            {
+                continue;
+            }
+
+            NativeElementKind kind = element.Kind switch
+            {
+                ElementKind.Face => NativeElementKind.Face,
+                ElementKind.Edge => NativeElementKind.Edge,
+                _ => NativeElementKind.Vertex,
+            };
+            shown.Add(new ViewerElement(_shownInstances[instance], kind, element.Index));
+        }
+        viewer.SetHighlightedElements(shown.ToArray());
+
+        static bool Has(ShapeTessellation shape, ElementReference element) => element.Kind switch
+        {
+            ElementKind.Face => element.Index < shape.FaceCount,
+            ElementKind.Edge => shape.EdgeIndices.Contains(element.Index),
+            _ => element.Index < shape.Vertices.Length,
+        };
     }
 
     /// <summary>
