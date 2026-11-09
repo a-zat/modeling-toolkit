@@ -105,7 +105,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 throw new InvalidDataException(
                     $"Format version {manifest.Version} is newer than the supported one ({NativeFormat.Version}).");
             }
-            if (manifest.Version < NativeFormat.Version)
+            if (manifest.Version < NativeFormat.OldestVersion)
             {
                 throw new InvalidDataException(
                     $"Format version {manifest.Version} is no longer read: save the model again from its source.");
@@ -178,10 +178,27 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                     MeshEntry mesh => ReadMesh(mesh, document.Materials),
                     BrepEntry shape => ReadShape(shape, document.Materials),
                     BlockReferenceEntry reference => ToBlockReference(reference, document.Blocks),
+                    GuideEntry guide => ToGuide(guide),
                     _ => throw new InvalidDataException($"Unknown entity in block '{entry.Name}'."),
                 };
                 entity.Name = entityEntry.Name;
                 block.Entities.Add(entity);
+            }
+        }
+
+        private static GuideEntity ToGuide(GuideEntry entry)
+        {
+            if (entry.Point is not { Length: 3 } point || entry.Direction is not { Length: 3 } direction)
+            {
+                throw new InvalidDataException("A guide needs a point and a direction of 3 values each.");
+            }
+            try
+            {
+                return new GuideEntity(new Point3d(point[0], point[1], point[2]), new Vector3d(direction[0], direction[1], direction[2]));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException(exception.Message, exception);
             }
         }
 

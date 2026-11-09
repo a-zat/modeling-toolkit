@@ -68,6 +68,7 @@
                           Gesture="{OnPlatform Default=Ctrl+V, macOS=Cmd+V}" />
           <NativeMenuItem Header="Delete" Command="{Binding DeleteCommand}"
                           Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" />
+          <NativeMenuItem Header="Delete Guides" Command="{Binding DeleteGuidesCommand}" />
         </NativeMenu>
       </NativeMenuItem>
       <NativeMenuItem Header="View">

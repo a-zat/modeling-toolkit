@@ -1,5 +1,6 @@
 using Avalonia.Media;
 using ModelingToolkit.Core.Editing.Tools;
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Gui.Viewport;
 
 namespace ModelingToolkit.Gui.ViewModels;
@@ -16,10 +17,13 @@ internal static class ToolOverlay
     private static readonly Color Magenta = Color.FromRgb(0xC2, 0x38, 0xC2);
     private static readonly Color Cyan = Color.FromRgb(0x14, 0xA3, 0xB8);
     private static readonly Color Gold = Color.FromRgb(0xE0, 0xA8, 0x16);
+    private const double GuideReach = 100_000;
+    private const int GuidePieces = 100;
 
     /// <param name="dark">Whether the theme is dark.</param>
     /// <param name="cad">Whether the view draws in the CAD render style, on white.</param>
-    public static ViewOverlay Of(ToolPreview preview, bool dark, bool cad)
+    /// <param name="guides">The guide lines to show, dashed and endless (100 m each way).</param>
+    public static ViewOverlay Of(ToolPreview preview, bool dark, bool cad, IReadOnlyList<GuideLine>? guides = null)
     {
         ArgumentNullException.ThrowIfNull(preview);
         // A plain line looks as the edge it will be: as Mtk.Viewport.Edge, one pixel wide, or as the outlines of the
@@ -29,6 +33,14 @@ internal static class ToolOverlay
         List<OverlayLine> lines = [.. preview.Lines.Select(line => ColorOf(line.Along) is { } color
             ? new OverlayLine([line.Start, line.End], color, 2)
             : new OverlayLine([line.Start, line.End], plain, width))];
+        Color guideColor = dark ? Color.FromRgb(0x9A, 0xA3, 0xB0) : Color.FromRgb(0x5B, 0x64, 0x72);
+        foreach (GuideLine guide in guides ?? [])
+        {
+            // In pieces, so that none reaches behind the camera, where its dashes would be lost.
+            Point3d[] points = [.. Enumerable.Range(-GuidePieces, 2 * GuidePieces + 1)
+                .Select(i => guide.Point + guide.Direction * (GuideReach * i / GuidePieces))];
+            lines.Add(new OverlayLine(points, guideColor, 1, 4));
+        }
         List<OverlayMarker> markers = [];
         List<OverlayLabel> labels = [];
         if (preview.Inference is { } inference && MarkerOf(inference.Kind) is { } marker)
@@ -53,6 +65,8 @@ internal static class ToolOverlay
         InferenceKind.AxisZ => "On blue axis",
         InferenceKind.Parallel => "Parallel to edge",
         InferenceKind.Perpendicular => "Perpendicular to edge",
+        InferenceKind.OnGuide => "On guide",
+        InferenceKind.Intersection => "Intersection",
         _ => string.Empty,
     };
 
@@ -72,6 +86,8 @@ internal static class ToolOverlay
         InferenceKind.OnEdge => (Red, MarkerShape.Dot),
         InferenceKind.OnFace => (Blue, MarkerShape.Circle),
         InferenceKind.Origin => (Gold, MarkerShape.Dot),
+        InferenceKind.OnGuide => (Gold, MarkerShape.Dot),
+        InferenceKind.Intersection => (Green, MarkerShape.Dot),
         InferenceKind.AxisX or InferenceKind.AxisY or InferenceKind.AxisZ or InferenceKind.Parallel
             or InferenceKind.Perpendicular => (ColorOf(kind)!.Value, MarkerShape.Circle),
         _ => null, // on the ground, nothing to point out

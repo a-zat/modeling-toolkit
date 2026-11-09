@@ -35,7 +35,16 @@ public enum InferenceKind
 
     /// <summary>Perpendicular to the edge last pointed at, in the plane drawn on.</summary>
     Perpendicular,
+
+    /// <summary>On a guide line.</summary>
+    OnGuide,
+
+    /// <summary>Where two guide lines cross.</summary>
+    Intersection,
 }
+
+/// <summary>A guide line in the model space: through a point, along a direction of unit length.</summary>
+public readonly record struct GuideLine(Point3d Point, Vector3d Direction);
 
 /// <summary>A point inferred from the pointer, in the model space.</summary>
 /// <param name="Plane">The plane drawn on: of the face, or the ground; null elsewhere.</param>
@@ -61,6 +70,9 @@ public sealed class InferenceEngine
 
     /// <summary>How close the pointer must come to snap, in units of the screen.</summary>
     public double SnapDistance { get; init; } = 8;
+
+    /// <summary>The guide lines to snap to, in the model space.</summary>
+    public IReadOnlyList<GuideLine> Guides { get; set; } = [];
 
     /// <summary>The direction of the line last pointed at, for parallels and perpendiculars; null for none yet.</summary>
     public Vector3d? Reference => _reference;
@@ -106,6 +118,10 @@ public sealed class InferenceEngine
         if (found.Kind is InferenceKind.Endpoint or InferenceKind.Midpoint)
         {
             return found;
+        }
+        if (pick.Ray is { } guideRay && OnGuide(guideRay) is { } guided)
+        {
+            return guided with { Plane = found.Plane };
         }
 
         if (pick.Ray is { } ray && found.Kind != InferenceKind.None &&
@@ -163,6 +179,55 @@ public sealed class InferenceEngine
             }
         }
         return best;
+    }
+
+    // The point of the guide the ray passes closest, within the snap distance, or where it crosses another one as close.
+    private Inference? OnGuide(PointerRay ray)
+    {
+        var near = new List<(GuideLine Guide, Point3d Point, double Units)>();
+        foreach (GuideLine guide in Guides)
+        {
+            (Point3d point, double distance) = ClosestOnLine(ray, guide.Point, guide.Direction);
+            double units = distance / ray.UnitSizeAt(point);
+            if (units < SnapDistance)
+            {
+                near.Add((guide, point, units));
+            }
+        }
+        if (near.Count == 0)
+        {
+            return null;
+        }
+        near.Sort((a, b) => a.Units.CompareTo(b.Units));
+        for (int i = 0; i < near.Count; i++)
+        {
+            for (int j = i + 1; j < near.Count; j++)
+            {
+                if (Crossing(near[i].Guide, near[j].Guide) is { } crossing &&
+                    crossing.DistanceTo(ray.At(Math.Max((crossing - ray.Origin).Dot(ray.Direction), 0))) <
+                    SnapDistance * ray.UnitSizeAt(crossing))
+                {
+                    return new Inference(InferenceKind.Intersection, crossing);
+                }
+            }
+        }
+        return new Inference(InferenceKind.OnGuide, near[0].Point, null, near[0].Guide.Direction);
+    }
+
+    // Where two lines meet; null when they are parallel or pass each other.
+    private static Point3d? Crossing(GuideLine a, GuideLine b)
+    {
+        Vector3d across = a.Direction.Cross(b.Direction);
+        double squared = across.Dot(across);
+        if (squared < 1e-12)
+        {
+            return null;
+        }
+        Vector3d between = b.Point - a.Point;
+        double s = between.Cross(b.Direction).Dot(across) / squared;
+        double t = between.Cross(a.Direction).Dot(across) / squared;
+        Point3d onA = a.Point + a.Direction * s;
+        return onA.DistanceTo(b.Point + b.Direction * t) < 1e-6 ? onA : null;
     }
 
     // Along an axis, the reference line or its perpendicular in the plane, from a point, if the ray passes close.

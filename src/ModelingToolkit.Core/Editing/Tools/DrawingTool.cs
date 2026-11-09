@@ -77,8 +77,13 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
     }
 
     /// <summary>The point inferred under the pointer.</summary>
-    protected Inference Infer(ToolPick pick, Point3d? from = null, Vector3d? locked = null) =>
-        Inference.Infer(pick, Host.Context.Placement, from, locked, SnapVertices(pick));
+    protected Inference Infer(ToolPick pick, Point3d? from = null, Vector3d? locked = null)
+    {
+        Transform placement = Host.Context.Placement;
+        Inference.Guides = [.. Host.Context.Block.Entities.OfType<GuideEntity>()
+            .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
+        return Inference.Infer(pick, placement, from, locked, SnapVertices(pick));
+    }
 
     /// <summary>The plane to draw on from a point: that of the face it is on, otherwise the ground through it.</summary>
     protected Plane PlaneAt(Inference point)

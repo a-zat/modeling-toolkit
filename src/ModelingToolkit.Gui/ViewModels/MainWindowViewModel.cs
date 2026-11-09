@@ -61,6 +61,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 new ToolItemViewModel(new RotateTool(kernel), "Icon.Rotate"),
                 new ToolItemViewModel(new ScaleTool(kernel), "Icon.Scale"),
                 new ToolItemViewModel(new PaintTool(), "Icon.Paint"),
+                new ToolItemViewModel(new TapeTool(kernel), "Icon.Tape"),
             ];
         ActiveTool.HintChanged += OnToolHintChanged;
         ActiveTool.MeasurementChanged += OnToolMeasurementChanged;
@@ -99,6 +100,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Copy", CopyCommand, Gesture: Shortcut("C")),
             new("Paste", PasteCommand, Gesture: Shortcut("V")),
             new("Delete", DeleteCommand),
+            new("Delete Guides", DeleteGuidesCommand),
             new("Fit All", FitAllCommand),
             new("Top View", ShowViewCommand, StandardView.Top),
             new("Bottom View", ShowViewCommand, StandardView.Bottom),
@@ -392,7 +394,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         public void SelectEntity(IReadOnlyList<Entity>? path) => owner.ModelTree.SelectCommand.Execute(path);
 
-        public void ShowPreview(ToolPreview preview) => owner.Overlay = ToolOverlay.Of(preview, owner.IsDark, owner.RenderStyle == RenderStyle.Cad);
+        public void ShowPreview(ToolPreview preview)
+        {
+            owner._preview = preview;
+            owner.ShowOverlay();
+        }
 
         public void Report(string message) => owner.StatusMessage = message;
     }
@@ -449,6 +455,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void OnContextChanged(object? sender, EventArgs e)
     {
         Elements?.Clear();
+        ShowOverlay();
         ModelTree.ShowContext(Context?.Path ?? []);
         if (_lastHover is { } hover && ActiveTool.IsActive)
         {
@@ -516,6 +523,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (Tools.FirstOrDefault(item => item.Tool is MoveTool) is { } move)
         {
             ActivateTool(move);
+        }
+    }
+
+    /// <summary>Deletes the guides of the block being edited, as one command.</summary>
+    [RelayCommand]
+    private void DeleteGuides()
+    {
+        if (Context?.Block.Entities.OfType<GuideEntity>().ToArray() is { Length: > 0 } guides)
+        {
+            Edit(new CompositeCommand("Delete Guides", [.. guides.Select(guide => new DeleteCommand(guide))]));
         }
     }
 
@@ -1061,7 +1078,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnEditingChanged();
     }
 
-    private void OnSessionChanged(object? sender, EventArgs e) => OnEditingChanged();
+    private void OnSessionChanged(object? sender, EventArgs e)
+    {
+        OnEditingChanged();
+        ShowOverlay();
+    }
+
+    private ToolPreview _preview = ToolPreview.Empty;
+
+    // What the tool shows, with the guides of the block being edited.
+    private void ShowOverlay()
+    {
+        Transform placement = Context?.Placement ?? Transform.Identity;
+        GuideLine[] guides = Context is null ? [] : [.. Context.Block.Entities.OfType<GuideEntity>()
+            .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
+        Overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
+    }
 
     private async Task WriteAsync(string path)
     {

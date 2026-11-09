@@ -53,6 +53,7 @@ public static class TransformCommands
             mesh.Triangles,
             mesh.Normals?.Select(normal => Turned(normal, transform)).ToArray(),
             mesh.TextureCoordinates) { Material = mesh.Material },
+        GuideEntity guide => new GuideEntity(transform.Apply(guide.Point), transform.ApplyVector(guide.Direction)),
         _ => throw new ArgumentException($"An entity of type {entity.GetType().Name} cannot be transformed.", nameof(entity)),
     };
 

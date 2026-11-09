@@ -248,6 +248,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
                 return (entity.Name ?? mesh.Material?.Name ?? "Mesh", $"{Formatting.Count(mesh.Triangles.Length)} triangles");
             case BrepEntity shape:
                 return (entity.Name ?? "Geometry", ShapeDetail(shape));
+            case GuideEntity:
+                return (entity.Name ?? "Guide", null);
             default:
                 return (entity.Name ?? entity.GetType().Name, null);
         }

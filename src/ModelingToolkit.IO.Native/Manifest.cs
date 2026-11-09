@@ -31,6 +31,7 @@ internal sealed record BlockEntry(string Name, List<EntityEntry> Entities);
 [JsonDerivedType(typeof(MeshEntry), "mesh")]
 [JsonDerivedType(typeof(BrepEntry), "brep")]
 [JsonDerivedType(typeof(BlockReferenceEntry), "blockReference")]
+[JsonDerivedType(typeof(GuideEntry), "guide")]
 internal abstract record EntityEntry(string? Name);
 
 internal sealed record MeshEntry(
@@ -46,6 +47,8 @@ internal sealed record MeshEntry(
 internal sealed record BrepEntry(string? Name, string Path, List<FaceMaterialEntry>? FaceMaterials) : EntityEntry(Name);
 
 internal sealed record FaceMaterialEntry(int Face, int Material);
+
+internal sealed record GuideEntry(string? Name, double[] Point, double[] Direction) : EntityEntry(Name);
 
 internal sealed record BlockReferenceEntry(string? Name, int Block, double[] Transform) : EntityEntry(Name);
 

@@ -127,7 +127,7 @@ public sealed class NativeFormatTests : IDisposable
         using Stream stream = archive.GetEntry("manifest.json")!.Open();
         using JsonDocument manifest = JsonDocument.Parse(stream);
         Assert.Equal("modeling-toolkit", manifest.RootElement.GetProperty("format").GetString());
-        Assert.Equal(3, manifest.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(4, manifest.RootElement.GetProperty("version").GetInt32());
         Assert.Equal("mm", manifest.RootElement.GetProperty("units").GetString());
     }
 
@@ -187,6 +187,21 @@ public sealed class NativeFormatTests : IDisposable
         var exception = Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
 
         Assert.Contains($"version {version} is no longer read", exception.Message);
+    }
+
+    [Fact]
+    public void Guides_survive_a_round_trip_and_files_of_version_3_are_still_read()
+    {
+        var document = new Document();
+        document.Root.Entities.Add(new GuideEntity(new Point3d(1, 2, 3), new Vector3d(0, 2, 0)) { Name = "Edge" });
+        string path = PathOf("guides.mtk");
+        _writer.Write(document, path);
+
+        var guide = Assert.IsType<GuideEntity>(Assert.Single(_reader.Read(path, []).Root.Entities));
+        Assert.Equal((new Point3d(1, 2, 3), new Vector3d(0, 1, 0), "Edge"), (guide.Point, guide.Direction, guide.Name));
+
+        string old = Archive("version3.mtk", Manifest("{}"));
+        Assert.Empty(_reader.Read(old, []).Root.Entities);
     }
 
     [Fact]
@@ -255,7 +270,7 @@ public sealed class NativeFormatTests : IDisposable
     }
 
     [Theory]
-    [InlineData(4)] // newer than this reader
+    [InlineData(5)] // newer than this reader
     [InlineData(0)]
     [InlineData(-1)]
     public void Versions_that_this_reader_does_not_know_are_rejected(int version)

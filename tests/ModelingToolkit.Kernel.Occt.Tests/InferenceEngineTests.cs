@@ -168,4 +168,20 @@ public sealed class InferenceEngineTests
             vertices: vertices);
         Assert.Equal(InferenceKind.OnFace, onTop.Kind);
     }
+
+    [Fact]
+    public void The_pointer_snaps_to_a_guide_and_where_two_guides_cross()
+    {
+        _engine.Guides = [new GuideLine(new Point3d(0, 50, 0), Vector3d.UnitX), new GuideLine(new Point3d(500, 0, 0), Vector3d.UnitY)];
+
+        Inference on = _engine.Infer(Nothing(Down(300, 54)), Transform.Identity);
+        Assert.Equal((InferenceKind.OnGuide, new Point3d(300, 50, 0)), (on.Kind, Round(on.Point)));
+
+        Inference crossing = _engine.Infer(Nothing(Down(504, 53)), Transform.Identity);
+        Assert.Equal((InferenceKind.Intersection, new Point3d(500, 50, 0)), (crossing.Kind, Round(crossing.Point)));
+
+        Assert.Equal(InferenceKind.Ground, _engine.Infer(Nothing(Down(300, 80)), Transform.Identity).Kind);
+    }
+
+    private static Point3d Round(Point3d point) => new(Math.Round(point.X, 6), Math.Round(point.Y, 6), Math.Round(point.Z, 6));
 }

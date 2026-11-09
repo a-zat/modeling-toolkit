@@ -119,6 +119,8 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                         reference.Transform.M10, reference.Transform.M11, reference.Transform.M12, reference.Transform.M13,
                         reference.Transform.M20, reference.Transform.M21, reference.Transform.M22, reference.Transform.M23,
                     ]),
+                GuideEntity guide => new GuideEntry(guide.Name, [guide.Point.X, guide.Point.Y, guide.Point.Z],
+                    [guide.Direction.X, guide.Direction.Y, guide.Direction.Z]),
                 _ => throw new NotSupportedException($"Entities of type {entity.GetType().Name} cannot be written."),
             };
         }

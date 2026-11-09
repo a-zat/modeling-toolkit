@@ -143,7 +143,7 @@ void main() {
 layout(lines) in;
 layout(triangle_strip, max_vertices = 4) out;
 uniform vec4 occViewport;
-out float along_pixels; // the distance from the start of the segment, for dashes
+noperspective out float along_pixels; // the distance from the start of the segment, for dashes, linear on screen
 void main() {
     vec4 start = gl_in[0].gl_Position;
     vec4 end = gl_in[1].gl_Position;
@@ -168,7 +168,7 @@ void main() {
     program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(
         Graphic3d_TOS_FRAGMENT, TCollection_AsciiString("const float dash = ") + TCollection_AsciiString(dash) + ";" +
                                     R"(
-in float along_pixels;
+noperspective in float along_pixels;
 void main() {
     // Dashes as long as the gaps between them.
     if (dash > 0.0 && mod(along_pixels, 2.0 * dash) > dash) {
