@@ -60,9 +60,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 new ToolItemViewModel(new MoveTool(kernel), "Icon.Move"),
                 new ToolItemViewModel(new RotateTool(kernel), "Icon.Rotate"),
                 new ToolItemViewModel(new ScaleTool(kernel), "Icon.Scale"),
+                new ToolItemViewModel(new PaintTool(), "Icon.Paint"),
             ];
         ActiveTool.HintChanged += OnToolHintChanged;
         ActiveTool.MeasurementChanged += OnToolMeasurementChanged;
+        if (PaintTool is { } paint)
+        {
+            PaintPicker.Chosen = material => paint.Material = material;
+            paint.MaterialChanged += (_, _) =>
+            {
+                OnPropertyChanged(nameof(PaintName));
+                OnPropertyChanged(nameof(PaintBrush));
+            };
+        }
         ModelTree.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ModelTreeViewModel.SelectedNode))
@@ -116,6 +126,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public PropertiesViewModel Properties { get; } = new();
 
     public CommandPaletteViewModel Palette { get; } = new();
+
+    private PaintTool? PaintTool => Tools.Select(item => item.Tool).OfType<PaintTool>().FirstOrDefault();
+
+    /// <summary>Whether the paint tool is active, which shows its material in the status bar.</summary>
+    public bool IsPainting => ActiveTool is PaintTool;
+
+    /// <summary>The choice of the material of the paint tool.</summary>
+    public MaterialPickerViewModel PaintPicker { get; } = new();
+
+    public string PaintName => PaintTool?.Material?.Name ?? "Default";
+
+    public Avalonia.Media.IBrush PaintBrush => MaterialSwatch.BrushOf(PaintTool?.Material);
+
+    [RelayCommand]
+    private void OpenPaintPicker() => PaintPicker.Open(Document);
 
     /// <summary>Runs the commands that change the open document, and undoes them; null without a document.</summary>
     public EditSession? Session { get; private set; }
@@ -238,6 +263,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             item.Tool.Activate(_toolHost);
         }
         OnPropertyChanged(nameof(ActiveTool));
+        OnPropertyChanged(nameof(IsPainting));
         OnPropertyChanged(nameof(ToolHint));
         OnToolMeasurementChanged(this, EventArgs.Empty);
     }
@@ -1002,6 +1028,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         Session = new EditSession(document);
         Session.Changed += OnSessionChanged;
+        if (PaintTool is { } paint)
+        {
+            paint.Material = null; // a material of the document closed
+        }
         if (Elements is not null)
         {
             Elements.Changed -= OnElementsChanged;

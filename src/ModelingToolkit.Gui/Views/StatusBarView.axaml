@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
+             xmlns:views="using:ModelingToolkit.Gui.Views"
              x:Class="ModelingToolkit.Gui.Views.StatusBarView"
              x:DataType="vm:MainWindowViewModel">
 
@@ -13,6 +14,21 @@
           <PathIcon Data="{StaticResource Icon.WeatherSunny}" Width="14" Height="14" IsVisible="{Binding !IsDark}" />
         </Panel>
       </ToggleButton>
+
+      <!-- The material of the paint tool, chosen in the picker. -->
+      <Panel DockPanel.Dock="Right" Margin="12,0,0,0" IsVisible="{Binding IsPainting}">
+        <Button x:Name="PaintButton" Classes="field" Padding="6,0" Height="22" MinHeight="22" Command="{Binding OpenPaintPickerCommand}"
+                ToolTip.Tip="The material to paint with">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Border Classes="swatch" Background="{Binding PaintBrush}" />
+            <TextBlock Text="{Binding PaintName}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Popup IsOpen="{Binding PaintPicker.IsOpen, Mode=TwoWay}" PlacementTarget="{Binding #PaintButton}"
+               Placement="TopEdgeAlignedRight" VerticalOffset="-8" IsLightDismissEnabled="True">
+          <views:MaterialPickerView DataContext="{Binding PaintPicker}" />
+        </Popup>
+      </Panel>
 
       <!-- The measure of the active tool, which takes a typed value in its place. -->
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0"
