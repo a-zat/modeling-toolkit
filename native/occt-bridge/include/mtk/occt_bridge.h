@@ -228,9 +228,11 @@ MTK_API mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_de
                                         const mtk_progress* progress, mtk_tessellation** out_tessellation);
 
 /*
- * The mesh, as for a scene, without a material or texture coordinates: the faces have their own vertices, with the
- * normals of their surfaces, so that edges between faces look sharp. The front of the triangles is on the outside of
- * the solid. The arrays are valid until mtk_tessellation_release.
+ * The mesh, as for a scene, without a material: the faces have their own vertices, with the normals of their surfaces,
+ * so that edges between faces look sharp. The front of the triangles is on the outside of the solid. The texture
+ * coordinates are in millimetres along each face, along the axes of a plane, the parameters of another surface times
+ * its lengths per unit of each; a texture is not mirrored seen from the front. The arrays are valid until
+ * mtk_tessellation_release.
  */
 MTK_API mtk_status mtk_tessellation_get_mesh(const mtk_tessellation* tessellation, mtk_mesh_info* out_mesh);
 

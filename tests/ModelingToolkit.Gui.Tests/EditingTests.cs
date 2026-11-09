@@ -120,6 +120,40 @@ public sealed class EditingTests
     }
 
     [Fact]
+    public async Task AnImageMakesAMaterialWithATextureOfTheSizeGiven()
+    {
+        MainWindowViewModel viewModel = await OpenBox();
+        var mesh = (MeshEntity)SelectMesh(viewModel).Entity!;
+        MaterialPickerViewModel picker = viewModel.Properties.Picker;
+        string image = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.png");
+        File.WriteAllBytes(image, [1, 2, 3]);
+        int textures = viewModel.Document!.Textures.Count;
+        try
+        {
+            picker.ChooseImage = () => Task.FromResult<string?>(image);
+            picker.TextureSize = 250;
+            viewModel.Properties.OpenPickerCommand.Execute(null);
+
+            await picker.PickTextureCommand.ExecuteAsync(null);
+
+            Texture texture = mesh.Material!.BaseColorTexture!;
+            Assert.Equal(("image/png", 250f), (texture.MediaType, mesh.Material.TextureSize));
+            Assert.Equal([1, 2, 3], texture.Data);
+            Assert.Contains(texture, viewModel.Document.Textures);
+            viewModel.UndoCommand.Execute(null);
+            Assert.Equal(textures, viewModel.Document.Textures.Count);
+
+            picker.ChooseImage = () => Task.FromResult<string?>(null); // cancelled
+            await picker.PickTextureCommand.ExecuteAsync(null);
+            Assert.False(viewModel.UndoCommand.CanExecute(null));
+        }
+        finally
+        {
+            File.Delete(image);
+        }
+    }
+
+    [Fact]
     public async Task ACustomColourMakesAMaterialOfItsOwn()
     {
         MainWindowViewModel viewModel = await OpenBox();

@@ -38,6 +38,7 @@ public sealed class NativeFormatTests : IDisposable
         Assert.Equal(new Color(0.5f, 0.25f, 0.125f, 0.75f), material.BaseColor);
         Assert.Equal((0.1f, 0.9f), (material.Metallic, material.Roughness));
         Assert.Same(texture, material.BaseColorTexture);
+        Assert.Equal(250, material.TextureSize);
 
         Block leg = Assert.Single(copy.Blocks);
         Assert.Equal("Leg", leg.Name);
@@ -467,6 +468,7 @@ public sealed class NativeFormatTests : IDisposable
             Metallic = 0.1f,
             Roughness = 0.9f,
             BaseColorTexture = texture,
+            TextureSize = 250,
         };
         document.Materials.Add(material);
 

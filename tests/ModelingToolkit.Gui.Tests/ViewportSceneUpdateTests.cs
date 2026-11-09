@@ -72,6 +72,32 @@ public sealed class ViewportSceneUpdateTests
     }
 
     [Fact]
+    public void TheTexturesOfFacesRepeatEveryTextureSize()
+    {
+        var brep = new BrepEntity(_kernel, _kernel.MakeBox(500, 500, 500));
+        var document = new Document();
+        document.Root.Entities.Add(brep);
+        (ViewportScene scene, RecordingViewer viewer) = Show(document);
+        var tiles = new Material("Tiles") { BaseColorTexture = new Texture("tiles", "image/png", [0]), TextureSize = 100 };
+
+        brep.Paint([0], tiles);
+        scene.Update();
+
+        ShapeTessellation tessellation = _kernel.Tessellate(brep.Shape, 0.5);
+        MeshEntity shown = viewer.Meshes[1];
+        int vertex = tessellation.Mesh.Triangles[tessellation.TrianglesOf(0).Start].A;
+        int other = tessellation.Mesh.Triangles[tessellation.TrianglesOf(1).Start].A;
+        Assert.Equal(tessellation.Mesh.TextureCoordinates![vertex] / 100, shown.TextureCoordinates![vertex]);
+        Assert.Equal(tessellation.Mesh.TextureCoordinates[other], shown.TextureCoordinates[other]); // not textured
+        // The face, 500 mm wide, is 5 repetitions of the texture across.
+        System.Numerics.Vector2[] face = [.. tessellation.Mesh.Triangles[tessellation.TrianglesOf(0)]
+            .SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C })
+            .Select(corner => shown.TextureCoordinates[corner])];
+        Assert.Equal(5, face.Max(uv => uv.X) - face.Min(uv => uv.X), precision: 3);
+        Assert.Equal(5, face.Max(uv => uv.Y) - face.Min(uv => uv.Y), precision: 3);
+    }
+
+    [Fact]
     public void PaintingFacesShowsTheShapeWithAMeshOfItsMaterials()
     {
         var brep = new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10));

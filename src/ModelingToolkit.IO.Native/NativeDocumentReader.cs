@@ -165,6 +165,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 Metallic = entry.Metallic,
                 Roughness = entry.Roughness,
                 BaseColorTexture = entry.BaseColorTexture is int texture ? At(textures, texture, "texture") : null,
+                TextureSize = entry.TextureSize is > 0 and float size && float.IsFinite(size) ? size : 1000f,
             };
         }
 

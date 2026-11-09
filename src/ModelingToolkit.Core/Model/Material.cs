@@ -22,4 +22,10 @@ public sealed class Material
 
     /// <summary>Image multiplied by <see cref="BaseColor"/>, mapped through the texture coordinates of the meshes.</summary>
     public Texture? BaseColorTexture { get; set; }
+
+    /// <summary>
+    /// The width and the height, in millimetres, that <see cref="BaseColorTexture"/> covers once on the faces of shapes,
+    /// where it repeats; meshes map it through texture coordinates of their own.
+    /// </summary>
+    public float TextureSize { get; set; } = 1000f;
 }

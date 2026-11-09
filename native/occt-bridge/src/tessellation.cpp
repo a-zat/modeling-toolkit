@@ -6,7 +6,10 @@
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRep_Tool.hxx>
+#include <gp_Ax3.hxx>
+#include <gp_Pnt2d.hxx>
 #include <GCPnts_TangentialDeflection.hxx>
 #include <NCollection_IndexedDataMap.hxx>
 #include <NCollection_IndexedMap.hxx>
@@ -36,6 +39,7 @@
 struct mtk_tessellation {
     std::vector<double> vertices;
     std::vector<float> normals;
+    std::vector<float> uvs; // in millimetres along the face, of each vertex
     std::vector<int32_t> triangles;
     std::vector<int32_t> first_triangles; // of each face, then the number of triangles
     std::vector<double> edge_points;
@@ -63,9 +67,39 @@ void append_face(const TopoDS_Face& face, mtk_tessellation& mesh) {
     const bool mirrored = transform.VectorialPart().Determinant() < 0.0;
     const auto first_vertex = static_cast<int32_t>(mesh.vertices.size() / 3);
 
+    // Texture coordinates in millimetres along the face, so that a texture keeps its size whatever the face: on a
+    // plane, along its axes; elsewhere, the parameters of the surface times its lengths per unit of each, at the middle
+    // of the face. Seen from the front of a reversed face, the first axis is turned the other way, so that a texture is
+    // not mirrored.
+    const BRepAdaptor_Surface surface(face);
+    const bool planar = surface.GetType() == GeomAbs_Plane;
+    const gp_Ax3 axes = planar ? surface.Plane().Position() : gp_Ax3();
+    double u_scale = 1.0, v_scale = 1.0;
+    if (!planar) {
+        gp_Pnt middle;
+        gp_Vec du, dv;
+        surface.D1(0.5 * (surface.FirstUParameter() + surface.LastUParameter()),
+                   0.5 * (surface.FirstVParameter() + surface.LastVParameter()), middle, du, dv);
+        u_scale = du.Magnitude();
+        v_scale = dv.Magnitude();
+    }
+    const double u_sign = reversed ? -1.0 : 1.0;
+
     for (int node = 1; node <= triangulation->NbNodes(); ++node) {
         const gp_Pnt point = triangulation->Node(node).Transformed(transform);
         mesh.vertices.insert(mesh.vertices.end(), {point.X(), point.Y(), point.Z()});
+
+        double u = 0.0, v = 0.0;
+        if (planar) {
+            const gp_Vec offset(axes.Location(), point);
+            u = offset.Dot(gp_Vec(axes.XDirection()));
+            v = offset.Dot(gp_Vec(axes.YDirection()));
+        } else if (triangulation->HasUVNodes()) {
+            const gp_Pnt2d parameters = triangulation->UVNode(node);
+            u = parameters.X() * u_scale;
+            v = parameters.Y() * v_scale;
+        }
+        mesh.uvs.insert(mesh.uvs.end(), {static_cast<float>(u_sign * u), static_cast<float>(v)});
 
         gp_Dir normal = triangulation->Normal(node).Transformed(transform);
         if (reversed) {
@@ -239,6 +273,7 @@ mtk_status mtk_tessellation_get_mesh(const mtk_tessellation* tessellation, mtk_m
         out_mesh->triangle_count = static_cast<int32_t>(tessellation->triangles.size() / 3);
         out_mesh->vertices = tessellation->vertices.data();
         out_mesh->normals = tessellation->normals.data();
+        out_mesh->texture_coordinates = tessellation->uvs.data();
         out_mesh->triangles = tessellation->triangles.data();
         return MTK_STATUS_OK;
     });

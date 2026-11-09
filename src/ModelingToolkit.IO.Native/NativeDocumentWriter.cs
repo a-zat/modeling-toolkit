@@ -100,7 +100,8 @@ public sealed class NativeDocumentWriter : IDocumentWriter
             [material.BaseColor.R, material.BaseColor.G, material.BaseColor.B, material.BaseColor.A],
             material.Metallic,
             material.Roughness,
-            material.BaseColorTexture is null ? null : Find(_textures, material.BaseColorTexture, "texture"));
+            material.BaseColorTexture is null ? null : Find(_textures, material.BaseColorTexture, "texture"),
+            material.BaseColorTexture is null ? null : material.TextureSize);
 
         private BlockEntry ToEntry(Block block) => new(block.Name, block.Entities.Select(ToEntry).ToList());
 

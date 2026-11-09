@@ -193,7 +193,7 @@ public sealed class OcctKernelTests
         Assert.Equal(6000, measures.Volume, precision: 6);
         Assert.Equal(0, measures.TrianglesAgainstTheirNormals);
         Assert.All(mesh.Normals!, normal => Assert.Equal(1f, normal.Length(), precision: 4));
-        Assert.Null(mesh.TextureCoordinates);
+        Assert.Equal(mesh.Vertices.Length, mesh.TextureCoordinates!.Length); // in millimetres along the faces
         Assert.Null(mesh.Material);
     }
 

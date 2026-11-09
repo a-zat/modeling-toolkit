@@ -85,6 +85,57 @@ public sealed partial class MaterialPickerViewModel : ObservableObject
     [ObservableProperty]
     public partial double Metallic { get; set; }
 
+    /// <summary>Asks for an image file, for a material with a texture; null for no file chosen.</summary>
+    public Func<Task<string?>>? ChooseImage { get; set; }
+
+    /// <summary>The millimetres that the texture of a new material covers once on the faces of shapes.</summary>
+    [ObservableProperty]
+    public partial decimal? TextureSize { get; set; } = 1000;
+
+    /// <summary>
+    /// Chooses a new material with the image of a file as its texture, of the size, roughness and metallic of the picker;
+    /// a file that cannot be read, or is not a PNG, JPEG or WebP image, chooses nothing.
+    /// </summary>
+    [RelayCommand]
+    private async Task PickTextureAsync()
+    {
+        IsOpen = false; // the dialog takes the focus, which would close the picker anyway
+        if (ChooseImage is null || await ChooseImage() is not { } path)
+        {
+            return;
+        }
+
+        string? mediaType = Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            _ => null,
+        };
+        byte[] data;
+        try
+        {
+            data = await File.ReadAllBytesAsync(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+        if (mediaType is null)
+        {
+            return;
+        }
+
+        string name = Path.GetFileNameWithoutExtension(path);
+        Choose(Named(new Material(name)
+        {
+            BaseColorTexture = new Texture(name, mediaType, data),
+            TextureSize = (float)Math.Max(TextureSize ?? 1000, 1),
+            Roughness = (float)Math.Round(Roughness, 2),
+            Metallic = (float)Math.Round(Metallic, 2),
+        }));
+    }
+
     /// <summary>Opens the picker on the materials of a document.</summary>
     public void Open(Document? document)
     {

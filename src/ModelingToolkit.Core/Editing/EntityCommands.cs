@@ -16,11 +16,15 @@ public sealed class RenameCommand(Entity entity, string? name) : IEditCommand
     public void Revert() => _entity.Name = _before;
 }
 
-/// <summary>Adds a material to the materials of a document, as one chosen from a library is when first used.</summary>
+/// <summary>
+/// Adds a material to the materials of a document, with its texture to the textures, as one chosen from a library or
+/// made from an image is when first used.
+/// </summary>
 public sealed class AddMaterialCommand(Document document, Material material) : IEditCommand
 {
     private readonly Document _document = document ?? throw new ArgumentNullException(nameof(document));
     private readonly Material _material = material ?? throw new ArgumentNullException(nameof(material));
+    private bool _addedTexture;
 
     public string Name => "Add Material";
 
@@ -30,9 +34,22 @@ public sealed class AddMaterialCommand(Document document, Material material) : I
         {
             _document.Materials.Add(_material);
         }
+        if (_material.BaseColorTexture is { } texture && !_document.Textures.Contains(texture))
+        {
+            _document.Textures.Add(texture);
+            _addedTexture = true;
+        }
     }
 
-    public void Revert() => _document.Materials.Remove(_material);
+    public void Revert()
+    {
+        _document.Materials.Remove(_material);
+        if (_addedTexture)
+        {
+            _document.Textures.Remove(_material.BaseColorTexture!);
+            _addedTexture = false;
+        }
+    }
 }
 
 /// <summary>Gives a mesh a material, or the default material with null.</summary>

@@ -39,6 +39,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsGridVisible = true;
 
         Properties.Edit = Edit;
+        Properties.Picker.ChooseImage = () => FileDialogs?.OpenAsync(
+            "Choose an image for the material", [new FileType("Images", [".png", ".jpg", ".jpeg", ".webp"])])
+            ?? Task.FromResult<string?>(null);
         ModelTree.EnterCommand = EnterNodeCommand;
         _toolHost = new ToolHost(this);
         Tools = [new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true }];

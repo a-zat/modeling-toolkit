@@ -16,12 +16,14 @@ internal sealed record Manifest(
 
 internal sealed record TextureEntry(string Name, string MediaType, string Path);
 
+/// <param name="TextureSize">With a texture, the millimetres it covers once on the faces of shapes.</param>
 internal sealed record MaterialEntry(
     string Name,
     float[] BaseColor,
     float Metallic,
     float Roughness,
-    int? BaseColorTexture);
+    int? BaseColorTexture,
+    float? TextureSize = null);
 
 internal sealed record BlockEntry(string Name, List<EntityEntry> Entities);
 

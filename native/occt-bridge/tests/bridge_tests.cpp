@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 namespace {
@@ -615,7 +616,7 @@ TEST(Tessellation, TurnsABoxIntoTwelveTrianglesFacingOutwards) {
     const MeshMeasures measures = measure(mesh);
 
     EXPECT_EQ(mesh.material, -1);
-    EXPECT_EQ(mesh.texture_coordinates, nullptr);
+    EXPECT_NE(mesh.texture_coordinates, nullptr) << "in millimetres along the faces";
     EXPECT_EQ(mesh.vertex_count, 24) << "each face has its own vertices";
     EXPECT_EQ(mesh.triangle_count, 12);
     EXPECT_NEAR(measures.area, 2200.0, 1e-6);
@@ -684,6 +685,46 @@ TEST(Tessellation, KeepsTheShapeAsItWasAndItsPlacement) {
     EXPECT_EQ(measures.triangles_against_their_normals, 0);
     EXPECT_NEAR(volume_of(placed), 6000.0, 1e-6);
     EXPECT_EQ(mesh_of(tessellate(box, 1.0)).triangle_count, 12);
+}
+
+TEST(Tessellation, GivesTextureCoordinatesInMillimetresAlongEachFace) {
+    // The sides of a box span its sizes; the side of a cylinder its circumference and its height.
+    ShapePtr box = make_box(100.0, 20.0, 30.0);
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(10.0, 40.0, &made), MTK_STATUS_OK);
+    ShapePtr cylinder(made);
+    for (const auto& [shape, expected_u, expected_v] :
+         {std::tuple{box.get(), 0.0, 0.0}, std::tuple{cylinder.get(), 2 * M_PI * 10.0, 40.0}}) {
+        mtk_tessellation* tessellation = nullptr;
+        ASSERT_EQ(mtk_shape_tessellate(shape, 0.01, 0.1, nullptr, &tessellation), MTK_STATUS_OK)
+            << mtk_last_error_message();
+        TessellationPtr owned(tessellation);
+        mtk_mesh_info mesh{};
+        ASSERT_EQ(mtk_tessellation_get_mesh(tessellation, &mesh), MTK_STATUS_OK);
+        ASSERT_NE(mesh.texture_coordinates, nullptr);
+        const int32_t* first = nullptr;
+        int32_t faces = 0;
+        ASSERT_EQ(mtk_tessellation_get_faces(tessellation, &first, &faces), MTK_STATUS_OK);
+
+        // The span of the coordinates of the first face.
+        float u_min = 1e9f, u_max = -1e9f, v_min = 1e9f, v_max = -1e9f;
+        for (int32_t corner = 3 * first[0]; corner < 3 * first[1]; ++corner) {
+            const int32_t vertex = mesh.triangles[corner];
+            u_min = std::min(u_min, mesh.texture_coordinates[2 * vertex]);
+            u_max = std::max(u_max, mesh.texture_coordinates[2 * vertex]);
+            v_min = std::min(v_min, mesh.texture_coordinates[2 * vertex + 1]);
+            v_max = std::max(v_max, mesh.texture_coordinates[2 * vertex + 1]);
+        }
+        if (shape == box.get()) {
+            // The first face of the box is x = 0: it spans its depth and its height, in either order.
+            const std::array<double, 2> spans{std::max(u_max - u_min, v_max - v_min), std::min(u_max - u_min, v_max - v_min)};
+            EXPECT_NEAR(spans[0], 30.0, 1e-3);
+            EXPECT_NEAR(spans[1], 20.0, 1e-3);
+        } else {
+            EXPECT_NEAR(u_max - u_min, expected_u, 1e-3);
+            EXPECT_NEAR(v_max - v_min, expected_v, 1e-3);
+        }
+    }
 }
 
 TEST(Tessellation, GivesTheTrianglesOfEachFace) {

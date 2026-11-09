@@ -40,6 +40,7 @@ internal sealed class ViewportScene
     private readonly List<Polylines?> _meshEdges = [];
     private readonly List<ShapeTessellation?> _meshShapes = []; // for the meshes of shapes, picked by their elements
     private readonly List<int[]?> _meshFaceMaterials = []; // of the faces of the meshes of shapes painted, -1 for none
+    private readonly List<(MeshEntity Mesh, string FaceMaterials)> _meshKeys = []; // of each mesh in _meshIndices
     private readonly List<Material> _materials = [];
     private readonly List<int> _materialTextures = [];
     private readonly List<Texture> _textures = [];
@@ -525,7 +526,7 @@ internal sealed class ViewportScene
             {
                 viewer.RemoveMesh(_shownMeshes[index]);
             }
-            _meshIndices.Remove((mesh, Key(_meshFaceMaterials[index])));
+            _meshIndices.Remove(_meshKeys[index]);
             _meshes[index] = null;
             _meshEdges[index] = null;
             _meshShapes[index] = null;
@@ -569,14 +570,51 @@ internal sealed class ViewportScene
         return materials;
     }
 
+    // The mesh of a shape whose faces have textures, with the texture coordinates of each such face, in millimetres
+    // along it, divided by the size of its texture; the mesh as it is otherwise.
+    private MeshEntity Textured(MeshEntity mesh, ShapeTessellation shape, int[] faceMaterials)
+    {
+        if (mesh.TextureCoordinates is not { } coordinates ||
+            !faceMaterials.Any(material => material >= 0 && _materials[material].BaseColorTexture is not null))
+        {
+            return mesh;
+        }
+
+        var scaled = (System.Numerics.Vector2[])coordinates.Clone();
+        var done = new bool[scaled.Length]; // the faces have vertices of their own: each is scaled once
+        for (int face = 0; face < faceMaterials.Length; face++)
+        {
+            if (faceMaterials[face] < 0 || _materials[faceMaterials[face]] is not { BaseColorTexture: not null } material)
+            {
+                continue;
+            }
+
+            float scale = 1f / Math.Max(material.TextureSize, 1e-3f);
+            foreach (Triangle triangle in mesh.Triangles.AsSpan()[shape.TrianglesOf(face)])
+            {
+                foreach (int vertex in (ReadOnlySpan<int>)[triangle.A, triangle.B, triangle.C])
+                {
+                    if (!done[vertex])
+                    {
+                        scaled[vertex] *= scale;
+                        done[vertex] = true;
+                    }
+                }
+            }
+        }
+        return new MeshEntity(mesh.Vertices, mesh.Triangles, mesh.Normals, scaled);
+    }
+
     private static string Key(int[]? faceMaterials) => faceMaterials is null ? string.Empty : string.Join(',', faceMaterials);
 
     private int IndexOf(MeshEntity mesh, ShapeTessellation? shape, int[]? faceMaterials)
     {
-        if (!_meshIndices.TryGetValue((mesh, Key(faceMaterials)), out int index))
+        (MeshEntity, string) key = (mesh, Key(faceMaterials));
+        if (!_meshIndices.TryGetValue(key, out int index))
         {
-            index = _meshIndices[(mesh, Key(faceMaterials))] = _meshes.Count;
-            _meshes.Add(mesh);
+            index = _meshIndices[key] = _meshes.Count;
+            _meshKeys.Add(key);
+            _meshes.Add(shape is not null && faceMaterials is not null ? Textured(mesh, shape, faceMaterials) : mesh);
             // A mesh read from a file has no edges but those of its triangles: the sharp ones outline it.
             _meshEdges.Add(shape?.Edges ?? SharpEdges.Of(mesh.Vertices, mesh.Triangles));
             _meshShapes.Add(shape);
