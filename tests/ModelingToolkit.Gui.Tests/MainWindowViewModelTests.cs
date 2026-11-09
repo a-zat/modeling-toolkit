@@ -184,10 +184,16 @@ public sealed class MainWindowViewModelTests
 
         viewModel.ModelTree.SelectCommand.Execute(path);
 
+        // The mesh is in the geometry of the last block, opened too.
         ModelNodeViewModel node = viewModel.ModelTree.Roots[0];
         foreach (Entity step in path)
         {
             Assert.True(node.IsExpanded);
+            if (step is not BlockReference)
+            {
+                node = node.Children.Single(child => child.IsGeometry);
+                Assert.True(node.IsExpanded);
+            }
             node = node.Children.Single(child => child.Entity == step);
         }
         Assert.Same(node, viewModel.ModelTree.SelectedNode);
@@ -211,10 +217,26 @@ public sealed class MainWindowViewModelTests
         viewModel.ModelTree.Show(document);
 
         ModelNodeViewModel model = Assert.Single(viewModel.ModelTree.Roots);
-        Assert.Equal(["Steel", "Cube"], model.Children.Select(node => node.Name));
-        Assert.All(model.Children, node => Assert.True(node.IsBrep));
+        ModelNodeViewModel geometry = Assert.Single(model.Children);
+        Assert.Equal(("Geometry", "2 solids · 12 faces · 24 edges"), (geometry.Name, geometry.Detail));
+        Assert.Equal(["Steel", "Cube"], geometry.Children.Select(node => node.Name));
+        Assert.All(geometry.Children, node => Assert.True(node.IsBrep));
 
-        viewModel.ModelTree.SelectedNode = model.Children[0];
+        viewModel.ModelTree.SelectedNode = geometry;
+
+        Assert.Equal(("Geometry", "of Model"), (viewModel.Properties.Title, viewModel.Properties.Kind));
+        Assert.Equal(
+            [
+                new PropertyRow("B-rep shapes", "2"),
+                new PropertyRow("Solids", "2"),
+                new PropertyRow("Faces", "12"),
+                new PropertyRow("Edges", "24"),
+                new PropertyRow("Vertices", "16"),
+            ],
+            viewModel.Properties.Rows);
+        Assert.False(viewModel.Properties.IsEditable);
+
+        viewModel.ModelTree.SelectedNode = geometry.Children[0];
 
         Assert.Equal("B-rep shape", viewModel.Properties.Kind);
         Assert.Equal(

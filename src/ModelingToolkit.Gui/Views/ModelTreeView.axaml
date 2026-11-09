@@ -5,11 +5,15 @@
              x:DataType="vm:ModelTreeViewModel">
 
   <Panel>
-    <TreeView ItemsSource="{Binding Roots}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
-              DoubleTapped="OnTreeDoubleTapped">
+    <TreeView x:Name="Tree" ItemsSource="{Binding Roots}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
       <TreeView.Styles>
         <Style Selector="TreeViewItem" x:DataType="vm:ModelNodeViewModel">
           <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+        </Style>
+        <!-- The reference whose block is being edited. -->
+        <Style Selector="TextBlock.context">
+          <Setter Property="FontWeight" Value="SemiBold" />
+          <Setter Property="Foreground" Value="{DynamicResource Mtk.AccentForeground}" />
         </Style>
       </TreeView.Styles>
       <TreeView.ItemTemplate>
@@ -20,8 +24,9 @@
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.CubeLink}" IsVisible="{Binding IsReference}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsMesh}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsBrep}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsGeometry}" />
             </Panel>
-            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Classes.context="{Binding IsContext}" />
             <TextBlock Text="{Binding Detail}" Classes="secondary" VerticalAlignment="Center" />
           </StackPanel>
         </TreeDataTemplate>

@@ -113,6 +113,36 @@ public sealed class EditContextTests : IDisposable
         Assert.Null(_viewModel.EmphasizedPath);
     }
 
+    [Fact]
+    public async Task TheTreeMarksTheReferenceWhoseBlockIsBeingEdited()
+    {
+        await OpenParts();
+        ModelNodeViewModel left = _viewModel.ModelTree.Roots[0].Children[0];
+
+        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
+        Assert.True(left.IsContext);
+        Assert.True(left.IsExpanded);
+        Assert.Equal("1 solid · 6 faces · 12 edges", Assert.Single(left.Children).Detail);
+
+        _viewModel.EnterNodeCommand.Execute(_viewModel.ModelTree.Roots[0].Children[1]);
+        Assert.False(left.IsContext);
+        Assert.True(_viewModel.ModelTree.Roots[0].Children[1].IsContext);
+
+        _viewModel.LeaveContextCommand.Execute(null);
+        Assert.DoesNotContain(_viewModel.ModelTree.Roots[0].Children, node => node.IsContext);
+    }
+
+    [Fact]
+    public async Task TheCountsOfAGeometryFollowItsShapes()
+    {
+        await OpenParts();
+        ModelNodeViewModel geometry = Assert.Single(_viewModel.ModelTree.Roots[0].Children[0].Children);
+
+        _viewModel.Edit(new Core.Editing.ReplaceShapeCommand("Cylinder", _box, _kernel.MakeCylinder(5, 10)));
+
+        Assert.Equal("1 solid · 3 faces · 3 edges", geometry.Detail);
+    }
+
     private ElementReference Face(BlockReference reference) => new([reference, _box], ElementKind.Face, 0);
 
     private ViewportPick Click(BlockReference reference, int clicks = 1) =>

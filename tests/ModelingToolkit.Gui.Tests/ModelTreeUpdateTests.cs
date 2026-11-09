@@ -30,13 +30,18 @@ public sealed class ModelTreeUpdateTests
         document.Root.Entities.Add(body);
         wheel.Entities.Add(Square());
 
+        // The geometry of the model appears with its first entity; the one of the wheel counts another square.
         Assert.Equal([nameof(ModelNodeViewModel.Children)], changed);
         Assert.Same(referenceNode, model.Children[0]);
         Assert.True(referenceNode.IsExpanded);
-        Assert.Same(body, model.Children[1].Entity);
-        Assert.Equal([body], model.Children[1].Path);
-        Assert.Equal(2, referenceNode.Children.Count);
-        Assert.Equal([reference, wheel.Entities[1]], referenceNode.Children[1].Path);
+        ModelNodeViewModel geometry = model.Children[1];
+        Assert.True(geometry.IsGeometry);
+        Assert.Equal("2 triangles", geometry.Detail);
+        Assert.Same(body, geometry.Children[0].Entity);
+        Assert.Equal([body], geometry.Children[0].Path);
+        ModelNodeViewModel wheelGeometry = Assert.Single(referenceNode.Children);
+        Assert.Equal("4 triangles", wheelGeometry.Detail);
+        Assert.Equal([reference, wheel.Entities[1]], wheelGeometry.Children[1].Path);
     }
 
     [Fact]
@@ -77,12 +82,14 @@ public sealed class ModelTreeUpdateTests
         wheel.Name = "Front wheel";
         body.Material = new Material("Paint");
 
-        Assert.Equal(["Front wheel", "Paint"], model.Children.Select(node => node.Name));
+        Assert.Equal(["Front wheel", "Geometry"], model.Children.Select(node => node.Name));
+        Assert.Equal("Paint", model.Children[1].Children[0].Name);
 
         reference.Name = "Left";
         body.Name = "Body";
 
-        Assert.Equal(["Left", "Body"], model.Children.Select(node => node.Name));
+        Assert.Equal("Left", model.Children[0].Name);
+        Assert.Equal("Body", model.Children[1].Children[0].Name);
         Assert.Equal("Front wheel", model.Children[0].Detail);
     }
 
@@ -99,7 +106,7 @@ public sealed class ModelTreeUpdateTests
 
         Assert.Contains(new PropertyRow("Meshes", "2 (2 placed)"), viewModel.Properties.Rows);
 
-        ModelNodeViewModel squareNode = viewModel.ModelTree.Roots[0].Children[^1];
+        ModelNodeViewModel squareNode = viewModel.ModelTree.Roots[0].Children[^1].Children[^1];
         viewModel.ModelTree.SelectedNode = squareNode;
         squareNode.Entity!.Name = "Floor";
 

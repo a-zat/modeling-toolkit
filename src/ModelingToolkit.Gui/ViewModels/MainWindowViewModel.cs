@@ -279,6 +279,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void OnContextChanged(object? sender, EventArgs e)
     {
         Elements?.Clear();
+        ModelTree.ShowContext(Context?.Path ?? []);
         OnPropertyChanged(nameof(IsEditingBlock));
         OnPropertyChanged(nameof(ContextName));
         OnPropertyChanged(nameof(EmphasizedPath));

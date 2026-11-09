@@ -126,6 +126,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
         {
             null => string.Empty,
             { IsModel: true } => "Model",
+            { IsGeometry: true, Block: { } geometryBlock } => $"of {geometryBlock.Name}",
             { IsReference: true } => "Block reference",
             { IsMesh: true } => "Mesh",
             { IsBrep: true } => "B-rep shape",
@@ -135,6 +136,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
         {
             { Document: { } document } => ModelRows(
                 _known is { } known && known.Document == document ? known.Statistics : DocumentStatistics.Of(document)),
+            { IsGeometry: true, Block: { } block } => GeometryRows(block),
             { Entity: BlockReference reference } => ReferenceRows(reference),
             { Entity: MeshEntity mesh } => MeshRows(mesh),
             { Entity: BrepEntity brep } => BrepRows(brep),
@@ -242,6 +244,29 @@ public sealed partial class PropertiesViewModel : ObservableObject
         rows.Add(new("Materials", Formatting.Count(statistics.Materials)));
         rows.Add(new("Textures", Formatting.Count(statistics.Textures)));
         rows.Add(new("Size", Formatting.Size(statistics.BoundingBox)));
+        return rows;
+    }
+
+    // The entities of a block that are not references, and what they are made of.
+    private static List<PropertyRow> GeometryRows(Block block)
+    {
+        List<PropertyRow> rows = [];
+        BrepEntity[] shapes = [.. block.Entities.OfType<BrepEntity>()];
+        if (shapes.Length > 0)
+        {
+            ShapeTopology[] counts = [.. shapes.Select(shape => shape.Kernel.CountElements(shape.Shape))];
+            rows.Add(new("B-rep shapes", Formatting.Count(shapes.Length)));
+            rows.Add(new("Solids", Formatting.Count(counts.Sum(count => count.Solids))));
+            rows.Add(new("Faces", Formatting.Count(counts.Sum(count => count.Faces))));
+            rows.Add(new("Edges", Formatting.Count(counts.Sum(count => count.Edges))));
+            rows.Add(new("Vertices", Formatting.Count(counts.Sum(count => count.Vertices))));
+        }
+        MeshEntity[] meshes = [.. block.Entities.OfType<MeshEntity>()];
+        if (meshes.Length > 0)
+        {
+            rows.Add(new("Meshes", Formatting.Count(meshes.Length)));
+            rows.Add(new("Triangles", Formatting.Count(meshes.Sum(mesh => (long)mesh.Triangles.Length))));
+        }
         return rows;
     }
 

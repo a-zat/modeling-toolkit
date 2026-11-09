@@ -1,14 +1,18 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.ViewModels;
 
 /// <summary>
-/// A node of the model tree: the model itself, a block reference, a mesh or a B-rep shape, as placed in the model.
+/// A node of the model tree, an outline of the references of the blocks: the model itself, a block reference, the
+/// geometry of a block, or a mesh or a B-rep shape of that geometry, as placed in the model.
 /// </summary>
 /// <remarks>
-/// A block placed twice appears twice. The children of a node are created when the tree first asks for them, so that
-/// only the expanded part of a large model is built.
+/// The children of the model and of a reference are the references of its block, then the geometry of the block, one
+/// node with its counts, when the block has entities that are not references; the children of the geometry are those
+/// entities. A block placed twice appears twice. The children of a node are created when the tree first asks for them,
+/// so that only the expanded part of a large model is built.
 /// </remarks>
 public sealed partial class ModelNodeViewModel : ObservableObject
 {
@@ -16,13 +20,15 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     private IReadOnlyList<ModelNodeViewModel>? _children;
 
     private ModelNodeViewModel(
-        string name, string? detail, Entity? entity, IReadOnlyList<Entity> path, Block? block, Document? document)
+        string name, string? detail, Entity? entity, IReadOnlyList<Entity> path, Block? block, Document? document,
+        bool isGeometry = false)
     {
         _name = name;
         _detail = detail;
         Entity = entity;
         Path = path;
         Document = document;
+        IsGeometry = isGeometry;
         _block = block;
     }
 
@@ -36,7 +42,10 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         private set => SetProperty(ref _name, value);
     }
 
-    /// <summary>Secondary text: the number of triangles of a mesh, or the block of a reference with its own name.</summary>
+    /// <summary>
+    /// Secondary text: the number of triangles of a mesh, the block of a reference with its own name, or the counts of
+    /// a geometry.
+    /// </summary>
     public string? Detail
     {
         get => _detail;
@@ -46,19 +55,30 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     private string _name;
     private string? _detail;
 
-    /// <summary>The entity of the node; null for the model.</summary>
+    /// <summary>The entity of the node; null for the model and for a geometry.</summary>
     public Entity? Entity { get; }
 
     /// <summary>
     /// The entities from the model to the node, the last one being <see cref="Entity"/>: the references that place it,
-    /// which tell apart the placements of a block. Empty for the model.
+    /// which tell apart the placements of a block. Empty for the model; for a geometry, the path of the node it is the
+    /// geometry of.
     /// </summary>
     public IReadOnlyList<Entity> Path { get; }
 
     /// <summary>The document, for the model node only.</summary>
     public Document? Document { get; }
 
-    public bool IsModel => Entity is null;
+    /// <summary>The block whose entities the node shows: of the model, of a reference, or of a geometry.</summary>
+    public Block? Block => _block;
+
+    public bool IsModel => Document is not null;
+
+    /// <summary>Whether the node is the geometry of a block: its entities that are not references.</summary>
+    public bool IsGeometry { get; }
+
+    /// <summary>Whether the node is the reference whose block is being edited.</summary>
+    [ObservableProperty]
+    public partial bool IsContext { get; set; }
 
     public bool IsReference => Entity is BlockReference;
 
@@ -69,8 +89,7 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsExpanded { get; set; }
 
-    public IReadOnlyList<ModelNodeViewModel> Children =>
-        _children ??= _block is null ? [] : [.. _block.Entities.Select(Child)];
+    public IReadOnlyList<ModelNodeViewModel> Children => _children ??= BuildChildren([]);
 
     public static ModelNodeViewModel ForDocument(Document document) =>
         new(document.Root.Name, null, null, [], document.Root, document) { IsExpanded = true };
@@ -91,15 +110,18 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         };
         if (changed is not null && ReferenceEquals(_block, changed) && _children is not null)
         {
-            Dictionary<Entity, ModelNodeViewModel> kept = _children.ToDictionary(
-                child => child.Entity!, child => child, ReferenceEqualityComparer.Instance as IEqualityComparer<Entity>);
-            _children = [.. changed.Entities.Select(entity => kept.GetValueOrDefault(entity) ?? Child(entity))];
+            _children = BuildChildren(_children);
             OnPropertyChanged(nameof(Children));
         }
         else if (change is Core.Model.PropertyChanged renamed && Entity is not null &&
                  (ReferenceEquals(renamed.Target, Entity) || ReferenceEquals(renamed.Target, _block)))
         {
             (Name, Detail) = Label(Entity);
+        }
+        if (IsGeometry && (ReferenceEquals(changed, _block) ||
+                           (change is ShapeReplaced shape && ReferenceEquals(shape.Entity.Owner, _block))))
+        {
+            Detail = GeometryDetail(_block!);
         }
 
         foreach (ModelNodeViewModel child in _children ?? [])
@@ -114,13 +136,85 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         ModelNodeViewModel current = this;
         foreach (Entity entity in node.Path)
         {
-            if (current._children?.FirstOrDefault(child => ReferenceEquals(child.Entity, entity)) is not { } next)
+            if (current.FindChild(entity, build: false) is not { } next)
             {
                 return false;
             }
             current = next;
         }
-        return ReferenceEquals(current, node);
+        return node.IsGeometry
+            ? current._children?.Any(child => ReferenceEquals(child, node)) == true
+            : ReferenceEquals(current, node);
+    }
+
+    /// <summary>
+    /// The child of an entity of the block: a node of a reference, or of an entity in the geometry, which is then
+    /// opened when <paramref name="build"/> builds the nodes not built yet.
+    /// </summary>
+    internal ModelNodeViewModel? FindChild(Entity entity, bool build)
+    {
+        foreach (ModelNodeViewModel child in (build ? Children : _children) ?? [])
+        {
+            if (ReferenceEquals(child.Entity, entity))
+            {
+                return child;
+            }
+            if (child.IsGeometry && entity is not BlockReference && child.FindChild(entity, build) is { } found)
+            {
+                if (build)
+                {
+                    child.IsExpanded = true;
+                }
+                return found;
+            }
+        }
+        return null;
+    }
+
+    // The nodes of the entities of the block, reusing those of the entities that remain, so that they stay open.
+    private List<ModelNodeViewModel> BuildChildren(IReadOnlyList<ModelNodeViewModel> previous)
+    {
+        if (_block is null)
+        {
+            return [];
+        }
+
+        Dictionary<Entity, ModelNodeViewModel> kept = previous.Where(child => child.Entity is not null).ToDictionary(
+            child => child.Entity!, child => child, ReferenceEqualityComparer.Instance as IEqualityComparer<Entity>);
+        if (IsGeometry)
+        {
+            return [.. _block.Entities.Where(entity => entity is not BlockReference)
+                .Select(entity => kept.GetValueOrDefault(entity) ?? Child(entity))];
+        }
+
+        List<ModelNodeViewModel> children = [.. _block.Entities.OfType<BlockReference>()
+            .Select(entity => kept.GetValueOrDefault(entity) ?? Child(entity))];
+        if (_block.Entities.Any(entity => entity is not BlockReference))
+        {
+            children.Add(previous.FirstOrDefault(child => child.IsGeometry) ??
+                new ModelNodeViewModel("Geometry", GeometryDetail(_block), null, Path, _block, null, isGeometry: true));
+        }
+        return children;
+    }
+
+    // The counts of the entities of a block that are not references: "1 solid · 6 faces · 12 edges".
+    private static string GeometryDetail(Block block)
+    {
+        List<string> parts = [];
+        BrepEntity[] shapes = [.. block.Entities.OfType<BrepEntity>()];
+        if (shapes.Length > 0)
+        {
+            ShapeTopology[] counts = [.. shapes.Select(shape => shape.Kernel.CountElements(shape.Shape))];
+            parts.Add(Formatting.Count(counts.Sum(count => count.Solids), "solid", "solids"));
+            parts.Add(Formatting.Count(counts.Sum(count => count.Faces), "face", "faces"));
+            parts.Add(Formatting.Count(counts.Sum(count => count.Edges), "edge", "edges"));
+        }
+        MeshEntity[] meshes = [.. block.Entities.OfType<MeshEntity>()];
+        if (meshes.Length > 0)
+        {
+            parts.Add(Formatting.Count(meshes.Sum(mesh => (long)mesh.Triangles.Length), "triangle", "triangles"));
+        }
+        return string.Join(" · ", parts);
     }
 
     private ModelNodeViewModel Child(Entity entity)

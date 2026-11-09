@@ -37,6 +37,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         }
 
         SelectedNode = null;
+        _context = null;
         Roots = document is null ? [] : [ModelNodeViewModel.ForDocument(document)];
     }
 
@@ -62,8 +63,35 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     [RelayCommand]
     private void Select(IReadOnlyList<Entity>? path)
     {
-        ModelNodeViewModel? node = path is null || Roots.Count == 0 ? null : Roots[0];
-        foreach (Entity entity in path ?? [])
+        SelectedNode = path is null ? null : Find(path);
+    }
+
+    /// <summary>
+    /// Marks the node of the reference whose block is being edited, given the references entered from the model, and
+    /// opens the nodes down to it; none in the model.
+    /// </summary>
+    public void ShowContext(IReadOnlyList<Entity> path)
+    {
+        ModelNodeViewModel? node = path.Count == 0 ? null : Find(path);
+        if (_context is not null && !ReferenceEquals(_context, node))
+        {
+            _context.IsContext = false;
+        }
+        _context = node;
+        if (node is not null)
+        {
+            node.IsContext = true;
+            node.IsExpanded = true;
+        }
+    }
+
+    private ModelNodeViewModel? _context;
+
+    // The node of a path, opening the nodes above it; null for a path not in the document.
+    private ModelNodeViewModel? Find(IReadOnlyList<Entity> path)
+    {
+        ModelNodeViewModel? node = Roots.Count == 0 ? null : Roots[0];
+        foreach (Entity entity in path)
         {
             if (node is null)
             {
@@ -71,9 +99,8 @@ public sealed partial class ModelTreeViewModel : ObservableObject
             }
 
             node.IsExpanded = true;
-            node = node.Children.FirstOrDefault(child => ReferenceEquals(child.Entity, entity));
+            node = node.FindChild(entity, build: true);
         }
-
-        SelectedNode = node;
+        return node;
     }
 }
