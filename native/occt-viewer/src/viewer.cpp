@@ -16,6 +16,7 @@
 #include <NCollection_IndexedDataMap.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_Drawer.hxx>
+#include <Prs3d_LineAspect.hxx>
 #include <Prs3d_ShadingAspect.hxx>
 #include <Prs3d_TextAspect.hxx>
 #include <SelectMgr_Selection.hxx>
@@ -49,6 +50,8 @@ namespace {
 // Sizes in device-independent units, like the rest of the interface; the viewer multiplies them by the scale.
 // The outlines of the CAD render style, in device-independent units.
 constexpr double outline_width = 1.5;
+// The edges highlighted, hovered or selected, in device-independent units.
+constexpr double highlighted_edge_width = 3.0;
 constexpr double view_cube_size = 42.0;
 constexpr double view_cube_offset = 70.0; // from the upper right corner to the centre of the cube
 constexpr double view_cube_bevel = 0.08;  // width of the edges and corners, relative to the size
@@ -757,6 +760,15 @@ void mtk::Viewer::apply_scale(double scale) {
         context_->Redisplay(view_cube_, false);
     }
     set_display_mode(display_mode_); // the width of the outlines
+
+    // The elements draw their edges as wide as the lines of the highlight styles, the selected ones again.
+    for (const Prs3d_TypeOfHighlight type : {Prs3d_TypeOfHighlight_Dynamic, Prs3d_TypeOfHighlight_Selected}) {
+        context_->HighlightStyle(type)->SetLineAspect(
+            new Prs3d_LineAspect(Quantity_NOC_WHITE, Aspect_TOL_SOLID, highlighted_edge_width * scale));
+    }
+    for (const auto& [instance, owner] : highlighted_) {
+        owner->highlight_selected(context_->MainPrsMgr(), context_->HighlightStyle(Prs3d_TypeOfHighlight_Selected));
+    }
 }
 
 NCollection_Vec2<int> mtk::Viewer::to_pixels(double x, double y) const {

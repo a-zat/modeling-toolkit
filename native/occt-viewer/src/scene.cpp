@@ -12,6 +12,7 @@
 #include <Graphic3d_ShaderProgram.hxx>
 #include <Graphic3d_TextureSet.hxx>
 #include <Image_PixMap.hxx>
+#include <Prs3d_LineAspect.hxx>
 #include <Prs3d_Presentation.hxx>
 #include <PrsMgr_PresentationManager.hxx>
 #include <Select3D_SensitivePoint.hxx>
@@ -160,14 +161,6 @@ void main() {
     return program;
 }
 
-occ::handle<Graphic3d_ShaderProgram> outline_program(float width) {
-    static std::map<float, occ::handle<Graphic3d_ShaderProgram>> programs;
-    occ::handle<Graphic3d_ShaderProgram>& program = programs[width];
-    if (program.IsNull()) {
-        program = make_outline_program(width);
-    }
-    return program;
-}
 
 void apply_display_mode_to(Graphic3d_AspectFillArea3d& aspect, mtk_viewer_display_mode mode,
                            const Quantity_ColorRGBA& edges, bool triangle_edges) {
@@ -191,6 +184,15 @@ void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode m
     apply_display_mode_to(*aspects.faded, mode, faded, edges.triangle_edges);
     apply_display_mode_to(*aspects.shaded_faces, mode, shaded, false);
     apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
+}
+
+occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width) {
+    static std::map<float, occ::handle<Graphic3d_ShaderProgram>> programs;
+    occ::handle<Graphic3d_ShaderProgram>& program = programs[width];
+    if (program.IsNull()) {
+        program = make_outline_program(width);
+    }
+    return program;
 }
 
 mtk::EdgeAspects mtk::make_edge_aspects() {
@@ -255,7 +257,6 @@ namespace {
 // Selected faces are tinted more than hovered ones; edges and vertices are drawn opaque.
 constexpr float hovered_face_opacity = 0.35f;
 constexpr float selected_face_opacity = 0.6f;
-constexpr float highlighted_edge_width = 2.0f; // drawn 1 pixel wide where OpenGL has only thin lines, as on macOS
 constexpr double highlighted_vertex_scale = 3.0;
 
 // Near an edge or a vertex, OpenCASCADE keeps the closest of the face and the edge, whatever their priorities, as
@@ -317,8 +318,9 @@ mtk::ElementOwner::ElementOwner(const occ::handle<SelectMgr_SelectableObject>& o
                                 mtk_viewer_element_kind kind, int index, int polyline)
     : SelectMgr_EntityOwner(object, priority_of(kind)), mesh_(mesh), kind_(kind), index_(index), polyline_(polyline) {}
 
-void mtk::ElementOwner::draw(const occ::handle<Prs3d_Presentation>& presentation, const Quantity_Color& color,
+void mtk::ElementOwner::draw(const occ::handle<Prs3d_Presentation>& presentation, const Prs3d_Drawer& style,
                              float opacity) const {
+    const Quantity_Color color = style.Color();
     presentation->Clear();
     // Over the scene, hidden by what is in front of the element; with the placement of the object that shows it.
     presentation->SetZLayer(Graphic3d_ZLayerId_Top);
@@ -341,7 +343,9 @@ void mtk::ElementOwner::draw(const occ::handle<Prs3d_Presentation>& presentation
         }
         group->AddPrimitiveArray(face);
     } else if (kind_ == MTK_VIEWER_ELEMENT_EDGE) {
-        group->SetGroupPrimitivesAspect(new Graphic3d_AspectLine3d(color, Aspect_TOL_SOLID, highlighted_edge_width));
+        occ::handle<Graphic3d_AspectLine3d> aspect = new Graphic3d_AspectLine3d(color, Aspect_TOL_SOLID, 1.0);
+        aspect->SetShaderProgram(outline_program(static_cast<float>(style.LineAspect()->Aspect()->Width())));
+        group->SetGroupPrimitivesAspect(aspect);
         const std::vector<gp_Pnt> points = polyline_points(*mesh_.edges, polyline_);
         occ::handle<Graphic3d_ArrayOfPolylines> line = new Graphic3d_ArrayOfPolylines(static_cast<int>(points.size()));
         for (const gp_Pnt& point : points) {
@@ -362,7 +366,7 @@ void mtk::ElementOwner::HilightWithColor(const occ::handle<PrsMgr_PresentationMa
     if (hover_.IsNull()) {
         hover_ = new Prs3d_Presentation(manager->StructureManager());
     }
-    draw(hover_, style->Color(), hovered_face_opacity);
+    draw(hover_, *style, hovered_face_opacity);
     if (manager->IsImmediateModeOn()) {
         manager->AddToImmediateList(hover_);
     } else {
@@ -381,7 +385,7 @@ void mtk::ElementOwner::highlight_selected(const occ::handle<PrsMgr_Presentation
     if (selected_.IsNull()) {
         selected_ = new Prs3d_Presentation(manager->StructureManager());
     }
-    draw(selected_, style->Color(), selected_face_opacity);
+    draw(selected_, *style, selected_face_opacity);
     selected_->Display();
 }
 

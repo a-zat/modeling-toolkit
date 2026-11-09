@@ -8,6 +8,7 @@
 #include <Graphic3d_ArrayOfTriangles.hxx>
 #include <Graphic3d_AspectLine3d.hxx>
 #include <Graphic3d_AspectFillArea3d.hxx>
+#include <Graphic3d_ShaderProgram.hxx>
 #include <Graphic3d_Texture2D.hxx>
 #include <Prs3d_Drawer.hxx>
 #include <Prs3d_Presentation.hxx>
@@ -61,7 +62,8 @@ public:
     void unhighlight_selected();
 
 private:
-    void draw(const occ::handle<Prs3d_Presentation>& presentation, const Quantity_Color& color, float opacity) const;
+    // In the colour of the style; edges as wide as its lines, in pixels.
+    void draw(const occ::handle<Prs3d_Presentation>& presentation, const Prs3d_Drawer& style, float opacity) const;
 
     Mesh mesh_;
     mtk_viewer_element_kind kind_;
@@ -159,6 +161,10 @@ struct EdgeStyle {
 void apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, const EdgeStyle& edges);
 
 EdgeAspects make_edge_aspects();
+
+// The program of the line aspects that draws their lines a width in pixels, thick also where OpenGL draws them one pixel
+// wide at most, and a little closer to the camera than they are, over the faces they bound.
+occ::handle<Graphic3d_ShaderProgram> outline_program(float width);
 void apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges);
 
 // The matrix as a placement that OpenCASCADE can apply to a shared presentation: a rotation, possibly with a
