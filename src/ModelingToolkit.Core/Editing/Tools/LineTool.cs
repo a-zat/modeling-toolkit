@@ -15,8 +15,6 @@ public sealed class LineTool(IGeometryKernel kernel) : DrawingTool(kernel)
     private const string NextHint = "Click to end the segment or type its length · arrows lock an axis · Esc stops";
 
     private Point3d? _start;
-    private Vector3d? _locked;
-    private InferenceKind _lockedKind = InferenceKind.None;
 
     public override string Name => "Line";
 
@@ -26,14 +24,14 @@ public sealed class LineTool(IGeometryKernel kernel) : DrawingTool(kernel)
     public override void Hover(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        Last = Infer(input.Pick, _start, _locked);
+        Last = Infer(input.Pick, _start, Locked);
         Show();
     }
 
     public override void Click(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        Inference point = Infer(input.Pick, _start, _locked);
+        Inference point = Infer(input.Pick, _start, Locked);
         Last = point;
         if (point.Kind == InferenceKind.None)
         {
@@ -79,21 +77,6 @@ public sealed class LineTool(IGeometryKernel kernel) : DrawingTool(kernel)
         return true;
     }
 
-    private void Lock(ToolKey key)
-    {
-        Transform placement = Host.Context.Placement;
-        (InferenceKind kind, Vector3d? direction) = key switch
-        {
-            ToolKey.Right => (InferenceKind.AxisX, placement.ApplyVector(Vector3d.UnitX)),
-            ToolKey.Left => (InferenceKind.AxisY, placement.ApplyVector(Vector3d.UnitY)),
-            ToolKey.Up => (InferenceKind.AxisZ, placement.ApplyVector(Vector3d.UnitZ)),
-            _ => (InferenceKind.Parallel, Inference.Reference),
-        };
-        bool unlock = _lockedKind == kind || direction is null;
-        _locked = unlock ? null : direction!.Value.Normalized();
-        _lockedKind = unlock ? InferenceKind.None : kind;
-    }
-
     private void DrawTo(Point3d start, Point3d end)
     {
         if (start.DistanceTo(end) < 1e-6)
@@ -112,8 +95,7 @@ public sealed class LineTool(IGeometryKernel kernel) : DrawingTool(kernel)
         else
         {
             _start = end;
-            _locked = null;
-            _lockedKind = InferenceKind.None;
+            Unlock();
             Show();
         }
     }
@@ -121,8 +103,7 @@ public sealed class LineTool(IGeometryKernel kernel) : DrawingTool(kernel)
     protected override void Restart()
     {
         _start = null;
-        _locked = null;
-        _lockedKind = InferenceKind.None;
+        Unlock();
         Hint = StartHint;
         Measurement = null;
         Show();

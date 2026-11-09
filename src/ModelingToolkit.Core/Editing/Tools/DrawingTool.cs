@@ -20,6 +20,36 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
     /// <summary>The point under the pointer, as last inferred; null before the pointer moves.</summary>
     protected Inference? Last { get; set; }
 
+    /// <summary>The direction locked by an arrow key, of unit length; null for none.</summary>
+    protected Vector3d? Locked { get; private set; }
+
+    private InferenceKind _lockedKind = InferenceKind.None;
+
+    /// <summary>
+    /// Locks the direction on the axis of an arrow key (right X, left Y, up Z) or, for the down arrow, parallel to the
+    /// edge last pointed at; the same key again unlocks it.
+    /// </summary>
+    protected void Lock(ToolKey key)
+    {
+        Transform placement = Host.Context.Placement;
+        (InferenceKind kind, Vector3d? direction) = key switch
+        {
+            ToolKey.Right => (InferenceKind.AxisX, placement.ApplyVector(Vector3d.UnitX)),
+            ToolKey.Left => (InferenceKind.AxisY, placement.ApplyVector(Vector3d.UnitY)),
+            ToolKey.Up => (InferenceKind.AxisZ, placement.ApplyVector(Vector3d.UnitZ)),
+            _ => (InferenceKind.Parallel, Inference.Reference),
+        };
+        bool unlock = _lockedKind == kind || direction is null;
+        Locked = unlock ? null : direction!.Value.Normalized();
+        _lockedKind = unlock ? InferenceKind.None : kind;
+    }
+
+    protected void Unlock()
+    {
+        Locked = null;
+        _lockedKind = InferenceKind.None;
+    }
+
     /// <summary>Drops what is being drawn, and shows the hint to start again.</summary>
     protected abstract void Restart();
 

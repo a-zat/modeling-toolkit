@@ -117,7 +117,9 @@ public sealed class LineToolTests
 
         public ElementSelection Elements { get; } = new(document);
 
-        public IReadOnlyList<Entity>? SelectedEntity => null;
+        public IReadOnlyList<Entity>? SelectedPath { get; set; }
+
+        public IReadOnlyList<Entity>? SelectedEntity => SelectedPath;
 
         public ToolPreview Preview { get; private set; } = ToolPreview.Empty;
 
