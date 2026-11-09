@@ -17,11 +17,11 @@
       <!-- The measure of the active tool, which takes a typed value in its place. -->
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0"
                   IsVisible="{Binding HasMeasurement}">
-        <TextBlock Classes="label" Text="LENGTH" VerticalAlignment="Center" />
+        <TextBlock Classes="label" Text="{Binding MeasurementName}" VerticalAlignment="Center" />
         <!-- Filled by the code-behind, so that the measure does not change while a value is typed. -->
         <TextBox x:Name="MeasurementField" Width="110" Height="22" MinHeight="22" Padding="6,0"
                  VerticalContentAlignment="Center"
-                 ToolTip.Tip="Type a length and press Enter, in the view too: 1250, 1.25 m, 48 in" />
+                 ToolTip.Tip="Type a value and press Enter, in the view too: 1250, 1.25 m, 48 in; a size as 1200, 800" />
       </StackPanel>
 
       <!-- How to move around the 3D view, which has no other hint. -->

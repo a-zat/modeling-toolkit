@@ -52,6 +52,20 @@ public abstract class Tool
 
     public event EventHandler? MeasurementChanged;
 
+    /// <summary>What <see cref="Measurement"/> measures, such as "Length" or "Radius".</summary>
+    public string MeasurementName
+    {
+        get => field;
+        protected set
+        {
+            if (field != value)
+            {
+                field = value;
+                MeasurementChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    } = "Length";
+
     /// <summary>A value typed in the measurement field; whether the tool took it.</summary>
     public virtual bool TypeMeasurement(string text) => false;
 

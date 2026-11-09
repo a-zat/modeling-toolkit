@@ -52,6 +52,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             [
                 new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true },
                 new ToolItemViewModel(new LineTool(kernel), "Icon.Line"),
+                new ToolItemViewModel(new RectangleTool(kernel), "Icon.Rectangle"),
+                new ToolItemViewModel(new CircleTool(kernel), "Icon.Circle"),
+                new ToolItemViewModel(new ArcTool(kernel), "Icon.Arc"),
             ];
         ActiveTool.HintChanged += OnToolHintChanged;
         ActiveTool.MeasurementChanged += OnToolMeasurementChanged;
@@ -227,6 +230,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void OnToolMeasurementChanged(object? sender, EventArgs e)
     {
         Measurement = ActiveTool.IsActive ? ActiveTool.Measurement ?? string.Empty : string.Empty;
+        MeasurementName = ActiveTool.MeasurementName.ToUpperInvariant();
         OnPropertyChanged(nameof(HasMeasurement));
     }
 
@@ -236,6 +240,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial string Measurement { get; set; } = string.Empty;
+
+    /// <summary>What the measure is, as the label of the field shows it: "LENGTH", "RADIUS".</summary>
+    [ObservableProperty]
+    public partial string MeasurementName { get; private set; } = "LENGTH";
 
     /// <summary>Whether the active tool takes typed values now.</summary>
     public bool HasMeasurement => ActiveTool.IsActive && ActiveTool.Measurement is not null;

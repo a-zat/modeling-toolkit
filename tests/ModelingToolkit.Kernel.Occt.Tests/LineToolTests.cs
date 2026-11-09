@@ -109,7 +109,7 @@ public sealed class LineToolTests
         Assert.Equal(new Point3d(300, 0, 0), edge.End);
     }
 
-    private sealed class Host(Document document) : IToolHost
+    internal sealed class Host(Document document) : IToolHost
     {
         public EditSession Session { get; } = new(document);
 
