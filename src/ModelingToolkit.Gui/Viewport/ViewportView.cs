@@ -79,6 +79,7 @@ public sealed class ViewportView : Border, IViewCamera
         // this control the target of the pointer events over the native view.
         Bind(BackgroundProperty, this.GetResourceObservable("Mtk.ViewportBackground"));
         ClipToBounds = true;
+        Focusable = true; // takes the keys back from the fields, as the measurement field gives them
 
         _host = new NativeViewHost(this);
         _failure = new TextBlock
@@ -265,6 +266,7 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        Focus(); // out of the fields, so that typed values and arrows go to the tools
         _clickCount = e.ClickCount;
         SendButtons(e);
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)

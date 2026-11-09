@@ -32,7 +32,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         Title = ApplicationName;
         DocumentName = "No document";
-        Summary = "Open a model with File › Open";
+        Summary = "Start a model with File › New, or open one with File › Open";
         StatusMessage = string.Empty;
         IsInspectorOpen = true;
         IsOutlineExpanded = true;
@@ -793,13 +793,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private void OnDocumentEdited(object? sender, DocumentChange change) => ShowProperties(refresh: true);
-
-    private void Show(Document document, DocumentStatistics statistics, string? path)
+    private void OnDocumentEdited(object? sender, DocumentChange change)
     {
-        _path = path;
-        DocumentName = path is null ? "Untitled" : Path.GetFileName(path);
-        Title = $"{DocumentName} — {ApplicationName}";
+        ShowProperties(refresh: true);
+        if (Document is { } document)
+        {
+            ShowSummary(DocumentStatistics.Of(document));
+        }
+    }
+
+    // What the model holds, in the status bar.
+    private void ShowSummary(DocumentStatistics statistics)
+    {
+        if (statistics.Meshes == 0 && statistics.BrepShapes == 0)
+        {
+            Summary = "Empty model · mm · Z up";
+            return;
+        }
 
         bool onlyShapes = statistics.BrepShapes > 0 && statistics.Meshes == 0;
         List<string> summary = [];
@@ -818,6 +828,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         summary.Add("mm");
         summary.Add("Z up");
         Summary = string.Join(" · ", summary);
+    }
+
+
+    private void Show(Document document, DocumentStatistics statistics, string? path)
+    {
+        _path = path;
+        DocumentName = path is null ? "Untitled" : Path.GetFileName(path);
+        Title = $"{DocumentName} — {ApplicationName}";
+
+        ShowSummary(statistics);
 
         if (Session is not null)
         {

@@ -33,7 +33,7 @@
       </TreeView.ItemTemplate>
     </TreeView>
 
-    <TextBlock Classes="placeholder" Text="Open a model to see its structure." IsVisible="{Binding IsEmpty}" />
+    <TextBlock Classes="placeholder" Text="Nothing in the model yet: draw, or open a model." IsVisible="{Binding IsEmpty}" />
   </Panel>
 
 </UserControl>

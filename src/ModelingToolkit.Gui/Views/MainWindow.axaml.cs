@@ -1,11 +1,32 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using ModelingToolkit.Gui.ViewModels;
 
 namespace ModelingToolkit.Gui.Views;
 
 public partial class MainWindow : Window
 {
-    public MainWindow() => InitializeComponent();
+    public MainWindow()
+    {
+        InitializeComponent();
+        // Digits typed outside the fields go to the measurement field, as the value of the active tool.
+        AddHandler(TextInputEvent, OnTextTyped, RoutingStrategies.Tunnel);
+    }
+
+    private void OnTextTyped(object? sender, TextInputEventArgs e)
+    {
+        if (e.Source is TextBox || string.IsNullOrEmpty(e.Text) || !(char.IsDigit(e.Text[0]) || e.Text[0] is '.' or ','))
+        {
+            return;
+        }
+        if (this.GetVisualDescendants().OfType<StatusBarView>().FirstOrDefault() is { } statusBar &&
+            statusBar.TakeTyping(e.Text))
+        {
+            e.Handled = true;
+        }
+    }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
