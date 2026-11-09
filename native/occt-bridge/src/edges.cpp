@@ -20,9 +20,11 @@
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepClass_FaceClassifier.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepGProp.hxx>
 #include <BRepTools_History.hxx>
 #include <BRep_Builder.hxx>
@@ -380,17 +382,23 @@ std::vector<TopoDS_Shape> loop_faces(const TopoDS_Shape& shape, const std::vecto
             if (!bounded) {
                 continue;
             }
-            // Not a face of the shape already: a point inside it is on none of them.
             gp_Pnt inside;
             gp_Pnt2d inside_uv;
             if (BOPTools_AlgoTools3D::PointInFace(face, inside, inside_uv, context) != 0) {
                 continue;
             }
+            // Not a face of the shape already: a point inside it is on none of them. The classifier alone looks only at
+            // where the point falls on the surface of a face, however far from it, so the distance counts first.
+            const TopoDS_Vertex probe = BRepBuilderAPI_MakeVertex(inside);
             bool existing = false;
             for (int i = 1; i <= faces.Extent() && !existing; ++i) {
                 Bnd_Box face_box;
                 BRepBndLib::Add(faces(i), face_box);
-                existing = !face_box.IsOut(inside) &&
+                if (face_box.IsOut(inside)) {
+                    continue;
+                }
+                const BRepExtrema_DistShapeShape distance(probe, faces(i));
+                existing = distance.IsDone() && distance.Value() < plane_tolerance &&
                            BRepClass_FaceClassifier(TopoDS::Face(faces(i)), inside, plane_tolerance).State() ==
                                TopAbs_IN;
             }

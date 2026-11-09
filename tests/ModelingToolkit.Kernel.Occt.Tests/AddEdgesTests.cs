@@ -27,6 +27,29 @@ public sealed class AddEdgesTests
     }
 
     [Fact]
+    public void Lines_that_close_a_loop_beside_a_slanted_face_without_touching_it_make_a_face()
+    {
+        // The box is turned, so that the box of its top face holds the loop; the loop is 40 mm off that face, which
+        // is where the loop falls on it when seen along its normal.
+        using IKernelShape box = _kernel.Place(_kernel.MakeBox(200, 200, 100),
+            Transform.Rotation(Point3d.Origin, new Vector3d(0, 1, 0), Math.PI / 4));
+        Plane slanted = Enumerable.Range(0, 6).Select(face => _kernel.GetFaceInfo(box, face).Plane!.Value)
+            .First(plane => Math.Abs(plane.Normal.X) > 0.1 && Math.Abs(plane.Normal.Z) > 0.1);
+        BoundingBox bounds = _kernel.GetBoundingBox(box);
+        Point3d middle = new((bounds.Min.X + bounds.Max.X) / 2, (bounds.Min.Y + bounds.Max.Y) / 2,
+                             (bounds.Min.Z + bounds.Max.Z) / 2);
+        double inside = slanted.Normal.X * middle.X + slanted.Normal.Y * middle.Y + slanted.Normal.Z * middle.Z -
+                        slanted.Offset;
+        Vector3d out40 = slanted.Normal * (40 - inside);
+        Point3d at = new(middle.X + out40.X, middle.Y + out40.Y, middle.Z + out40.Z);
+        ShapeEdit edit = _kernel.AddEdges(box, Rectangle(at.X - 10, at.Y - 10, at.X + 10, at.Y + 10, at.Z));
+        using IKernelShape shape = edit.Shape;
+
+        Assert.Equal(new ShapeTopology(1, 7, 16, 12), _kernel.CountElements(shape));
+        Assert.Equal(-1, edit.FaceOrigins[^1]);
+    }
+
+    [Fact]
     public void A_line_across_a_painted_face_leaves_both_parts_painted_until_undone()
     {
         var document = new Document();
