@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Editing;
@@ -6,6 +7,8 @@ namespace ModelingToolkit.Core.Editing;
 /// Runs the commands that change a document, and keeps them to undo and redo them. The commands of a transaction,
 /// such as those of a gesture of a tool, undo and redo as one step.
 /// </summary>
+[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "The open transaction belongs to whoever began it, who disposes it.")]
 public sealed class EditSession
 {
     private readonly Stack<IEditCommand> _undo = new();
