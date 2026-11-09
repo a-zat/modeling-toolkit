@@ -108,8 +108,14 @@ public:
     bool mouse_leave();
     bool scroll(double x, double y, double delta);
 
-    // Whether the view was clicked since the last call, and on which instance: -1 for none.
-    bool take_pick(int& instance);
+    // Whether the view was clicked since the last call, and on what.
+    bool take_pick(mtk_viewer_pick& pick);
+
+    // Highlights checked elements as selected, in place of those highlighted before.
+    void set_highlighted_elements(const mtk_viewer_element* elements, int count);
+
+    // The owner of an element of the shape that an instance shows; null when it has no such element.
+    occ::handle<ElementOwner> find_element(const mtk_viewer_element& element) const;
 
     // Applies the input and draws if needed; returns true while an animation needs more frames.
     bool redraw();
@@ -127,6 +133,8 @@ private:
     void update_size();
     void apply_scale(double scale);
     void set_grid_step(double step);
+    // Stops highlighting the elements of an instance, which changes or goes.
+    void forget_highlighted(int instance);
     occ::handle<AIS_InteractiveObject> make_instance(int mesh, int material, const double* transform);
     NCollection_Vec2<int> to_pixels(double x, double y) const;
 
@@ -153,7 +161,8 @@ private:
     std::vector<occ::handle<AIS_InteractiveObject>> instances_;
     std::vector<int> instance_meshes_; // the mesh of each instance
     Graphic3d_ZLayerId faded_layer_ = Graphic3d_ZLayerId_UNKNOWN;
-    std::optional<int> pick_; // the instance clicked, -1 for none, not yet taken
+    std::optional<mtk_viewer_pick> pick_; // what was clicked, not yet taken
+    std::vector<std::pair<int, occ::handle<ElementOwner>>> highlighted_; // by instance
     bool needs_next_frame_ = false; // whether the last redraw asked for another frame, see handleViewRedraw()
     double scale_ = 0.0;
     std::string failure_;

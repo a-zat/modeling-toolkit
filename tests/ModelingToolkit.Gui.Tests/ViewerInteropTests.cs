@@ -21,7 +21,9 @@ public sealed class ViewerInteropTests
     [Fact]
     public void MeshesAndMaterialsHaveTheNativeSizes()
     {
-        Assert.Equal(IntPtr.Size == 8 ? 72 : 36, Unsafe.SizeOf<NativeMesh>());
+        Assert.Equal(IntPtr.Size == 8 ? 112 : 56, Unsafe.SizeOf<NativeMesh>());
+        Assert.Equal(56, Unsafe.SizeOf<NativePick>());
+        Assert.Equal(12, Unsafe.SizeOf<ViewerElement>());
         Assert.Equal(28, Unsafe.SizeOf<NativeMaterial>());
     }
 

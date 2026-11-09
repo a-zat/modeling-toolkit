@@ -18,6 +18,10 @@
 #include <Prs3d_Drawer.hxx>
 #include <Prs3d_ShadingAspect.hxx>
 #include <Prs3d_TextAspect.hxx>
+#include <SelectMgr_Selection.hxx>
+#include <SelectMgr_SensitiveEntity.hxx>
+#include <SelectMgr_SortCriterion.hxx>
+#include <StdSelect_ViewerSelector3d.hxx>
 #include <TCollection_AsciiString.hxx>
 #include <V3d_Trihedron.hxx>
 
@@ -34,7 +38,9 @@ struct mtk_viewer : mtk::Viewer {
 // The managed side declares the same layouts: these sizes must match the ones it checks in its tests.
 static_assert(sizeof(mtk_viewer_colors) == 132);
 static_assert(sizeof(mtk_viewer_material) == 28);
-static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 72);
+static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 112);
+static_assert(sizeof(mtk_viewer_element) == 12);
+static_assert(sizeof(mtk_viewer_pick) == 56);
 
 namespace {
 
@@ -56,6 +62,9 @@ constexpr double fit_margin = 0.1; // around the scene, relative to its size on 
 
 // The instance under the pointer is tinted with the colour of the highlight, half transparent.
 constexpr float hover_transparency = 0.5f;
+
+// How far from an edge or a vertex the pointer picks it, in device-independent units.
+constexpr double pick_tolerance = 5.0;
 
 // Textures larger than graphics cards accept, and meshes larger than the arrays of OpenCASCADE can index with three
 // indices or vertices per triangle, are refused.
@@ -277,6 +286,11 @@ void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
     const occ::handle<Prs3d_Drawer>& hover = context_->HighlightStyle(Prs3d_TypeOfHighlight_Dynamic);
     hover->SetColor(highlight);
     hover->SetTransparency(hover_transparency);
+    context_->HighlightStyle(Prs3d_TypeOfHighlight_Selected)->SetColor(highlight);
+    // The selected elements take the new colour.
+    for (const auto& [instance, owner] : highlighted_) {
+        owner->highlight_selected(context_->MainPrsMgr(), context_->HighlightStyle(Prs3d_TypeOfHighlight_Selected));
+    }
 
     edge_color_ = to_color(colors.edges);
     set_display_mode(display_mode_);
@@ -309,7 +323,7 @@ occ::handle<AIS_InteractiveObject> mtk::Viewer::make_instance(int mesh, int mate
         if (shared.IsNull()) {
             shared = new MeshObject(meshes_[mesh], materials_[material], edge_aspects_);
         }
-        occ::handle<AIS_ConnectedInteractive> connected = new AIS_ConnectedInteractive();
+        occ::handle<ConnectedMesh> connected = new ConnectedMesh();
         connected->Connect(shared, *placement);
         instance = connected;
     } else {
@@ -328,6 +342,7 @@ int mtk::Viewer::add_instance(int mesh, int material, const double* transform) {
 }
 
 void mtk::Viewer::set_instance(int index, int mesh, int material, const double* transform) {
+    forget_highlighted(index);
     const occ::handle<AIS_InteractiveObject> instance = make_instance(mesh, material, transform);
     const bool faded = instances_[index]->ZLayer() == faded_layer_;
     context_->Remove(instances_[index], false);
@@ -341,6 +356,7 @@ void mtk::Viewer::set_instance(int index, int mesh, int material, const double* 
 }
 
 void mtk::Viewer::remove_instance(int index) {
+    forget_highlighted(index);
     context_->Remove(instances_[index], false);
     instances_[index].Nullify();
     instance_meshes_[index] = -1;
@@ -380,6 +396,7 @@ void mtk::Viewer::set_selection(const int32_t* instances, int count) {
 }
 
 void mtk::Viewer::clear() {
+    set_highlighted_elements(nullptr, 0);
     for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
         if (!instance.IsNull()) {
             context_->Remove(instance, false);
@@ -510,13 +527,56 @@ bool mtk::Viewer::scroll(double x, double y, double delta) {
     return is_attached() && UpdateMouseScroll(Aspect_ScrollDelta(to_pixels(x, y), delta));
 }
 
-bool mtk::Viewer::take_pick(int& instance) {
+bool mtk::Viewer::take_pick(mtk_viewer_pick& pick) {
     if (!pick_) {
         return false;
     }
-    instance = *pick_;
+    pick = *pick_;
     pick_.reset();
     return true;
+}
+
+occ::handle<mtk::ElementOwner> mtk::Viewer::find_element(const mtk_viewer_element& element) const {
+    if (!has_instance(element.instance)) {
+        return nullptr;
+    }
+    // The owners are those of the selection of the instance, made when it was displayed.
+    const occ::handle<AIS_InteractiveObject>& instance = instances_[element.instance];
+    if (!instance->HasSelection(0)) {
+        return nullptr;
+    }
+    for (const occ::handle<SelectMgr_SensitiveEntity>& entity : instance->Selection(0)->Entities()) {
+        const occ::handle<ElementOwner> owner =
+            occ::down_cast<ElementOwner>(entity->BaseSensitive()->OwnerId());
+        if (!owner.IsNull() && owner->kind() == element.kind && owner->index() == element.index) {
+            return owner;
+        }
+    }
+    return nullptr;
+}
+
+void mtk::Viewer::set_highlighted_elements(const mtk_viewer_element* elements, int count) {
+    for (const auto& [instance, owner] : highlighted_) {
+        owner->unhighlight_selected();
+    }
+    highlighted_.clear();
+    const occ::handle<Prs3d_Drawer>& style = context_->HighlightStyle(Prs3d_TypeOfHighlight_Selected);
+    for (int i = 0; i < count; ++i) {
+        const occ::handle<ElementOwner> owner = find_element(elements[i]);
+        owner->highlight_selected(context_->MainPrsMgr(), style);
+        highlighted_.emplace_back(elements[i].instance, owner);
+    }
+    view_->Invalidate();
+}
+
+void mtk::Viewer::forget_highlighted(int instance) {
+    std::erase_if(highlighted_, [instance](const auto& entry) {
+        if (entry.first != instance) {
+            return false;
+        }
+        entry.second->unhighlight_selected();
+        return true;
+    });
 }
 
 // Called by FlushViewEvents for each click: on an instance, on nothing, or on the ViewCube, which has turned the view
@@ -525,13 +585,30 @@ void mtk::Viewer::OnSelectionChanged(const occ::handle<AIS_InteractiveContext>& 
                                      const occ::handle<V3d_View>&) {
     const occ::handle<SelectMgr_EntityOwner>& detected = context->DetectedOwner();
     if (detected.IsNull()) {
-        pick_ = -1;
+        pick_ = mtk_viewer_pick{-1, MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
     } else {
         const auto picked = std::find_if(instances_.begin(), instances_.end(), [&](const auto& instance) {
             return !instance.IsNull() && instance.get() == detected->Selectable().get();
         });
         if (picked != instances_.end()) {
-            pick_ = static_cast<int>(picked - instances_.begin());
+            mtk_viewer_pick pick{static_cast<int>(picked - instances_.begin()), MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
+            if (const occ::handle<ElementOwner> element = occ::down_cast<ElementOwner>(detected)) {
+                pick.kind = element->kind();
+                pick.index = element->index();
+            }
+            // The detected owner is the first picked.
+            if (context->MainSelector()->NbPicked() > 0) {
+                const SelectMgr_SortCriterion& data = context->MainSelector()->PickedData(1);
+                pick.point[0] = data.Point.X();
+                pick.point[1] = data.Point.Y();
+                pick.point[2] = data.Point.Z();
+                if (pick.kind == MTK_VIEWER_ELEMENT_FACE || pick.kind == MTK_VIEWER_ELEMENT_INSTANCE) {
+                    pick.normal[0] = data.Normal.x();
+                    pick.normal[1] = data.Normal.y();
+                    pick.normal[2] = data.Normal.z();
+                }
+            }
+            pick_ = pick;
         }
     }
     context->ClearSelected(false);
@@ -613,6 +690,7 @@ void mtk::Viewer::update_size() {
 // display, so that they keep their size in device-independent units.
 void mtk::Viewer::apply_scale(double scale) {
     scale_ = scale;
+    context_->SetPixelTolerance(static_cast<int>(std::lround(pick_tolerance * scale)));
     view_->ChangeRenderingParams().Resolution = static_cast<unsigned int>(std::lround(72.0 * scale));
 
     // The distance of the axes from their corner follows their scale, but only when the corner is set again.
@@ -655,6 +733,40 @@ mtk_status check_position(double x, double y) {
     return MTK_STATUS_OK;
 }
 
+// The faces, edges and vertices of a mesh whose triangles and edges are checked.
+mtk_status check_elements(const mtk_viewer_mesh& mesh) {
+    if (mesh.face_first_triangles == nullptr) {
+        return MTK_STATUS_OK;
+    }
+    if (mesh.face_count <= 0 || mesh.face_count > mesh.triangle_count + 1 || mesh.face_first_triangles[0] != 0 ||
+        mesh.face_first_triangles[mesh.face_count] != mesh.triangle_count) {
+        return mtk::invalid_argument("The faces of a mesh must take its triangles from 0 to the last one.");
+    }
+    for (int32_t face = 0; face < mesh.face_count; ++face) {
+        if (mesh.face_first_triangles[face + 1] < mesh.face_first_triangles[face]) {
+            return mtk::invalid_argument("The faces of a mesh must take its triangles in order.");
+        }
+    }
+    if (mesh.edge_first_points == nullptr || (mesh.edge_count > 0 && mesh.edge_indices == nullptr)) {
+        return mtk::invalid_argument("A mesh with faces needs edges of its own, with their indices in the shape.");
+    }
+    for (int32_t edge = 0; edge < mesh.edge_count; ++edge) {
+        if (mesh.edge_indices[edge] < 0) {
+            return mtk::invalid_argument("The indices of the edges in the shape must not be negative.");
+        }
+    }
+    if (mesh.shape_vertex_count < 0 || mesh.shape_vertex_count > max_mesh_size ||
+        (mesh.shape_vertex_count > 0 && mesh.shape_vertices == nullptr)) {
+        return mtk::invalid_argument("The vertices of the shape must be from 0 to 715827882, and not null.");
+    }
+    for (int64_t i = 0; i < 3 * static_cast<int64_t>(mesh.shape_vertex_count); ++i) {
+        if (!std::isfinite(mesh.shape_vertices[i])) {
+            return mtk::invalid_argument("The vertices of the shape must be finite.");
+        }
+    }
+    return MTK_STATUS_OK;
+}
+
 mtk_status check_mesh(const mtk_viewer_mesh& mesh) {
     if (mesh.vertex_count <= 0 || mesh.triangle_count <= 0 || mesh.vertex_count > max_mesh_size ||
         mesh.triangle_count > max_mesh_size) {
@@ -675,7 +787,7 @@ mtk_status check_mesh(const mtk_viewer_mesh& mesh) {
     }
 
     if (mesh.edge_first_points == nullptr) {
-        return MTK_STATUS_OK;
+        return check_elements(mesh);
     }
     if (mesh.edge_count < 0 || mesh.edge_count > max_mesh_size || mesh.edge_first_points[0] != 0) {
         return mtk::invalid_argument("The edges of a mesh must be from 0 to 715827882, their points counted from 0.");
@@ -695,7 +807,7 @@ mtk_status check_mesh(const mtk_viewer_mesh& mesh) {
             return mtk::invalid_argument("The points of the edges of a mesh must be finite.");
         }
     }
-    return MTK_STATUS_OK;
+    return check_elements(mesh);
 }
 
 bool is_unit(float value) {
@@ -1022,17 +1134,35 @@ mtk_status mtk_viewer_mouse_leave(mtk_viewer* viewer, int32_t* out_redraw) {
     });
 }
 
-mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, int32_t* out_instance) {
+mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, mtk_viewer_pick* out_pick) {
     return mtk::guarded([&] {
-        mtk::clear_outputs(out_picked, out_instance);
-        if (viewer == nullptr || out_picked == nullptr || out_instance == nullptr) {
-            return mtk::invalid_argument("viewer, out_picked and out_instance must not be null.");
+        mtk::clear_outputs(out_picked, out_pick);
+        if (viewer == nullptr || out_picked == nullptr || out_pick == nullptr) {
+            return mtk::invalid_argument("viewer, out_picked and out_pick must not be null.");
         }
-        int instance = -1;
-        if (viewer->take_pick(instance)) {
+        out_pick->instance = -1;
+        if (viewer->take_pick(*out_pick)) {
             *out_picked = 1;
-            *out_instance = instance;
         }
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_highlighted_elements(mtk_viewer* viewer, const mtk_viewer_element* elements,
+                                               int32_t count) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || (elements == nullptr && count != 0)) {
+            return mtk::invalid_argument("viewer must not be null, nor elements unless count is 0.");
+        }
+        if (count < 0) {
+            return mtk::invalid_argument("count must not be negative.");
+        }
+        for (int32_t i = 0; i < count; ++i) {
+            if (elements[i].kind == MTK_VIEWER_ELEMENT_INSTANCE || viewer->find_element(elements[i]).IsNull()) {
+                return mtk::invalid_argument("An element is not a face, an edge or a vertex that an instance shows.");
+            }
+        }
+        viewer->set_highlighted_elements(elements, count);
         return MTK_STATUS_OK;
     });
 }

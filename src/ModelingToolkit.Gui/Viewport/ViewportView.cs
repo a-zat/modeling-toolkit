@@ -273,20 +273,20 @@ public sealed class ViewportView : Border, IViewCamera
         topLevel.RequestAnimationFrame(_ =>
         {
             _frameRequested = false;
-            int? picked = null;
+            ViewerPick? picked = null;
             Send(viewer =>
             {
                 bool animating = viewer.Redraw();
-                if (viewer.TakePick(out int instance))
+                if (viewer.TakePick(out ViewerPick pick))
                 {
-                    picked = instance;
+                    picked = pick;
                 }
 
                 return animating;
             });
-            if (picked is { } instance)
+            if (picked is { } pick)
             {
-                IReadOnlyList<Entity>? path = _shownScene?.PathOfShown(instance);
+                IReadOnlyList<Entity>? path = _shownScene?.PathOfShown(pick.Instance);
                 if (PickCommand is { } command && command.CanExecute(path))
                 {
                     command.Execute(path);

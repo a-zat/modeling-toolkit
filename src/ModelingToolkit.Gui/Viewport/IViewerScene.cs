@@ -1,4 +1,5 @@
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.Viewport;
@@ -11,7 +12,8 @@ namespace ModelingToolkit.Gui.Viewport;
 internal interface IViewerScene
 {
     /// <exception cref="ArgumentException">The viewer refuses the mesh: positions that are not finite, for example.</exception>
-    int AddMesh(MeshEntity mesh, Polylines? edges);
+    /// <param name="shape">The tessellation the mesh is part of, whose elements are picked; null for a plain mesh.</param>
+    int AddMesh(MeshEntity mesh, Polylines? edges, ShapeTessellation? shape);
 
     void RemoveMesh(int mesh);
 

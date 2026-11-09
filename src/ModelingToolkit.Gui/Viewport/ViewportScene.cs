@@ -37,6 +37,7 @@ internal sealed class ViewportScene
 
     private readonly List<MeshEntity?> _meshes = [];
     private readonly List<Polylines?> _meshEdges = [];
+    private readonly List<ShapeTessellation?> _meshShapes = []; // for the meshes of shapes, picked by their elements
     private readonly List<Material> _materials = [];
     private readonly List<int> _materialTextures = [];
     private readonly List<Texture> _textures = [];
@@ -296,7 +297,7 @@ internal sealed class ViewportScene
                     if (_tessellations.GetValueOrDefault(brep)?.Tessellation is { } tessellation)
                     {
                         instances.Add(new(
-                            IndexOf(tessellation.Mesh, tessellation.Edges), IndexOf(entity.Material ?? inherited),
+                            IndexOf(tessellation.Mesh, tessellation), IndexOf(entity.Material ?? inherited),
                             placement, [.. path]));
                     }
                     break;
@@ -442,7 +443,7 @@ internal sealed class ViewportScene
             {
                 try
                 {
-                    shown = viewer.AddMesh(mesh, _meshEdges[index]);
+                    shown = viewer.AddMesh(mesh, _meshEdges[index], _meshShapes[index]);
                 }
                 catch (ArgumentException)
                 {
@@ -472,6 +473,7 @@ internal sealed class ViewportScene
             _meshIndices.Remove(mesh);
             _meshes[index] = null;
             _meshEdges[index] = null;
+            _meshShapes[index] = null;
         }
     }
 
@@ -493,14 +495,15 @@ internal sealed class ViewportScene
 
     private static string NameOf(BrepEntity brep) => brep.Name ?? brep.Material?.Name ?? "A shape";
 
-    private int IndexOf(MeshEntity mesh, Polylines? edges)
+    private int IndexOf(MeshEntity mesh, ShapeTessellation? shape)
     {
         if (!_meshIndices.TryGetValue(mesh, out int index))
         {
             index = _meshIndices[mesh] = _meshes.Count;
             _meshes.Add(mesh);
             // A mesh read from a file has no edges but those of its triangles: the sharp ones outline it.
-            _meshEdges.Add(edges ?? SharpEdges.Of(mesh.Vertices, mesh.Triangles));
+            _meshEdges.Add(shape?.Edges ?? SharpEdges.Of(mesh.Vertices, mesh.Triangles));
+            _meshShapes.Add(shape);
         }
 
         return index;

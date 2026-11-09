@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 10
+#define MTK_OCCT_VIEWER_ABI_VERSION 11
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -132,6 +132,16 @@ typedef struct mtk_viewer_mesh {
     const double* edge_points;
     const int32_t* edge_first_points;
     int32_t edge_count;
+    /* The elements of the shape the mesh is the tessellation of, picked and highlighted one by one: null
+     * face_first_triangles for a mesh picked as a whole. Otherwise face i has the triangles from face_first_triangles[i]
+     * to face_first_triangles[i + 1] - 1, which has face_count + 1 values, the last one being triangle_count; the mesh
+     * needs edges of its own, and edge_indices, with edge_count values, gives the index in the shape of each; the
+     * vertices of the shape are shape_vertices, 3 values per vertex in millimetres, which may be null without any. */
+    const int32_t* face_first_triangles;
+    int32_t face_count;
+    const int32_t* edge_indices;
+    const double* shape_vertices;
+    int32_t shape_vertex_count;
 } mtk_viewer_mesh;
 
 /* A material of the metallic-roughness model of glTF. */
@@ -207,12 +217,43 @@ MTK_VIEWER_API mtk_status mtk_viewer_mouse_move(mtk_viewer* viewer, double x, do
 /* The pointer left the view: the object under it is no longer highlighted. */
 MTK_VIEWER_API mtk_status mtk_viewer_mouse_leave(mtk_viewer* viewer, int32_t* out_redraw);
 
+/* What a pick finds: the whole instance, for a mesh picked as a whole, or an element of the shape of its mesh. */
+typedef enum mtk_viewer_element_kind {
+    MTK_VIEWER_ELEMENT_INSTANCE = 0,
+    MTK_VIEWER_ELEMENT_FACE = 1,
+    MTK_VIEWER_ELEMENT_EDGE = 2,
+    MTK_VIEWER_ELEMENT_VERTEX = 3
+} mtk_viewer_element_kind;
+
+/* An element of the shape that an instance shows; index counts in the order of the shape, as the mesh gives it. */
+typedef struct mtk_viewer_element {
+    int32_t instance;
+    int32_t kind; /* mtk_viewer_element_kind, not MTK_VIEWER_ELEMENT_INSTANCE */
+    int32_t index;
+} mtk_viewer_element;
+
+typedef struct mtk_viewer_pick {
+    int32_t instance; /* -1 for none */
+    int32_t kind;     /* mtk_viewer_element_kind */
+    int32_t index;    /* of the element in the shape; 0 for the whole instance */
+    double point[3];  /* the point picked, in the scene: on the face, the edge or the vertex */
+    float normal[3];  /* the normal of the face at the point, of unit length; 0 for edges, vertices and meshes */
+} mtk_viewer_pick;
+
 /*
  * Whether the view was clicked since the last call, other than on the ViewCube, which turns the view instead: clicks
- * are applied by mtk_viewer_redraw. out_instance receives the instance under the pointer, or -1 for none. The viewer
- * shows no selection by itself: see mtk_viewer_set_selection.
+ * are applied by mtk_viewer_redraw. out_pick receives what is under the pointer, the faces, edges and vertices of the
+ * shapes taking precedence in this order when they are a few pixels apart. The viewer shows no selection by itself:
+ * see mtk_viewer_set_selection and mtk_viewer_set_highlighted_elements.
  */
-MTK_VIEWER_API mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, int32_t* out_instance);
+MTK_VIEWER_API mtk_status mtk_viewer_take_pick(mtk_viewer* viewer, int32_t* out_picked, mtk_viewer_pick* out_pick);
+
+/*
+ * Highlights count elements, in place of those highlighted before, as the selected ones; elements may be null when
+ * count is 0. An element whose instance is changed or removed is no longer highlighted.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_set_highlighted_elements(mtk_viewer* viewer, const mtk_viewer_element* elements,
+                                                              int32_t count);
 
 /* Zooms at (x, y) by delta notches of the mouse wheel, positive to zoom in; fractions come from touchpads. */
 MTK_VIEWER_API mtk_status mtk_viewer_scroll(mtk_viewer* viewer, double x, double y, double delta,

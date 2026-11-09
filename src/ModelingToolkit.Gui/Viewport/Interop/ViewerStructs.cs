@@ -53,6 +53,22 @@ internal unsafe struct NativeMesh
     public double* EdgePoints;
     public int* EdgeFirstPoints;
     public int EdgeCount;
+    public int* FaceFirstTriangles;
+    public int FaceCount;
+    public int* EdgeIndices;
+    public double* ShapeVertices;
+    public int ShapeVertexCount;
+}
+
+/// <summary>What a pick finds, as the viewer gives it.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativePick
+{
+    public int Instance;
+    public ElementKind Kind;
+    public int Index;
+    public fixed double Point[3];
+    public fixed float Normal[3];
 }
 
 /// <summary>A material of the metallic-roughness model of glTF.</summary>
@@ -64,3 +80,16 @@ internal unsafe struct NativeMaterial
     public float Roughness;
     public int BaseColorTexture;
 }
+
+/// <summary>What a pick finds: the whole instance, for a mesh picked as a whole, or an element of its shape.</summary>
+internal enum ElementKind
+{
+    Instance = 0,
+    Face = 1,
+    Edge = 2,
+    Vertex = 3,
+}
+
+/// <summary>An element of the shape that an instance of the viewer shows, numbered as in the shape.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly record struct ViewerElement(int Instance, ElementKind Kind, int Index);

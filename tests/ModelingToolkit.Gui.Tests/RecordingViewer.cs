@@ -1,4 +1,5 @@
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
 
@@ -28,7 +29,7 @@ internal sealed class RecordingViewer : IViewerScene
 
     public void Forget() => Changes.Clear();
 
-    public int AddMesh(MeshEntity mesh, Polylines? edges)
+    public int AddMesh(MeshEntity mesh, Polylines? edges, ShapeTessellation? shape)
     {
         Meshes[_nextMesh] = mesh;
         Changes.Add($"add mesh {_nextMesh}");

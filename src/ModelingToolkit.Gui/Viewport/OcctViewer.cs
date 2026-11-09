@@ -2,11 +2,18 @@ using System.Numerics;
 using Avalonia;
 using Avalonia.Input;
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport.Interop;
 using Color = Avalonia.Media.Color;
 
 namespace ModelingToolkit.Gui.Viewport;
+
+/// <summary>
+/// What a click of the view picks: an instance, -1 for none, and the element of its shape under the pointer, with the
+/// point picked and, on a face, its normal.
+/// </summary>
+internal readonly record struct ViewerPick(int Instance, ElementKind Kind, int Index, Point3d Point, Vector3 Normal);
 
 /// <summary>
 /// The OpenCASCADE viewer of the native library (native/occt-viewer) and the native view it draws into. Every method
@@ -98,9 +105,17 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
     /// The edges that the display modes with edges draw, such as those of the shape the mesh is the tessellation of;
     /// null for the edges of the triangles.
     /// </param>
+    /// <param name="shape">
+    /// The tessellation of the shape the mesh is, whose faces, edges and vertices are then picked one by one; null for a
+    /// mesh picked as a whole.
+    /// </param>
     /// <exception cref="ArgumentException">The mesh has no triangles, or positions that are not finite.</exception>
-    public unsafe int AddMesh(MeshEntity mesh, Polylines? edges = null)
+    public unsafe int AddMesh(MeshEntity mesh, Polylines? edges = null, ShapeTessellation? shape = null)
     {
+        int[]? faces = shape is null
+            ? null
+            : [.. Enumerable.Range(0, shape.FaceCount).Select(face => shape.TrianglesOf(face).Start.Value),
+                mesh.Triangles.Length];
         // The arrays of the mesh are passed as they are: their elements are made of doubles, floats and ints.
         fixed (Point3d* positions = mesh.Vertices)
         fixed (Vector3* normals = mesh.Normals)
@@ -108,6 +123,9 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         fixed (Triangle* triangles = mesh.Triangles)
         fixed (Point3d* edgePoints = edges is null ? default : edges.Points)
         fixed (int* edgeFirstPoints = edges is null ? default : edges.FirstPoints)
+        fixed (int* faceFirstTriangles = faces)
+        fixed (int* edgeIndices = shape is null ? default : shape.EdgeIndices)
+        fixed (Point3d* shapeVertices = shape is null ? default : shape.Vertices)
         {
             var native = new NativeMesh
             {
@@ -122,6 +140,11 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
                 EdgePoints = (double*)edgePoints,
                 EdgeFirstPoints = edgeFirstPoints,
                 EdgeCount = edges?.Count ?? 0,
+                FaceFirstTriangles = faceFirstTriangles,
+                FaceCount = shape?.FaceCount ?? 0,
+                EdgeIndices = edgeIndices,
+                ShapeVertices = (double*)shapeVertices,
+                ShapeVertexCount = shape?.Vertices.Length ?? 0,
             };
             NativeMethods.AddMesh(_handle, in native, out int index).ThrowIfFailed();
             return index;
@@ -257,11 +280,27 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
     /// Whether the view was clicked since the last call, other than on the ViewCube: the clicks are applied by
     /// <see cref="Redraw"/>. The viewer shows no selection by itself: see <see cref="SetSelection"/>.
     /// </summary>
-    /// <param name="instance">The instance under the pointer, or -1 for none.</param>
-    public bool TakePick(out int instance)
+    /// <param name="pick">What is under the pointer: an instance of -1 for nothing.</param>
+    public unsafe bool TakePick(out ViewerPick pick)
     {
-        NativeMethods.TakePick(_handle, out int picked, out instance).ThrowIfFailed();
+        NativeMethods.TakePick(_handle, out int picked, out NativePick native).ThrowIfFailed();
+        pick = new ViewerPick(
+            native.Instance, native.Kind, native.Index, new Point3d(native.Point[0], native.Point[1], native.Point[2]),
+            new Vector3(native.Normal[0], native.Normal[1], native.Normal[2]));
         return picked != 0;
+    }
+
+    /// <summary>
+    /// Highlights elements of the shapes of instances as selected, in place of those highlighted before. An element
+    /// whose instance is changed or removed is no longer highlighted.
+    /// </summary>
+    /// <exception cref="ArgumentException">An element is not one that an instance shows.</exception>
+    public unsafe void SetHighlightedElements(ReadOnlySpan<ViewerElement> elements)
+    {
+        fixed (ViewerElement* values = elements)
+        {
+            NativeMethods.SetHighlightedElements(_handle, values, elements.Length).ThrowIfFailed();
+        }
     }
 
     /// <param name="delta">Notches of the mouse wheel, positive to zoom in.</param>

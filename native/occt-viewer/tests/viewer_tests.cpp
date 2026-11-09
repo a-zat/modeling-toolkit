@@ -67,7 +67,8 @@ struct Square {
     std::array<int32_t, 6> triangles{0, 1, 2, 0, 2, 3};
 
     mtk_viewer_mesh mesh() const {
-        return {positions.data(), normals.data(), uvs.data(), 4, triangles.data(), 2, nullptr, nullptr, 0};
+        return {positions.data(), normals.data(), uvs.data(), 4, triangles.data(), 2, nullptr, nullptr, 0,
+                nullptr, 0, nullptr, nullptr, 0};
     }
 };
 
@@ -130,8 +131,9 @@ TEST(Viewer, IgnoresInputUntilTheViewIsInAWindow) {
     int32_t animating = 1;
     EXPECT_EQ(mtk_viewer_redraw(viewer.get(), &animating), MTK_STATUS_OK) << mtk_viewer_last_error_message();
     EXPECT_EQ(animating, 0);
-    int32_t picked = 1, instance = 1;
-    EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &picked, &instance), MTK_STATUS_OK);
+    int32_t picked = 1;
+    mtk_viewer_pick pick{};
+    EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &picked, &pick), MTK_STATUS_OK);
     EXPECT_EQ(picked, 0) << "the click was not applied";
 }
 
@@ -253,6 +255,96 @@ struct OutlinedSquare : Square {
         return result;
     }
 };
+
+// The square as the tessellation of a shape: a face per triangle, its four sides as edges, the third one of the shape
+// left out as a seam would be, and its four corners.
+struct SquareShape : Square {
+    std::array<double, 24> edge_points{0, 0, 0, 1000, 0, 0, 1000, 0, 0, 1000, 1000, 0,
+                                       1000, 1000, 0, 0, 1000, 0, 0, 1000, 0, 0, 0, 0};
+    std::array<int32_t, 5> edge_first_points{0, 2, 4, 6, 8};
+    std::array<int32_t, 3> face_first_triangles{0, 1, 2};
+    std::array<int32_t, 4> edge_indices{0, 1, 3, 4};
+
+    mtk_viewer_mesh mesh() const {
+        mtk_viewer_mesh result = Square::mesh();
+        result.edge_points = edge_points.data();
+        result.edge_first_points = edge_first_points.data();
+        result.edge_count = 4;
+        result.face_first_triangles = face_first_triangles.data();
+        result.face_count = 2;
+        result.edge_indices = edge_indices.data();
+        result.shape_vertices = positions.data();
+        result.shape_vertex_count = 4;
+        return result;
+    }
+};
+
+TEST(Viewer, HighlightsTheElementsOfTheShapesOfItsInstances) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t shape = add_mesh(viewer.get(), SquareShape().mesh());
+    const int32_t plain = add_mesh(viewer.get(), Square().mesh());
+    const int32_t material = add_material(viewer.get(), grey());
+    const double moved[12] = {1, 0, 0, 2000, 0, 1, 0, 0, 0, 0, 1, 0};
+    const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    const int32_t connected = add_instance(viewer.get(), shape, material, moved);
+    const int32_t copied = add_instance(viewer.get(), shape, material, stretched); // triangles of its own
+    const int32_t whole = add_instance(viewer.get(), plain, material, identity);
+
+    const mtk_viewer_element elements[] = {{connected, MTK_VIEWER_ELEMENT_FACE, 1},
+                                           {connected, MTK_VIEWER_ELEMENT_EDGE, 4},
+                                           {copied, MTK_VIEWER_ELEMENT_VERTEX, 3},
+                                           {copied, MTK_VIEWER_ELEMENT_EDGE, 0}};
+    EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), elements, 4), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_WIREFRAME), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), &copied, 1), MTK_STATUS_OK);
+    const mtk_viewer_colors darker = colors(0.3f);
+    EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &darker), MTK_STATUS_OK);
+
+    // Changed or removed, an instance no longer has its elements highlighted; they can be highlighted again.
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), connected, shape, material, identity), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_remove_instance(viewer.get(), copied), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), elements, 2), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+
+    const mtk_viewer_element missing[] = {{connected, MTK_VIEWER_ELEMENT_EDGE, 2}, // a seam, without a polyline
+                                          {connected, MTK_VIEWER_ELEMENT_FACE, 2},
+                                          {connected, MTK_VIEWER_ELEMENT_VERTEX, 4},
+                                          {connected, MTK_VIEWER_ELEMENT_INSTANCE, 0},
+                                          {whole, MTK_VIEWER_ELEMENT_FACE, 0}, // picked as a whole
+                                          {copied, MTK_VIEWER_ELEMENT_FACE, 0}, // removed
+                                          {7, MTK_VIEWER_ELEMENT_FACE, 0}};
+    for (const mtk_viewer_element& element : missing) {
+        EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), &element, 1), MTK_STATUS_INVALID_ARGUMENT)
+            << element.instance << " " << element.kind << " " << element.index;
+    }
+    EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), nullptr, 0), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), elements, 1), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
+}
+
+TEST(Viewer, RejectsElementsItCannotShow) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const SquareShape square;
+    const std::array<int32_t, 3> unordered{0, 2, 1}, short_of_the_end{0, 1, 1};
+    const double infinite[3] = {0, 0, std::numeric_limits<double>::infinity()};
+    std::vector<mtk_viewer_mesh> invalid(6, square.mesh());
+    invalid[0].face_first_triangles = unordered.data();
+    invalid[1].face_first_triangles = short_of_the_end.data();
+    invalid[2].face_count = 0;
+    invalid[3].edge_indices = nullptr;
+    invalid[4].shape_vertices = infinite;
+    invalid[4].shape_vertex_count = 1;
+    invalid[5].edge_first_points = nullptr; // faces without edges of their own
+    invalid[5].edge_count = 0;
+    for (const mtk_viewer_mesh& mesh : invalid) {
+        int32_t index = -1;
+        EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), &mesh, &index), MTK_STATUS_INVALID_ARGUMENT);
+        EXPECT_STRNE(mtk_viewer_last_error_message(), "");
+    }
+}
 
 TEST(Viewer, ShowsMeshesWithEdgesOfTheirOwnInEveryDisplayMode) {
     Parent parent;
@@ -515,9 +607,12 @@ TEST(Viewer, NullArgumentsAreRejected) {
     EXPECT_EQ(mtk_viewer_add_instance(viewer.get(), 0, 0, identity, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_selection(nullptr, nullptr, 0), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_take_pick(nullptr, &flag, &flag), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
+    mtk_viewer_pick pick{};
+    EXPECT_EQ(mtk_viewer_take_pick(nullptr, &flag, &pick), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), nullptr, &pick), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_take_pick(viewer.get(), &flag, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_highlighted_elements(nullptr, nullptr, 0), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_clear(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_fit_all(nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_show_view(nullptr, MTK_VIEWER_VIEW_TOP), MTK_STATUS_INVALID_ARGUMENT);

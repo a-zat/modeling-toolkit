@@ -2,12 +2,17 @@
 
 #include "mtk/errors.hpp"
 
+#include <Graphic3d_ArrayOfPoints.hxx>
+#include <Graphic3d_AspectMarker3d.hxx>
 #include <Graphic3d_Group.hxx>
 #include <Graphic3d_MaterialAspect.hxx>
 #include <Graphic3d_PBRMaterial.hxx>
 #include <Graphic3d_TextureSet.hxx>
 #include <Image_PixMap.hxx>
 #include <Prs3d_Presentation.hxx>
+#include <PrsMgr_PresentationManager.hxx>
+#include <Select3D_SensitivePoint.hxx>
+#include <Select3D_SensitivePoly.hxx>
 #include <Select3D_SensitivePrimitiveArray.hxx>
 #include <SelectMgr_EntityOwner.hxx>
 #include <SelectMgr_Selection.hxx>
@@ -142,10 +147,163 @@ void mtk::MeshObject::ComputeSelection(const occ::handle<SelectMgr_Selection>& s
     if (mode != 0) {
         return;
     }
+    if (mesh_.elements) {
+        add_element_sensitives(selection, this, mesh_);
+        return;
+    }
     const occ::handle<Select3D_SensitivePrimitiveArray> sensitive =
         new Select3D_SensitivePrimitiveArray(new SelectMgr_EntityOwner(this));
     sensitive->InitTriangulation(mesh_.triangles->Attributes(), mesh_.triangles->Indices(), TopLoc_Location());
     selection->Add(sensitive);
+}
+
+namespace {
+
+// Selected faces are tinted more than hovered ones; edges and vertices are drawn opaque.
+constexpr float hovered_face_opacity = 0.35f;
+constexpr float selected_face_opacity = 0.6f;
+constexpr float highlighted_edge_width = 2.0f; // drawn 1 pixel wide where OpenGL has only thin lines, as on macOS
+constexpr double highlighted_vertex_scale = 3.0;
+
+// Element owners are picked with priority to vertices, then edges, then faces, at about the same depth.
+int priority_of(mtk_viewer_element_kind kind) {
+    return kind == MTK_VIEWER_ELEMENT_VERTEX ? 7 : kind == MTK_VIEWER_ELEMENT_EDGE ? 6 : 5;
+}
+
+// The points of a polyline of an array, from 0.
+std::vector<gp_Pnt> polyline_points(const Graphic3d_ArrayOfPolylines& polylines, int polyline) {
+    int first = 1;
+    for (int bound = 1; bound <= polyline; ++bound) {
+        first += polylines.Bound(bound);
+    }
+    std::vector<gp_Pnt> points;
+    for (int vertex = first; vertex < first + polylines.Bound(polyline + 1); ++vertex) {
+        points.push_back(polylines.Vertice(vertex));
+    }
+    return points;
+}
+
+} // namespace
+
+mtk::ElementOwner::ElementOwner(const occ::handle<SelectMgr_SelectableObject>& object, const Mesh& mesh,
+                                mtk_viewer_element_kind kind, int index, int polyline)
+    : SelectMgr_EntityOwner(object, priority_of(kind)), mesh_(mesh), kind_(kind), index_(index), polyline_(polyline) {}
+
+void mtk::ElementOwner::draw(const occ::handle<Prs3d_Presentation>& presentation, const Quantity_Color& color,
+                             float opacity) const {
+    presentation->Clear();
+    // Over the scene, hidden by what is in front of the element; with the placement of the object that shows it.
+    presentation->SetZLayer(Graphic3d_ZLayerId_Top);
+    presentation->SetTransformation(Selectable()->TransformationGeom());
+    const occ::handle<Graphic3d_Group> group = presentation->NewGroup();
+    if (kind_ == MTK_VIEWER_ELEMENT_FACE) {
+        occ::handle<Graphic3d_AspectFillArea3d> aspect = new Graphic3d_AspectFillArea3d();
+        aspect->SetInteriorStyle(Aspect_IS_SOLID);
+        aspect->SetShadingModel(Graphic3d_TypeOfShadingModel_Unlit);
+        aspect->SetInteriorColor(Quantity_ColorRGBA(color, opacity));
+        aspect->SetAlphaMode(Graphic3d_AlphaMode_Blend);
+        aspect->SetPolygonOffsets(Aspect_POM_Fill, -1.0f, -1.0f); // over the face itself
+        group->SetGroupPrimitivesAspect(aspect);
+        const Graphic3d_ArrayOfTriangles& triangles = *mesh_.triangles;
+        const bool indexed = triangles.EdgeNumber() > 0;
+        const int first = mesh_.elements->first_triangles[index_], end = mesh_.elements->first_triangles[index_ + 1];
+        occ::handle<Graphic3d_ArrayOfTriangles> face = new Graphic3d_ArrayOfTriangles(3 * (end - first));
+        for (int corner = 3 * first + 1; corner <= 3 * end; ++corner) {
+            face->AddVertex(triangles.Vertice(indexed ? triangles.Edge(corner) : corner));
+        }
+        group->AddPrimitiveArray(face);
+    } else if (kind_ == MTK_VIEWER_ELEMENT_EDGE) {
+        group->SetGroupPrimitivesAspect(new Graphic3d_AspectLine3d(color, Aspect_TOL_SOLID, highlighted_edge_width));
+        const std::vector<gp_Pnt> points = polyline_points(*mesh_.edges, polyline_);
+        occ::handle<Graphic3d_ArrayOfPolylines> line = new Graphic3d_ArrayOfPolylines(static_cast<int>(points.size()));
+        for (const gp_Pnt& point : points) {
+            line->AddVertex(point);
+        }
+        group->AddPrimitiveArray(line);
+    } else {
+        group->SetGroupPrimitivesAspect(
+            new Graphic3d_AspectMarker3d(Aspect_TOM_BALL, color, highlighted_vertex_scale));
+        occ::handle<Graphic3d_ArrayOfPoints> point = new Graphic3d_ArrayOfPoints(1);
+        point->AddVertex(mesh_.elements->vertices[index_]);
+        group->AddPrimitiveArray(point);
+    }
+}
+
+void mtk::ElementOwner::HilightWithColor(const occ::handle<PrsMgr_PresentationManager>& manager,
+                                         const occ::handle<Prs3d_Drawer>& style, const int) {
+    if (hover_.IsNull()) {
+        hover_ = new Prs3d_Presentation(manager->StructureManager());
+    }
+    draw(hover_, style->Color(), hovered_face_opacity);
+    if (manager->IsImmediateModeOn()) {
+        manager->AddToImmediateList(hover_);
+    } else {
+        hover_->Display();
+    }
+}
+
+void mtk::ElementOwner::Unhilight(const occ::handle<PrsMgr_PresentationManager>&, const int) {
+    if (!hover_.IsNull()) {
+        hover_->Erase();
+    }
+}
+
+void mtk::ElementOwner::highlight_selected(const occ::handle<PrsMgr_PresentationManager>& manager,
+                                           const occ::handle<Prs3d_Drawer>& style) {
+    if (selected_.IsNull()) {
+        selected_ = new Prs3d_Presentation(manager->StructureManager());
+    }
+    draw(selected_, style->Color(), selected_face_opacity);
+    selected_->Display();
+}
+
+void mtk::ElementOwner::unhighlight_selected() {
+    if (!selected_.IsNull()) {
+        selected_->Erase();
+    }
+}
+
+void mtk::add_element_sensitives(const occ::handle<SelectMgr_Selection>& selection,
+                                 const occ::handle<SelectMgr_SelectableObject>& object, const Mesh& mesh) {
+    const Elements& elements = *mesh.elements;
+    for (size_t face = 0; face + 1 < elements.first_triangles.size(); ++face) {
+        const int first = elements.first_triangles[face], end = elements.first_triangles[face + 1];
+        if (first == end) {
+            continue;
+        }
+        occ::handle<Select3D_SensitivePrimitiveArray> sensitive = new Select3D_SensitivePrimitiveArray(
+            new ElementOwner(object, mesh, MTK_VIEWER_ELEMENT_FACE, static_cast<int>(face)));
+        // The range of the indices includes its last one.
+        sensitive->InitTriangulation(mesh.triangles->Attributes(), mesh.triangles->Indices(), TopLoc_Location(),
+                                     3 * first, 3 * end - 1);
+        selection->Add(sensitive);
+    }
+    for (size_t polyline = 0; polyline < elements.edge_indices.size(); ++polyline) {
+        const std::vector<gp_Pnt> points = polyline_points(*mesh.edges, static_cast<int>(polyline));
+        NCollection_Array1<gp_Pnt> array(1, static_cast<int>(points.size()));
+        for (size_t point = 0; point < points.size(); ++point) {
+            array.SetValue(static_cast<int>(point) + 1, points[point]);
+        }
+        selection->Add(new Select3D_SensitivePoly(
+            new ElementOwner(object, mesh, MTK_VIEWER_ELEMENT_EDGE, elements.edge_indices[polyline],
+                             static_cast<int>(polyline)),
+            array, true));
+    }
+    for (size_t vertex = 0; vertex < elements.vertices.size(); ++vertex) {
+        selection->Add(new Select3D_SensitivePoint(
+            new ElementOwner(object, mesh, MTK_VIEWER_ELEMENT_VERTEX, static_cast<int>(vertex)),
+            elements.vertices[vertex]));
+    }
+}
+
+void mtk::ConnectedMesh::ComputeSelection(const occ::handle<SelectMgr_Selection>& selection, const int mode) {
+    const occ::handle<MeshObject> mesh = occ::down_cast<MeshObject>(ConnectedTo());
+    if (mode != 0 || mesh.IsNull() || !mesh->mesh().elements) {
+        AIS_ConnectedInteractive::ComputeSelection(selection, mode);
+        return;
+    }
+    // In the coordinates of the mesh: the selector applies the placement of this object.
+    add_element_sensitives(selection, this, mesh->mesh());
 }
 
 namespace {
@@ -287,11 +445,31 @@ occ::handle<Graphic3d_ArrayOfTriangles> transform_triangles(const occ::handle<Gr
 } // namespace
 
 mtk::Mesh mtk::make_mesh(const mtk_viewer_mesh& mesh) {
-    return Mesh{make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh)};
+    std::shared_ptr<Elements> elements;
+    if (mesh.face_first_triangles != nullptr) {
+        elements = std::make_shared<Elements>();
+        elements->first_triangles.assign(mesh.face_first_triangles, mesh.face_first_triangles + mesh.face_count + 1);
+        elements->edge_indices.assign(mesh.edge_indices, mesh.edge_indices + mesh.edge_count);
+        for (int32_t vertex = 0; vertex < mesh.shape_vertex_count; ++vertex) {
+            const double* xyz = mesh.shape_vertices + 3 * vertex;
+            elements->vertices.emplace_back(xyz[0], xyz[1], xyz[2]);
+        }
+    }
+    return Mesh{make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh), std::move(elements)};
 }
 
 mtk::Mesh mtk::transform_mesh(const Mesh& mesh, const double* matrix) {
-    return Mesh{transform_triangles(mesh.triangles, matrix), mesh.has_own_edges, transform_edges(mesh.edges, matrix)};
+    std::shared_ptr<Elements> elements;
+    if (mesh.elements) {
+        elements = std::make_shared<Elements>(*mesh.elements);
+        const gp_Mat linear = linear_part(matrix);
+        const gp_XYZ translation(matrix[3], matrix[7], matrix[11]);
+        for (gp_Pnt& vertex : elements->vertices) {
+            vertex = gp_Pnt(vertex.XYZ().Multiplied(linear) + translation);
+        }
+    }
+    return Mesh{transform_triangles(mesh.triangles, matrix), mesh.has_own_edges, transform_edges(mesh.edges, matrix),
+                std::move(elements)};
 }
 
 occ::handle<Graphic3d_Texture2D> mtk::make_texture(const uint8_t* pixels, int width, int height) {
