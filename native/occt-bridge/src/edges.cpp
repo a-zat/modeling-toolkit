@@ -1,11 +1,19 @@
-// Drawing edges on shapes: General Fuse of the curves with the parts of the shape near them, then faces for the planar
-// loops they close. The design and its measures are in issue #64.
+// Editing shapes as a drawing does. Drawing edges: General Fuse of the curves with the parts of the shape near them,
+// then faces for the planar loops they close; the design and its measures are in issue #64. Push/pull: the prism a
+// face sweeps, added to its solid or taken from it, or a solid of its own.
 
 #include "internal.hpp"
 
 #include <BOPTools_AlgoTools3D.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_BuilderAlgo.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepLib.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
+#include <ShapeUpgrade_UnifySameDomain.hxx>
+#include <TopoDS_Solid.hxx>
 #include <BRepAlgoAPI_Splitter.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -457,6 +465,107 @@ void copy_vector(const gp_Vec& vector, double* out) {
     out[2] = vector.Z();
 }
 
+// The face of the old shape a face comes from, and whether a push/pull swept it from that face.
+struct Origin {
+    int32_t face = -1;
+    bool swept = false;
+};
+
+using Sources = std::vector<std::pair<TopoDS_Shape, Origin>>;
+
+Sources sources_of(const TopoDS_Shape& shape, const std::vector<Origin>& origins) {
+    ShapeMap faces;
+    TopExp::MapShapes(shape, TopAbs_FACE, faces);
+    Sources sources;
+    for (int i = 1; i <= faces.Extent(); ++i) {
+        sources.emplace_back(faces(i), origins[i - 1]);
+    }
+    return sources;
+}
+
+// The origins of the faces of a result, carried from faces through the history that made it, null for none: a face
+// left as it is keeps its origin and its pieces take it; a face made of faces swept and not swept, as when faces merge,
+// takes the origin of one not swept.
+std::vector<Origin> carried(const Sources& sources, const occ::handle<BRepTools_History>& history,
+                            const TopoDS_Shape& result) {
+    ShapeMap faces;
+    TopExp::MapShapes(result, TopAbs_FACE, faces);
+    std::vector<Origin> origins(faces.Extent());
+    std::vector<bool> taken(faces.Extent(), false);
+    const auto take = [&](const TopoDS_Shape& face, const Origin& origin) {
+        const int index = faces.FindIndex(face);
+        if (index > 0 && !taken[index - 1]) {
+            origins[index - 1] = origin;
+            taken[index - 1] = true;
+        }
+    };
+    for (const bool swept : {false, true}) {
+        for (const auto& [face, origin] : sources) {
+            if (origin.swept != swept || (!history.IsNull() && history->IsRemoved(face))) {
+                continue;
+            }
+            const ShapeList pieces = history.IsNull() ? ShapeList() : history->Modified(face);
+            if (pieces.IsEmpty()) {
+                take(face, origin);
+            }
+            for (const TopoDS_Shape& piece : pieces) {
+                take(piece, origin);
+            }
+        }
+    }
+    return origins;
+}
+
+// Merges the faces of a shape that lie on the same surface across the edges next to a face swept, and the edges on the
+// same curve across the vertices next to one; the others stay, such as the edges drawn between faces of the solid.
+std::pair<TopoDS_Shape, std::vector<Origin>> merge_swept(const TopoDS_Shape& shape, const std::vector<Origin>& origins) {
+    ShapeMap faces;
+    TopExp::MapShapes(shape, TopAbs_FACE, faces);
+    NCollection_Map<TopoDS_Shape, TopTools_ShapeMapHasher> kept;
+    for (const TopAbs_ShapeEnum kind : {TopAbs_EDGE, TopAbs_VERTEX}) {
+        AncestorMap faces_of;
+        TopExp::MapShapesAndAncestors(shape, kind, TopAbs_FACE, faces_of);
+        for (int i = 1; i <= faces_of.Extent(); ++i) {
+            const ShapeList& around = faces_of(i);
+            if (std::none_of(around.begin(), around.end(),
+                             [&](const TopoDS_Shape& face) { return origins[faces.FindIndex(face) - 1].swept; })) {
+                kept.Add(faces_of.FindKey(i));
+            }
+        }
+    }
+    ShapeUpgrade_UnifySameDomain unify(shape, true, true, false);
+    unify.KeepShapes(kept);
+    unify.Build();
+    return {unify.Shape(), carried(sources_of(shape, origins), unify.History(), unify.Shape())};
+}
+
+// The solid a face sweeps along a vector, made of copies of the face and its edges.
+TopoDS_Solid prism_of(const TopoDS_Face& face, const gp_Vec& sweep) {
+    BRepPrimAPI_MakePrism prism(face, sweep, true);
+    if (!prism.IsDone() || prism.Shape().ShapeType() != TopAbs_SOLID) {
+        throw mtk::kernel_error("The face could not be swept.");
+    }
+    TopoDS_Solid solid = TopoDS::Solid(prism.Shape());
+    BRepLib::OrientClosedSolid(solid);
+    return solid;
+}
+
+// The solid with the prism added (fuse) or taken away (cut), and the origins of its faces.
+template <typename Operation>
+std::pair<TopoDS_Shape, std::vector<Origin>> combine(const TopoDS_Shape& solid, const TopoDS_Solid& prism,
+                                                     const Sources& sources) {
+    Operation operation;
+    operation.SetArguments(ShapeList{solid});
+    operation.SetTools(ShapeList{prism});
+    operation.SetRunParallel(false);
+    operation.SetNonDestructive(true);
+    operation.Build();
+    if (!operation.IsDone() || operation.HasErrors()) {
+        throw mtk::kernel_error("The face could not be pushed or pulled.");
+    }
+    return {operation.Shape(), carried(sources, operation.History(), operation.Shape())};
+}
+
 } // namespace
 
 mtk_status mtk_shape_add_edges(const mtk_shape* shape, const mtk_curve* curves, int32_t curve_count,
@@ -530,6 +639,131 @@ mtk_status mtk_edit_get_face_origins(const mtk_edit* edit, const int32_t** out_o
 
 void mtk_edit_release(mtk_edit* edit) {
     delete edit;
+}
+
+mtk_status mtk_shape_push_pull(const mtk_shape* shape, int32_t face, double distance, mtk_edit** out_edit) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_edit);
+        if (shape == nullptr || out_edit == nullptr) {
+            return mtk::invalid_argument("shape and out_edit must not be null.");
+        }
+        ShapeMap faces;
+        TopExp::MapShapes(shape->value, TopAbs_FACE, faces);
+        if (face < 0 || face >= faces.Extent()) {
+            return mtk::invalid_argument("face is not a face of the shape.");
+        }
+        if (!std::isfinite(distance) || std::abs(distance) <= Precision::Confusion()) {
+            return mtk::invalid_argument("distance must be finite and not zero.");
+        }
+        const TopoDS_Face pulled = TopoDS::Face(faces(face + 1));
+        const BRepAdaptor_Surface surface(pulled);
+        if (surface.GetType() != GeomAbs_Plane) {
+            return mtk::invalid_argument("The face is not planar.");
+        }
+        gp_Dir normal = surface.Plane().Axis().Direction();
+        if (pulled.Orientation() == TopAbs_REVERSED) {
+            normal.Reverse();
+        }
+        const TopoDS_Solid prism = prism_of(pulled, gp_Vec(normal) * distance);
+        const Origin swept{face, true};
+        const auto old_origin = [&](const TopoDS_Shape& old) { return Origin{faces.FindIndex(old) - 1, false}; };
+
+        // The item that holds the face is made again; the others stay, to be fused with it.
+        const std::vector<TopoDS_Shape> items = items_of(shape->value);
+        const auto owner = std::find_if(items.begin(), items.end(), [&](const TopoDS_Shape& item) {
+            ShapeMap own;
+            TopExp::MapShapes(item, TopAbs_FACE, own);
+            return own.Contains(pulled);
+        });
+        BRep_Builder builder;
+        TopoDS_Compound rest;
+        builder.MakeCompound(rest);
+        for (auto item = items.begin(); item != items.end(); ++item) {
+            if (item != owner) {
+                builder.Add(rest, *item);
+            }
+        }
+
+        TopoDS_Shape made;
+        std::vector<Origin> made_origins;
+        if (owner->ShapeType() == TopAbs_SOLID) {
+            Sources sources;
+            for (TopExp_Explorer old(*owner, TopAbs_FACE); old.More(); old.Next()) {
+                sources.emplace_back(old.Current(), old_origin(old.Current()));
+            }
+            for (TopExp_Explorer side(prism, TopAbs_FACE); side.More(); side.Next()) {
+                sources.emplace_back(side.Current(), swept);
+            }
+            std::tie(made, made_origins) = distance > 0 ? combine<BRepAlgoAPI_Fuse>(*owner, prism, sources)
+                                                        : combine<BRepAlgoAPI_Cut>(*owner, prism, sources);
+            if (!made_origins.empty()) {
+                std::tie(made, made_origins) = merge_swept(made, made_origins);
+            }
+        } else {
+            // A face alone, or in a shell whose other faces stay.
+            for (TopExp_Explorer other(*owner, TopAbs_FACE); other.More(); other.Next()) {
+                if (!other.Current().IsSame(pulled)) {
+                    builder.Add(rest, other.Current());
+                }
+            }
+            made = prism;
+            ShapeMap sides;
+            TopExp::MapShapes(prism, TopAbs_FACE, sides);
+            made_origins.assign(static_cast<size_t>(sides.Extent()), swept);
+        }
+
+        Sources sources;
+        ShapeMap rest_faces;
+        TopExp::MapShapes(rest, TopAbs_FACE, rest_faces);
+        for (int i = 1; i <= rest_faces.Extent(); ++i) {
+            sources.emplace_back(rest_faces(i), old_origin(rest_faces(i)));
+        }
+        TopoDS_Shape result = rest;
+        occ::handle<BRepTools_History> history;
+        if (!made_origins.empty()) {
+            const Sources own = sources_of(made, made_origins);
+            sources.insert(sources.end(), own.begin(), own.end());
+            const Step step = fuse_into(rest, {made});
+            result = step.shape;
+            history = step.history;
+        }
+        if (items_of(result).empty()) {
+            throw mtk::kernel_error("Pushing the face so far would leave nothing.");
+        }
+        std::vector<int32_t> origins;
+        for (const Origin& origin : carried(sources, history, result)) {
+            origins.push_back(origin.face);
+        }
+        *out_edit = new mtk_edit{result, std::move(origins)};
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_shape_face_edges(const mtk_shape* shape, int32_t face, int32_t* out_edges, int32_t capacity,
+                                int32_t* out_count) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_count);
+        if (shape == nullptr || out_count == nullptr || capacity < 0 || (out_edges == nullptr && capacity > 0)) {
+            return mtk::invalid_argument(
+                "shape and out_count must not be null, capacity not negative, and out_edges null only for none.");
+        }
+        ShapeMap faces, edges, own;
+        TopExp::MapShapes(shape->value, TopAbs_FACE, faces);
+        if (face < 0 || face >= faces.Extent()) {
+            return mtk::invalid_argument("face is not a face of the shape.");
+        }
+        TopExp::MapShapes(shape->value, TopAbs_EDGE, edges);
+        for (TopExp_Explorer wire(faces(face + 1), TopAbs_WIRE); wire.More(); wire.Next()) {
+            for (TopExp_Explorer edge(wire.Current(), TopAbs_EDGE); edge.More(); edge.Next()) {
+                own.Add(edge.Current());
+            }
+        }
+        for (int i = 1; i <= own.Extent() && i <= capacity; ++i) {
+            out_edges[i - 1] = edges.FindIndex(own(i)) - 1;
+        }
+        *out_count = own.Extent();
+        return MTK_STATUS_OK;
+    });
 }
 
 mtk_status mtk_shape_edge_info(const mtk_shape* shape, int32_t edge, mtk_edge_info* out_info) {

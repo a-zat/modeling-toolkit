@@ -90,6 +90,17 @@ public interface IGeometryKernel
     /// <exception cref="GeometryKernelException">The result would not be a valid shape.</exception>
     ShapeEdit AddEdges(IKernelShape? shape, IReadOnlyList<Curve> curves);
 
+    /// <summary>
+    /// Pushes or pulls a planar face along its normal, as <see cref="GetFaceInfo"/> gives it, by a distance, in a new
+    /// shape. The face sweeps a prism: for a face of a solid, a positive distance, out of the solid, adds the prism to
+    /// it and a negative one takes it away, and the faces of the prism on the plane of the faces of the solid they meet
+    /// merge with them, as the sides of a box whose top is pulled; a face outside solids becomes the solid of the prism.
+    /// The faces swept come from the face pushed or pulled.
+    /// </summary>
+    /// <exception cref="ArgumentException">The face is not planar, or the distance is zero or not finite.</exception>
+    /// <exception cref="GeometryKernelException">The result would not be valid, or would leave nothing.</exception>
+    ShapeEdit PushPull(IKernelShape shape, int face, double distance);
+
     /// <summary>The volume of the solids of the shape, in cubic millimetres.</summary>
     double ComputeVolume(IKernelShape shape);
 
@@ -107,6 +118,9 @@ public interface IGeometryKernel
 
     /// <summary>The area of a face and its plane, if it has one, in the coordinates of the shape.</summary>
     FaceInfo GetFaceInfo(IKernelShape shape, int face);
+
+    /// <summary>The edges that bound a face, each once, wire after wire.</summary>
+    IReadOnlyList<int> GetFaceEdges(IKernelShape shape, int face);
 
     /// <summary>The kind, the length, the ends, the middle and the tangents of an edge, and its circle if it has one.</summary>
     EdgeInfo GetEdgeInfo(IKernelShape shape, int edge);

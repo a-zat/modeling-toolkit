@@ -166,6 +166,25 @@ public sealed class OcctKernel : IGeometryKernel
             ? NativeMethods.ShapeAddEdgesToNothing(0, native, native.Length, out edit)
             : NativeMethods.ShapeAddEdges(Unwrap(shape), native, native.Length, out edit);
         status.ThrowIfFailed();
+        return Take(edit);
+    }
+
+    public ShapeEdit PushPull(IKernelShape shape, int face, double distance)
+    {
+        NativeMethods.ShapePushPull(Unwrap(shape), face, distance, out EditHandle edit).ThrowIfFailed();
+        return Take(edit);
+    }
+
+    public IReadOnlyList<int> GetFaceEdges(IKernelShape shape, int face)
+    {
+        NativeMethods.ShapeFaceEdges(Unwrap(shape), face, [], 0, out int count).ThrowIfOutOfRange(nameof(face));
+        int[] edges = new int[count];
+        NativeMethods.ShapeFaceEdges(Unwrap(shape), face, edges, count, out _).ThrowIfFailed();
+        return edges;
+    }
+
+    private static unsafe ShapeEdit Take(EditHandle edit)
+    {
         using (edit)
         {
             NativeMethods.EditGetFaceOrigins(edit, out int* origins, out int count).ThrowIfFailed();

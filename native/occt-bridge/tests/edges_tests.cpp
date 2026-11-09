@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -337,6 +338,201 @@ TEST(EdgeInfo, DescribesLinesArcsAndCircles) {
 
     EXPECT_EQ(mtk_shape_edge_info(disc.shape.get(), 1, &info), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_shape_edge_info(nullptr, 0, &info), MTK_STATUS_INVALID_ARGUMENT);
+}
+
+
+Edited push_pull(const ShapePtr& shape, int32_t face, double distance) {
+    mtk_edit* edit = nullptr;
+    EXPECT_EQ(mtk_shape_push_pull(shape.get(), face, distance, &edit), MTK_STATUS_OK) << mtk_last_error_message();
+    Edited result;
+    if (edit == nullptr) {
+        return result;
+    }
+    mtk_shape* made = nullptr;
+    EXPECT_EQ(mtk_edit_get_shape(edit, &made), MTK_STATUS_OK);
+    result.shape.reset(made);
+    const int32_t* origins = nullptr;
+    int32_t count = 0;
+    EXPECT_EQ(mtk_edit_get_face_origins(edit, &origins, &count), MTK_STATUS_OK);
+    result.origins.assign(origins, origins + count);
+    mtk_edit_release(edit);
+    return result;
+}
+
+struct Face {
+    double area;
+    Point normal;
+    double offset; // of the plane along the normal
+};
+
+Face face_of(const ShapePtr& shape, int32_t face) {
+    Face result{};
+    int32_t planar = 0;
+    Point origin{};
+    EXPECT_EQ(mtk_shape_face_info(shape.get(), face, &result.area, &planar, origin.data(), result.normal.data()),
+              MTK_STATUS_OK);
+    result.offset = origin[0] * result.normal[0] + origin[1] * result.normal[1] + origin[2] * result.normal[2];
+    return result;
+}
+
+// The faces of a shape on a plane, by its normal and its offset along it.
+std::vector<int32_t> faces_on(const ShapePtr& shape, Point normal, double offset) {
+    std::vector<int32_t> found;
+    for (int32_t face = 0; face < counts_of(shape).faces; ++face) {
+        const Face info = face_of(shape, face);
+        if (std::abs(info.normal[0] - normal[0]) < 1e-9 && std::abs(info.normal[1] - normal[1]) < 1e-9 &&
+            std::abs(info.normal[2] - normal[2]) < 1e-9 && std::abs(info.offset - offset) < 1e-6) {
+            found.push_back(face);
+        }
+    }
+    return found;
+}
+
+double volume_of(const ShapePtr& shape) {
+    double volume = 0.0;
+    EXPECT_EQ(mtk_shape_volume(shape.get(), &volume), MTK_STATUS_OK);
+    return volume;
+}
+
+TEST(PushPull, PullingTheTopOfABoxMakesItTallerWithTheSameFaces) {
+    ShapePtr solid = box(100);
+    const std::vector<int32_t> top = faces_on(solid, {0, 0, 1}, 100);
+    ASSERT_EQ(top.size(), 1u);
+
+    Edited taller = push_pull(solid, top[0], 50);
+    const Counts counts = counts_of(taller.shape);
+    EXPECT_EQ(counts.solids, 1);
+    EXPECT_EQ(counts.faces, 6);
+    EXPECT_EQ(counts.edges, 12);
+    EXPECT_NEAR(volume_of(taller.shape), 1.5e6, 1e-3);
+    EXPECT_TRUE(is_valid(taller.shape));
+    EXPECT_EQ(std::set<int32_t>(taller.origins.begin(), taller.origins.end()), (std::set<int32_t>{0, 1, 2, 3, 4, 5}));
+    const std::vector<int32_t> new_top = faces_on(taller.shape, {0, 0, 1}, 150);
+    ASSERT_EQ(new_top.size(), 1u);
+    EXPECT_EQ(taller.origins[new_top[0]], top[0]);
+}
+
+TEST(PushPull, PushingTheTopIntoABoxLowersIt) {
+    ShapePtr solid = box(100);
+    Edited lower = push_pull(solid, faces_on(solid, {0, 0, 1}, 100)[0], -30);
+    EXPECT_EQ(counts_of(lower.shape).solids, 1);
+    EXPECT_EQ(counts_of(lower.shape).faces, 6);
+    EXPECT_NEAR(volume_of(lower.shape), 0.7e6, 1e-3);
+    EXPECT_TRUE(is_valid(lower.shape));
+}
+
+TEST(PushPull, PullingAPartOfTheTopMakesAStepWhoseFacesComeFromIt) {
+    ShapePtr solid = box(100);
+    Edited drawn = add(solid.get(), polygon({{20, 20, 100}, {80, 20, 100}, {80, 80, 100}, {20, 80, 100}}));
+    int32_t inner = -1;
+    for (int32_t face : faces_on(drawn.shape, {0, 0, 1}, 100)) {
+        if (std::abs(face_of(drawn.shape, face).area - 3600) < 1e-6) {
+            inner = face;
+        }
+    }
+    ASSERT_GE(inner, 0);
+
+    Edited step = push_pull(drawn.shape, inner, 40);
+    EXPECT_EQ(counts_of(step.shape).solids, 1);
+    EXPECT_EQ(counts_of(step.shape).faces, 11);
+    EXPECT_NEAR(volume_of(step.shape), 1e6 + 3600 * 40, 1e-3);
+    EXPECT_TRUE(is_valid(step.shape));
+    EXPECT_EQ(std::count(step.origins.begin(), step.origins.end(), inner), 5); // the four sides and the top
+
+    Edited pocket = push_pull(drawn.shape, inner, -40);
+    EXPECT_EQ(counts_of(pocket.shape).faces, 11);
+    EXPECT_NEAR(volume_of(pocket.shape), 1e6 - 3600 * 40, 1e-3);
+    EXPECT_TRUE(is_valid(pocket.shape));
+    EXPECT_EQ(std::count(pocket.origins.begin(), pocket.origins.end(), inner), 5); // the four walls and the bottom
+}
+
+TEST(PushPull, EdgesDrawnOnTheSidesStay) {
+    ShapePtr solid = box(100);
+    Edited drawn = add(solid.get(), {line({50, 0, 0}, {50, 0, 100})});
+    ASSERT_EQ(faces_on(drawn.shape, {0, -1, 0}, 0).size(), 2u);
+
+    Edited taller = push_pull(drawn.shape, faces_on(drawn.shape, {0, 0, 1}, 100)[0], 50);
+    EXPECT_NEAR(volume_of(taller.shape), 1.5e6, 1e-3);
+    EXPECT_TRUE(is_valid(taller.shape));
+    EXPECT_GE(faces_on(taller.shape, {0, -1, 0}, 0).size(), 2u);
+    EXPECT_EQ(faces_on(taller.shape, {1, 0, 0}, 100).size(), 1u);
+}
+
+TEST(PushPull, AFaceAloneBecomesASolidEitherWay) {
+    ShapePtr face = square(100);
+    for (const double distance : {30.0, -30.0}) {
+        Edited made = push_pull(face, 0, distance);
+        const Counts counts = counts_of(made.shape);
+        EXPECT_EQ(counts.solids, 1);
+        EXPECT_EQ(counts.faces, 6);
+        EXPECT_NEAR(volume_of(made.shape), 3e5, 1e-3);
+        EXPECT_TRUE(is_valid(made.shape));
+        EXPECT_EQ(made.origins, std::vector<int32_t>(6, 0));
+    }
+}
+
+TEST(PushPull, AFaceNextToAnotherStaysConnectedToIt) {
+    ShapePtr face = square(100);
+    Edited split = add(face.get(), {line({50, 0, 0}, {50, 100, 0})});
+    ASSERT_EQ(counts_of(split.shape).faces, 2);
+
+    Edited made = push_pull(split.shape, 0, 20);
+    const Counts counts = counts_of(made.shape);
+    EXPECT_EQ(counts.solids, 1);
+    EXPECT_EQ(counts.faces, 7); // the solid and the other face
+    EXPECT_EQ(counts.vertices, 10);
+    EXPECT_TRUE(is_valid(made.shape));
+}
+
+TEST(PushPull, RejectsWhatCannotBePushedOrPulled) {
+    ShapePtr solid = box(100);
+    const int32_t top = faces_on(solid, {0, 0, 1}, 100)[0];
+    mtk_edit* edit = nullptr;
+    EXPECT_EQ(mtk_shape_push_pull(solid.get(), top, -100, &edit), MTK_STATUS_KERNEL_ERROR);
+    EXPECT_EQ(mtk_shape_push_pull(solid.get(), top, 0, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_push_pull(solid.get(), top, std::numeric_limits<double>::quiet_NaN(), &edit),
+              MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_push_pull(solid.get(), 6, 10, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_push_pull(nullptr, 0, 10, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(edit, nullptr);
+
+    mtk_shape* cylinder = nullptr;
+    ASSERT_EQ(mtk_shape_make_cylinder(10, 40, &cylinder), MTK_STATUS_OK);
+    ShapePtr round(cylinder);
+    int32_t curved = -1;
+    for (int32_t face = 0; face < counts_of(round).faces; ++face) {
+        double area = 0.0;
+        int32_t planar = 1;
+        Point origin{}, normal{};
+        mtk_shape_face_info(round.get(), face, &area, &planar, origin.data(), normal.data());
+        if (planar == 0) {
+            curved = face;
+        }
+    }
+    ASSERT_GE(curved, 0);
+    EXPECT_EQ(mtk_shape_push_pull(round.get(), curved, 10, &edit), MTK_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(FaceEdges, GivesTheEdgesThatBoundAFace) {
+    ShapePtr face = square(100);
+    int32_t count = 0;
+    EXPECT_EQ(mtk_shape_face_edges(face.get(), 0, nullptr, 0, &count), MTK_STATUS_OK);
+    EXPECT_EQ(count, 4);
+    std::array<int32_t, 4> edges{};
+    EXPECT_EQ(mtk_shape_face_edges(face.get(), 0, edges.data(), 4, &count), MTK_STATUS_OK);
+    EXPECT_EQ(std::set<int32_t>(edges.begin(), edges.end()), (std::set<int32_t>{0, 1, 2, 3}));
+
+    ShapePtr ring = std::move(add(face.get(), {circle({50, 50, 0}, 20)}).shape);
+    for (const int32_t expected : {5, 1}) { // the square and the circle, or the circle alone
+        bool seen = false;
+        for (int32_t index = 0; index < 2; ++index) {
+            EXPECT_EQ(mtk_shape_face_edges(ring.get(), index, nullptr, 0, &count), MTK_STATUS_OK);
+            seen = seen || count == expected;
+        }
+        EXPECT_TRUE(seen) << expected;
+    }
+    EXPECT_EQ(mtk_shape_face_edges(face.get(), 1, nullptr, 0, &count), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_face_edges(face.get(), 0, nullptr, 2, &count), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 } // namespace

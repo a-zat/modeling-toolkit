@@ -27,6 +27,6 @@ public sealed record EdgeInfo(
 /// </summary>
 /// <param name="FaceOrigins">
 /// For each face of the new shape, in order, the index of the face of the old shape it comes from, such as each part of
-/// a face that was split; -1 for a face that the edit made.
+/// a face that was split, or a face swept from a face; -1 for a face that the edit made from nothing.
 /// </param>
 public sealed record ShapeEdit(IKernelShape Shape, IReadOnlyList<int> FaceOrigins);

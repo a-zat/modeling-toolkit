@@ -50,6 +50,10 @@ internal sealed class NoKernel : IGeometryKernel
 
     public ShapeEdit AddEdges(IKernelShape? shape, IReadOnlyList<Curve> curves) => throw new NotSupportedException();
 
+    public ShapeEdit PushPull(IKernelShape shape, int face, double distance) => throw new NotSupportedException();
+
+    public IReadOnlyList<int> GetFaceEdges(IKernelShape shape, int face) => throw new NotSupportedException();
+
     public Point3d GetVertexPoint(IKernelShape shape, int vertex) => throw new NotSupportedException();
 
     public byte[] Serialize(IKernelShape shape) => throw new NotSupportedException();

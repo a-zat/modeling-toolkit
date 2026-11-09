@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 15
+#define MTK_OCCT_BRIDGE_ABI_VERSION 16
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -159,12 +159,32 @@ typedef struct mtk_edit mtk_edit;
 MTK_API mtk_status mtk_shape_add_edges(const mtk_shape* shape, const mtk_curve* curves, int32_t curve_count,
                                        mtk_edit** out_edit);
 
+/*
+ * Pushes or pulls a planar face of a shape along its normal, as mtk_shape_face_info gives it, by a distance, and gives
+ * the result in a new edit; the shape is not changed. The face sweeps a prism: for a face of a solid, a positive
+ * distance, out of the solid, adds the prism to the solid and a negative one takes it away, and the faces of the prism
+ * that lie on the same plane as the faces of the solid they meet merge with them, as the sides of a box whose top is
+ * pulled; the edges between faces of the solid stay. A face outside solids becomes the solid of the prism, in either
+ * direction. The faces the prism makes come from the face pushed or pulled in mtk_edit_get_face_origins. A face that
+ * is not planar, a distance that is zero or not finite, are invalid arguments; a result that would not be valid, or
+ * that would leave nothing, is a kernel error.
+ */
+MTK_API mtk_status mtk_shape_push_pull(const mtk_shape* shape, int32_t face, double distance, mtk_edit** out_edit);
+
+/*
+ * The edges that bound a face, by their index in the shape, each once, wire after wire. out_count receives how many
+ * there are; the first ones, up to capacity, are written to out_edges, which may be null when capacity is 0.
+ */
+MTK_API mtk_status mtk_shape_face_edges(const mtk_shape* shape, int32_t face, int32_t* out_edges, int32_t capacity,
+                                        int32_t* out_count);
+
 /* The shape made by the edit, in a new handle. */
 MTK_API mtk_status mtk_edit_get_shape(const mtk_edit* edit, mtk_shape** out_shape);
 
 /*
  * For each face of the shape made by the edit, in order, the index of the face of the old shape it comes from: a part
- * of a face that was split comes from that face; a face made by the edit, from none, -1. out_origins has out_count
+ * of a face that was split comes from that face, as do the faces swept from a face; a face made by the edit from
+ * nothing, such as one closed by edges, from none, -1. out_origins has out_count
  * values, valid until mtk_edit_release.
  */
 MTK_API mtk_status mtk_edit_get_face_origins(const mtk_edit* edit, const int32_t** out_origins, int32_t* out_count);
