@@ -24,7 +24,7 @@ public sealed class ElementSelectionTests : IDisposable
         viewModel.ModelTree.SelectCommand.Execute(new Entity[] { box });
         ElementReference top = Face(box, normalZ: 1);
 
-        viewModel.PickCommand.Execute(Click(top));
+        viewModel.ViewInputCommand.Execute(Click(top));
 
         Assert.Equal([top], viewModel.SelectedElements);
         Assert.Null(viewModel.ModelTree.SelectedNode);
@@ -49,17 +49,17 @@ public sealed class ElementSelectionTests : IDisposable
         ElementReference first = new([box], ElementKind.Edge, 0), second = new([box], ElementKind.Edge, 1);
         ElementReference vertex = new([box], ElementKind.Vertex, 0);
 
-        viewModel.PickCommand.Execute(Click(first));
+        viewModel.ViewInputCommand.Execute(Click(first));
         Assert.Equal([new PropertyRow("Length", "100.0 mm")], viewModel.Properties.Rows);
-        viewModel.PickCommand.Execute(Click(second, KeyModifiers.Shift));
+        viewModel.ViewInputCommand.Execute(Click(second, KeyModifiers.Shift));
 
         Assert.Equal([first, second], viewModel.SelectedElements);
         Assert.Equal(("2 elements", "Selection"), (viewModel.Properties.Title, viewModel.Properties.Kind));
         Assert.Equal([new PropertyRow("Edges", "2"), new PropertyRow("Total length", "200.0 mm")],
             viewModel.Properties.Rows);
 
-        viewModel.PickCommand.Execute(Click(vertex, KeyModifiers.Shift));
-        viewModel.PickCommand.Execute(Click(first, KeyModifiers.Shift));
+        viewModel.ViewInputCommand.Execute(Click(vertex, KeyModifiers.Shift));
+        viewModel.ViewInputCommand.Execute(Click(first, KeyModifiers.Shift));
         Assert.Equal([second, vertex], viewModel.SelectedElements);
         Assert.Equal([new PropertyRow("Edges", "1"), new PropertyRow("Vertices", "1")], viewModel.Properties.Rows);
     }
@@ -68,10 +68,10 @@ public sealed class ElementSelectionTests : IDisposable
     public async Task AClickOnNothingClearsTheSelection()
     {
         (MainWindowViewModel viewModel, BrepEntity box) = await OpenBox();
-        viewModel.PickCommand.Execute(Click(new ElementReference([box], ElementKind.Vertex, 0)));
+        viewModel.ViewInputCommand.Execute(Click(new ElementReference([box], ElementKind.Vertex, 0)));
         Assert.StartsWith("Position", viewModel.Properties.Rows[0].Name, StringComparison.Ordinal);
 
-        viewModel.PickCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None));
+        viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None));
 
         Assert.Empty(viewModel.SelectedElements);
         Assert.False(viewModel.Properties.HasSelection);
@@ -81,7 +81,7 @@ public sealed class ElementSelectionTests : IDisposable
     public async Task SelectingANodeOfTheTreeUnselectsTheElements()
     {
         (MainWindowViewModel viewModel, BrepEntity box) = await OpenBox();
-        viewModel.PickCommand.Execute(Click(Face(box, normalZ: 1)));
+        viewModel.ViewInputCommand.Execute(Click(Face(box, normalZ: 1)));
 
         viewModel.ModelTree.SelectCommand.Execute(new Entity[] { box });
 
@@ -94,7 +94,7 @@ public sealed class ElementSelectionTests : IDisposable
     public async Task ReplacingTheShapeUnselectsItsElementsAndUndoDoesNotBringThemBack()
     {
         (MainWindowViewModel viewModel, BrepEntity box) = await OpenBox();
-        viewModel.PickCommand.Execute(Click(Face(box, normalZ: 1)));
+        viewModel.ViewInputCommand.Execute(Click(Face(box, normalZ: 1)));
 
         viewModel.Edit(new Core.Editing.ReplaceShapeCommand("Shrink", box, _kernel.MakeBox(10, 10, 10)));
 

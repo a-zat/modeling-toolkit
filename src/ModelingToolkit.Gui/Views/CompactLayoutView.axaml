@@ -156,14 +156,30 @@
       </Border>
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsSidePanelOpen}" />
 
-      <viewport:ViewportView x:Name="Viewport" Grid.Column="3" Document="{Binding Document}"
+      <DockPanel Grid.Column="3">
+      <!-- The tools of the 3D view, beside it: controls cannot float over its native view. -->
+      <Border DockPanel.Dock="Left" Classes="toolColumn">
+        <ItemsControl ItemsSource="{Binding Tools}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:ToolItemViewModel">
+              <ToggleButton Classes="tool" IsChecked="{Binding IsActive, Mode=OneWay}"
+                            Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ActivateToolCommand}"
+                            CommandParameter="{Binding}" ToolTip.Tip="{Binding Name}">
+                <PathIcon Data="{Binding Icon, Converter={x:Static views:ResourceConverter.Instance}}" />
+              </ToggleButton>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Border>
+      <viewport:ViewportView x:Name="Viewport" Document="{Binding Document}"
                              Selection="{Binding EmphasizedPath}"
-                             PickCommand="{Binding PickCommand}"
+                             InputCommand="{Binding ViewInputCommand}"
                              HighlightedElements="{Binding SelectedElements}"
                              WarningsCommand="{Binding ReportViewWarningsCommand}"
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
                              IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}" />
+      </DockPanel>
 
       <GridSplitter Grid.Column="4" IsVisible="{Binding Properties.HasSelection}" />
       <Border Grid.Column="5" Classes="sidePanel" IsVisible="{Binding Properties.HasSelection}">

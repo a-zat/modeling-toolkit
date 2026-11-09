@@ -33,8 +33,8 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<IReadOnlyList<Entity>?> SelectionProperty =
         AvaloniaProperty.Register<ViewportView, IReadOnlyList<Entity>?>(nameof(Selection));
 
-    public static readonly StyledProperty<ICommand?> PickCommandProperty =
-        AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(PickCommand));
+    public static readonly StyledProperty<ICommand?> InputCommandProperty =
+        AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(InputCommand));
 
     public static readonly StyledProperty<IReadOnlyList<ElementReference>?> HighlightedElementsProperty =
         AvaloniaProperty.Register<ViewportView, IReadOnlyList<ElementReference>?>(nameof(HighlightedElements));
@@ -65,6 +65,9 @@ public sealed class ViewportView : Border, IViewCamera
     private Document? _followedDocument;
     private KeyModifiers _clickModifiers; // held when a button was last released, which ends a click
     private int _clickCount = 1; // of the button last pressed, 2 for a double click
+    private ViewportPick _hovered = new(null, null, default, default, KeyModifiers.None); // as of the last frame
+    private bool _hoverMoved; // since the last frame, without buttons pressed
+    private KeyModifiers _hoverModifiers;
     private bool _updatePosted;
 
     public ViewportView()
@@ -113,14 +116,16 @@ public sealed class ViewportView : Border, IViewCamera
     }
 
     /// <summary>
-    /// Executed when the view is clicked, with all that the click picks (a <see cref="ViewportPick"/>): the path of the
-    /// mesh or shape under the pointer, a leaf of the model tree, the element of a shape, the point, and the modifier
-    /// keys. Clicks on the ViewCube turn the view instead.
+    /// Executed with each input of the pointer for the tools (a <see cref="ViewportPick"/>): what is under the pointer
+    /// as the view picks it, the path of the mesh or shape, a leaf of the model tree, the element of a shape and the
+    /// point, with the modifier keys. Hovers come once per frame at most; presses, drags and releases are those of the
+    /// left button, which turns the view too; a click follows the release that ends it. Clicks on the ViewCube turn the
+    /// view instead.
     /// </summary>
-    public ICommand? PickCommand
+    public ICommand? InputCommand
     {
-        get => GetValue(PickCommandProperty);
-        set => SetValue(PickCommandProperty, value);
+        get => GetValue(InputCommandProperty);
+        set => SetValue(InputCommandProperty, value);
     }
 
     /// <summary>The faces, edges and vertices of shapes shown as selected; null for none.</summary>
@@ -244,6 +249,10 @@ public sealed class ViewportView : Border, IViewCamera
         base.OnPointerPressed(e);
         _clickCount = e.ClickCount;
         SendButtons(e);
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            Raise(_hovered with { Modifiers = e.KeyModifiers, ClickCount = e.ClickCount, Kind = ViewportInputKind.Press });
+        }
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -251,13 +260,41 @@ public sealed class ViewportView : Border, IViewCamera
         base.OnPointerReleased(e);
         _clickModifiers = e.KeyModifiers;
         SendButtons(e);
+        if (e.InitialPressMouseButton == MouseButton.Left)
+        {
+            Raise(_hovered with { Modifiers = e.KeyModifiers, ClickCount = _clickCount, Kind = ViewportInputKind.Release });
+        }
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
         Send(viewer => viewer.MouseMove(Position(e), Buttons(e), OcctViewer.ToNative(e.KeyModifiers)));
+        PointerPointProperties buttons = e.GetCurrentPoint(this).Properties;
+        if (buttons.IsLeftButtonPressed)
+        {
+            Raise(_hovered with { Modifiers = e.KeyModifiers, Kind = ViewportInputKind.Drag });
+        }
+        else if (!buttons.IsRightButtonPressed && !buttons.IsMiddleButtonPressed)
+        {
+            // What is under the pointer is known once the next frame has detected it.
+            _hoverMoved = true;
+            _hoverModifiers = e.KeyModifiers;
+            RequestFrame();
+        }
     }
+
+    private void Raise(ViewportPick input)
+    {
+        if (InputCommand is { } command && command.CanExecute(input))
+        {
+            command.Execute(input);
+        }
+    }
+
+    private ViewportPick ToInput(ViewerPick pick, KeyModifiers modifiers, int clickCount, ViewportInputKind kind) =>
+        new(_shownScene?.PathOfShown(pick.Instance), _shownScene?.ElementOf(pick), pick.Point, pick.Normal, modifiers,
+            clickCount, kind);
 
     protected override void OnPointerExited(PointerEventArgs e)
     {
@@ -312,7 +349,9 @@ public sealed class ViewportView : Border, IViewCamera
         topLevel.RequestAnimationFrame(_ =>
         {
             _frameRequested = false;
-            ViewerPick? picked = null;
+            ViewerPick? picked = null, hovered = null;
+            bool hoverMoved = _hoverMoved;
+            _hoverMoved = false;
             Send(viewer =>
             {
                 bool animating = viewer.Redraw();
@@ -320,17 +359,21 @@ public sealed class ViewportView : Border, IViewCamera
                 {
                     picked = pick;
                 }
+                if (hoverMoved)
+                {
+                    hovered = viewer.GetHovered();
+                }
 
                 return animating;
             });
+            if (hovered is { } hover)
+            {
+                _hovered = ToInput(hover, _hoverModifiers, 1, ViewportInputKind.Hover);
+                Raise(_hovered);
+            }
             if (picked is { } pick)
             {
-                var detailed = new ViewportPick(_shownScene?.PathOfShown(pick.Instance), _shownScene?.ElementOf(pick),
-                    pick.Point, pick.Normal, _clickModifiers, _clickCount);
-                if (PickCommand is { } command && command.CanExecute(detailed))
-                {
-                    command.Execute(detailed);
-                }
+                Raise(ToInput(pick, _clickModifiers, _clickCount, ViewportInputKind.Click));
             }
         });
     }

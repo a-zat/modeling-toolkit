@@ -130,6 +130,12 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
     <Setter Property="Background" Value="{DynamicResource Mtk.Chrome}" />
   </Style>
+  <Style Selector="Border.toolColumn">
+    <Setter Property="Padding" Value="4,8" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Chrome}" />
+  </Style>
   <Style Selector="Border.sidePanel">
     <Setter Property="Background" Value="{DynamicResource Mtk.Chrome}" />
   </Style>

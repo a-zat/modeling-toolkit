@@ -25,12 +25,12 @@ public sealed class EditContextTests : IDisposable
     {
         await OpenParts();
 
-        _viewModel.PickCommand.Execute(Click(_left));
+        _viewModel.ViewInputCommand.Execute(Click(_left));
         Assert.Equal([_left], _viewModel.ModelTree.SelectedNode?.Path);
         Assert.Empty(_viewModel.SelectedElements);
         Assert.False(_viewModel.IsEditingBlock);
 
-        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
 
         Assert.True(_viewModel.IsEditingBlock);
         Assert.Equal("Left", _viewModel.ContextName);
@@ -42,9 +42,9 @@ public sealed class EditContextTests : IDisposable
     public async Task InABlockAClickSelectsAnElementOfItsShapes()
     {
         await OpenParts();
-        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
 
-        _viewModel.PickCommand.Execute(Click(_left));
+        _viewModel.ViewInputCommand.Execute(Click(_left));
 
         Assert.Equal([Face(_left)], _viewModel.SelectedElements);
         Assert.True(_viewModel.IsEditingBlock);
@@ -54,10 +54,10 @@ public sealed class EditContextTests : IDisposable
     public async Task AClickOutsideTheBlockLeavesItAndSelectsWhatWasClicked()
     {
         await OpenParts();
-        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
-        _viewModel.PickCommand.Execute(Click(_left));
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(Click(_left));
 
-        _viewModel.PickCommand.Execute(Click(_right));
+        _viewModel.ViewInputCommand.Execute(Click(_right));
 
         Assert.False(_viewModel.IsEditingBlock);
         Assert.Empty(_viewModel.SelectedElements);
@@ -68,12 +68,12 @@ public sealed class EditContextTests : IDisposable
     public async Task AClickOnNothingOrEscapeLeavesTheBlock()
     {
         await OpenParts();
-        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
-        _viewModel.PickCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None));
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None));
         Assert.False(_viewModel.IsEditingBlock);
 
-        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
-        _viewModel.PickCommand.Execute(Click(_left));
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(Click(_left));
         _viewModel.LeaveContextCommand.Execute(null);
 
         Assert.False(_viewModel.IsEditingBlock);
@@ -104,7 +104,7 @@ public sealed class EditContextTests : IDisposable
         await OpenParts();
         Assert.Null(_viewModel.EmphasizedPath);
 
-        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
         Assert.Equal([_left], _viewModel.EmphasizedPath);
         _viewModel.ModelTree.SelectCommand.Execute(new Entity[] { _left, _box });
         Assert.Equal([_left, _box], _viewModel.EmphasizedPath);
@@ -119,7 +119,7 @@ public sealed class EditContextTests : IDisposable
         await OpenParts();
         ModelNodeViewModel left = _viewModel.ModelTree.Roots[0].Children[0];
 
-        _viewModel.PickCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
         Assert.True(left.IsContext);
         Assert.True(left.IsExpanded);
         Assert.Equal("1 solid · 6 faces · 12 edges", Assert.Single(left.Children).Detail);
@@ -141,6 +141,43 @@ public sealed class EditContextTests : IDisposable
         _viewModel.Edit(new Core.Editing.ReplaceShapeCommand("Cylinder", _box, _kernel.MakeCylinder(5, 10)));
 
         Assert.Equal("1 solid · 3 faces · 3 edges", geometry.Detail);
+    }
+
+    [Fact]
+    public async Task TheSelectToolIsActiveAndItsHintFollowsThePointer()
+    {
+        await OpenParts();
+        ToolItemViewModel select = Assert.Single(_viewModel.Tools);
+        Assert.True(select.IsActive);
+        Assert.Equal("Select", select.Name);
+        Assert.Equal("Click an object to select it", _viewModel.ToolHint);
+        var changes = new List<string?>();
+        _viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        _viewModel.ViewInputCommand.Execute(Click(_right) with { Kind = ViewportInputKind.Hover });
+
+        Assert.Equal("Click to select Right, double-click to edit its block", _viewModel.ToolHint);
+        Assert.Contains(nameof(MainWindowViewModel.ToolHint), changes);
+        Assert.Null(_viewModel.ModelTree.SelectedNode); // a hover selects nothing
+    }
+
+    [Fact]
+    public async Task EscapeClearsTheSelectionThenLeavesTheBlock()
+    {
+        await OpenParts();
+        _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
+        _viewModel.ViewInputCommand.Execute(Click(_left));
+
+        _viewModel.EscapeCommand.Execute(null);
+        Assert.Empty(_viewModel.SelectedElements);
+        Assert.True(_viewModel.IsEditingBlock);
+
+        _viewModel.ViewInputCommand.Execute(Click(_left) with { Kind = ViewportInputKind.Hover });
+        Assert.StartsWith("Click to select the face", _viewModel.ToolHint, StringComparison.Ordinal);
+
+        _viewModel.EscapeCommand.Execute(null);
+        Assert.False(_viewModel.IsEditingBlock);
+        Assert.Equal("Click to select Left, double-click to edit its block", _viewModel.ToolHint); // in the model now
     }
 
     private ElementReference Face(BlockReference reference) => new([reference, _box], ElementKind.Face, 0);

@@ -2,6 +2,8 @@ using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModelingToolkit.Core.Editing;
+using ModelingToolkit.Core.Editing.Tools;
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
@@ -37,6 +39,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         Properties.Edit = Edit;
         ModelTree.EnterCommand = EnterNodeCommand;
+        _toolHost = new ToolHost(this);
+        Tools = [new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true }];
+        ActiveTool.HintChanged += OnToolHintChanged;
         ModelTree.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ModelTreeViewModel.SelectedNode))
@@ -169,62 +174,107 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ? string.Empty
         : string.Join(" › ", Context.Path.Select(reference => reference.Name ?? reference.Block.Name));
 
-    /// <summary>
-    /// Selects what a click of the 3D view picks, in the context: a reference of the block being edited, which a double
-    /// click enters; the face, edge or vertex of a shape of that block, Shift adding it to the elements selected or
-    /// taking it out; a mesh of that block. A click on what is outside the context leaves it, to the block that has
-    /// what was clicked, and a click on nothing to the model.
-    /// </summary>
+    /// <summary>The tools of the tool column.</summary>
+    public IReadOnlyList<ToolItemViewModel> Tools { get; }
+
+    /// <summary>The tool that the input of the 3D view goes to; it works once a document is open.</summary>
+    public Tool ActiveTool => Tools.Single(item => item.IsActive).Tool;
+
+    /// <summary>What the active tool expects next.</summary>
+    public string ToolHint => ActiveTool.IsActive ? ActiveTool.Hint : string.Empty;
+
     [RelayCommand]
-    private void Pick(ViewportPick pick)
+    private void ActivateTool(ToolItemViewModel item)
     {
-        if (Context is not { } context || Elements is not { } elements)
+        Tool previous = ActiveTool;
+        if (ReferenceEquals(item.Tool, previous))
         {
-            return;
-        }
-        if (pick.Path is null)
-        {
-            ModelTree.SelectedNode = null;
-            elements.Clear();
-            context.LeaveAll();
             return;
         }
 
-        IReadOnlyList<Entity> within = LeaveTo(pick.Path);
-        if (within[0] is BlockReference reference)
+        previous.Deactivate();
+        previous.HintChanged -= OnToolHintChanged;
+        foreach (ToolItemViewModel tool in Tools)
         {
-            if (pick.ClickCount == 2)
-            {
-                ModelTree.SelectedNode = null;
-                context.Enter(reference);
-            }
-            else
-            {
-                elements.Clear();
-                ModelTree.SelectCommand.Execute(pick.Path.Take(pick.Path.Count - within.Count + 1).ToArray());
-            }
+            tool.IsActive = ReferenceEquals(tool, item);
         }
-        else if (pick.ClickCount > 1)
+        item.Tool.HintChanged += OnToolHintChanged;
+        if (Session is not null)
         {
-            // The first click selected it.
+            item.Tool.Activate(_toolHost);
         }
-        else if (pick.Element is { } element)
+        OnPropertyChanged(nameof(ActiveTool));
+        OnPropertyChanged(nameof(ToolHint));
+    }
+
+    private void OnToolHintChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(ToolHint));
+
+    /// <summary>Passes an input of the pointer in the 3D view to the active tool.</summary>
+    [RelayCommand]
+    private void ViewInput(ViewportPick input)
+    {
+        Tool tool = ActiveTool;
+        if (!tool.IsActive || IsBusy)
         {
-            ModelTree.SelectedNode = null;
-            if (pick.Modifiers.HasFlag(KeyModifiers.Shift))
-            {
-                elements.Toggle(element);
-            }
-            else
-            {
-                elements.Select(element);
-            }
+            return;
         }
-        else
+
+        var toolInput = new ToolInput(
+            new ToolPick(input.Path, input.Element, input.Point, new Vector3d(input.Normal.X, input.Normal.Y, input.Normal.Z)),
+            ToToolModifiers(input.Modifiers), input.ClickCount);
+        switch (input.Kind)
         {
-            elements.Clear();
-            ModelTree.SelectCommand.Execute(pick.Path);
+            case ViewportInputKind.Hover:
+                _lastHover = toolInput;
+                tool.Hover(toolInput);
+                break;
+            case ViewportInputKind.Press:
+                tool.Press(toolInput);
+                break;
+            case ViewportInputKind.Drag:
+                tool.Drag(toolInput);
+                break;
+            case ViewportInputKind.Release:
+                tool.Release(toolInput);
+                break;
+            default:
+                tool.Click(toolInput);
+                break;
         }
+    }
+
+    /// <summary>Escape goes to the active tool, and leaves the block being edited if the tool does not take it.</summary>
+    [RelayCommand]
+    private void Escape()
+    {
+        if (ActiveTool is { IsActive: true } tool && tool.Key(ToolKey.Escape, ToolModifiers.None))
+        {
+            return;
+        }
+        LeaveContext();
+    }
+
+    private static ToolModifiers ToToolModifiers(KeyModifiers modifiers) =>
+        (modifiers.HasFlag(KeyModifiers.Shift) ? ToolModifiers.Shift : ToolModifiers.None) |
+        (modifiers.HasFlag(KeyModifiers.Control) ? ToolModifiers.Control : ToolModifiers.None) |
+        (modifiers.HasFlag(KeyModifiers.Alt) ? ToolModifiers.Alt : ToolModifiers.None) |
+        (modifiers.HasFlag(KeyModifiers.Meta) ? ToolModifiers.Meta : ToolModifiers.None);
+
+    private readonly ToolHost _toolHost;
+    private ToolInput? _lastHover; // what is under the pointer, for the tool to look at again when the context changes
+
+    // What the tools work on: the open document, and the selection, whose entity is the node of the model tree.
+    private sealed class ToolHost(MainWindowViewModel owner) : IToolHost
+    {
+        public EditSession Session => owner.Session!;
+
+        public EditContext Context => owner.Context!;
+
+        public ElementSelection Elements => owner.Elements!;
+
+        public IReadOnlyList<Entity>? SelectedEntity => owner.ModelTree.SelectedNode?.Path;
+
+        public void SelectEntity(IReadOnlyList<Entity>? path) => owner.ModelTree.SelectCommand.Execute(path);
     }
 
     // Leaves the context until it holds the path of entities, and gives the path from the block being edited.
@@ -280,6 +330,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         Elements?.Clear();
         ModelTree.ShowContext(Context?.Path ?? []);
+        if (_lastHover is { } hover && ActiveTool.IsActive)
+        {
+            ActiveTool.Hover(hover);
+        }
         OnPropertyChanged(nameof(IsEditingBlock));
         OnPropertyChanged(nameof(ContextName));
         OnPropertyChanged(nameof(EmphasizedPath));
@@ -705,7 +759,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SelectedElements = [];
         Context = new EditContext(document);
         Context.Changed += OnContextChanged;
+        _lastHover = null; // of the previous document
         OnContextChanged(this, EventArgs.Empty);
+        // The tool starts again on the new document.
+        ActiveTool.Deactivate();
+        ActiveTool.Activate(_toolHost);
+        OnPropertyChanged(nameof(ToolHint));
 
         Properties.Know(document, statistics);
         ModelTree.Show(document);
