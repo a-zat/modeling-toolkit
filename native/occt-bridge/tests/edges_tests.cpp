@@ -535,4 +535,86 @@ TEST(FaceEdges, GivesTheEdgesThatBoundAFace) {
     EXPECT_EQ(mtk_shape_face_edges(face.get(), 0, nullptr, 2, &count), MTK_STATUS_INVALID_ARGUMENT);
 }
 
+Edited remove(const ShapePtr& shape, const std::vector<int32_t>& faces, const std::vector<int32_t>& edges) {
+    mtk_edit* edit = nullptr;
+    EXPECT_EQ(mtk_shape_remove_elements(shape.get(), faces.data(), static_cast<int32_t>(faces.size()), edges.data(),
+                                        static_cast<int32_t>(edges.size()), &edit),
+              MTK_STATUS_OK)
+        << mtk_last_error_message();
+    Edited result;
+    if (edit == nullptr) {
+        return result;
+    }
+    mtk_shape* made = nullptr;
+    EXPECT_EQ(mtk_edit_get_shape(edit, &made), MTK_STATUS_OK);
+    result.shape.reset(made);
+    const int32_t* origins = nullptr;
+    int32_t count = 0;
+    EXPECT_EQ(mtk_edit_get_face_origins(edit, &origins, &count), MTK_STATUS_OK);
+    result.origins.assign(origins, origins + count);
+    mtk_edit_release(edit);
+    return result;
+}
+
+TEST(RemoveElements, AFaceOfABoxLeavesTheOtherFacesAndAllTheEdges) {
+    ShapePtr solid = box(100);
+    const int32_t top = faces_on(solid, {0, 0, 1}, 100)[0];
+    Edited open = remove(solid, {top}, {});
+    const Counts counts = counts_of(open.shape);
+    EXPECT_EQ(counts.solids, 0);
+    EXPECT_EQ(counts.faces, 5);
+    EXPECT_EQ(counts.edges, 12);
+    EXPECT_EQ(counts.vertices, 8);
+    EXPECT_TRUE(is_valid(open.shape));
+    EXPECT_EQ(std::count(open.origins.begin(), open.origins.end(), top), 0);
+    EXPECT_EQ(std::set<int32_t>(open.origins.begin(), open.origins.end()).size(), 5u);
+    for (int32_t face = 0; face < counts.faces; ++face) { // the faces still face out
+        const Face info = face_of(open.shape, face);
+        const Face before = face_of(solid, open.origins[face]);
+        EXPECT_EQ(info.normal, before.normal);
+    }
+}
+
+TEST(RemoveElements, AnEdgeTakesTheFacesItBounds) {
+    ShapePtr face = square(100);
+    Edited split = add(face.get(), {line({50, 0, 0}, {50, 100, 0})});
+    ASSERT_EQ(counts_of(split.shape).faces, 2);
+    // The edge across, the one that two faces share.
+    int32_t across = -1;
+    for (int32_t edge = 0; edge < counts_of(split.shape).edges; ++edge) {
+        mtk_edge_info info{};
+        ASSERT_EQ(mtk_shape_edge_info(split.shape.get(), edge, &info), MTK_STATUS_OK);
+        if (std::abs(info.start[0] - 50) < 1e-9 && std::abs(info.end[0] - 50) < 1e-9) {
+            across = edge;
+        }
+    }
+    ASSERT_GE(across, 0);
+
+    Edited erased = remove(split.shape, {}, {across});
+    const Counts counts = counts_of(erased.shape);
+    EXPECT_EQ(counts.faces, 0);
+    EXPECT_EQ(counts.edges, 6); // the outline, split where the edge was
+    EXPECT_EQ(counts.vertices, 6);
+
+    Edited one = remove(split.shape, {0}, {});
+    EXPECT_EQ(counts_of(one.shape).faces, 1);
+    EXPECT_EQ(counts_of(one.shape).edges, 7);
+    EXPECT_EQ(one.origins, std::vector<int32_t>{1});
+}
+
+TEST(RemoveElements, ErasingEverythingLeavesNothingAndRejectsBadIndices) {
+    ShapePtr face = square(100);
+    Edited nothing = remove(face, {}, {0, 1, 2, 3});
+    EXPECT_EQ(counts_of(nothing.shape).faces, 0);
+    EXPECT_EQ(counts_of(nothing.shape).edges, 0);
+    EXPECT_EQ(counts_of(nothing.shape).vertices, 0);
+
+    mtk_edit* edit = nullptr;
+    const int32_t bad = 4;
+    EXPECT_EQ(mtk_shape_remove_elements(face.get(), nullptr, 0, &bad, 1, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_remove_elements(face.get(), &bad, 1, nullptr, 0, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_remove_elements(face.get(), nullptr, 1, nullptr, 0, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(edit, nullptr);
+}
+
 } // namespace

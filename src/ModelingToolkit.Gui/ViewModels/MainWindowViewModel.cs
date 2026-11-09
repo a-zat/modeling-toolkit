@@ -123,8 +123,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string RedoTip =>
         $"Redo{(CanRedo ? " " + Session!.RedoName : "")} ({(OperatingSystem.IsMacOS() ? Shortcut("Z", shift: true) : Shortcut("Y"))})";
 
-    /// <summary>Whether the selected node is an entity, which can be deleted.</summary>
-    public bool CanDelete => Session is not null && !IsBusy && ModelTree.SelectedNode?.Entity is not null;
+    /// <summary>Whether faces or edges are selected, which can be erased, or else an entity, which can be deleted.</summary>
+    public bool CanDelete => Session is not null && !IsBusy &&
+        (SelectedElements.Any(element => element.Kind != ElementKind.Vertex) || ModelTree.SelectedNode?.Entity is not null);
 
     /// <summary>
     /// Runs a command on the open document; a command that refuses its change reports why in the status bar. Nothing
@@ -421,6 +422,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         SelectedElements = Elements!.Elements;
         ShowProperties();
+        OnEditingChanged();
     }
 
     // The elements selected, or else the node, or else the model.
@@ -441,7 +443,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand(CanExecute = nameof(CanDelete))]
-    private void Delete() => Edit(new DeleteCommand(ModelTree.SelectedNode!.Entity!));
+    private void Delete()
+    {
+        if (SelectedElements.Count == 0)
+        {
+            Edit(new DeleteCommand(ModelTree.SelectedNode!.Entity!));
+            return;
+        }
+        try
+        {
+            if (EraseCommand.Of(SelectedElements) is { } erase)
+            {
+                Edit(erase);
+            }
+        }
+        catch (Exception exception) when (exception is GeometryKernelException or ArgumentException)
+        {
+            StatusMessage = $"The selection could not be erased: {exception.Message}";
+        }
+    }
 
     // What can be edited, undone and redone follows the session, the selection and the file operations.
     private void OnEditingChanged()

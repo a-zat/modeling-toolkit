@@ -6,7 +6,7 @@ namespace ModelingToolkit.Kernel.Occt.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_BRIDGE_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 16;
+    public const int AbiVersion = 17;
 
     private const string LibraryName = "mtk_occt_bridge";
 
@@ -64,6 +64,11 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_push_pull")]
     public static partial NativeStatus ShapePushPull(ShapeHandle shape, int face, double distance, out EditHandle edit);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_remove_elements")]
+    public static partial NativeStatus ShapeRemoveElements(
+        ShapeHandle shape, ReadOnlySpan<int> faces, int faceCount, ReadOnlySpan<int> edges, int edgeCount,
+        out EditHandle edit);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_face_edges")]
     public static partial NativeStatus ShapeFaceEdges(

@@ -739,6 +739,93 @@ mtk_status mtk_shape_push_pull(const mtk_shape* shape, int32_t face, double dist
     });
 }
 
+mtk_status mtk_shape_remove_elements(const mtk_shape* shape, const int32_t* faces, int32_t face_count,
+                                     const int32_t* edges, int32_t edge_count, mtk_edit** out_edit) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_edit);
+        if (shape == nullptr || out_edit == nullptr || face_count < 0 || edge_count < 0 ||
+            (faces == nullptr && face_count > 0) || (edges == nullptr && edge_count > 0)) {
+            return mtk::invalid_argument("shape and out_edit must not be null, nor the faces and edges when counted.");
+        }
+        ShapeMap all_faces, all_edges, removed_faces, removed_edges;
+        TopExp::MapShapes(shape->value, TopAbs_FACE, all_faces);
+        TopExp::MapShapes(shape->value, TopAbs_EDGE, all_edges);
+        AncestorMap faces_of;
+        TopExp::MapShapesAndAncestors(shape->value, TopAbs_EDGE, TopAbs_FACE, faces_of);
+        for (int32_t i = 0; i < face_count; ++i) {
+            if (faces[i] < 0 || faces[i] >= all_faces.Extent()) {
+                return mtk::invalid_argument("A face is not a face of the shape.");
+            }
+            removed_faces.Add(all_faces(faces[i] + 1));
+        }
+        for (int32_t i = 0; i < edge_count; ++i) {
+            if (edges[i] < 0 || edges[i] >= all_edges.Extent()) {
+                return mtk::invalid_argument("An edge is not an edge of the shape.");
+            }
+            const TopoDS_Shape& edge = all_edges(edges[i] + 1);
+            removed_edges.Add(edge);
+            for (const TopoDS_Shape& face : faces_of.FindFromKey(edge)) {
+                removed_faces.Add(face);
+            }
+        }
+
+        BRep_Builder builder;
+        TopoDS_Compound result;
+        builder.MakeCompound(result);
+        for (const TopoDS_Shape& item : items_of(shape->value)) {
+            switch (item.ShapeType()) {
+            case TopAbs_EDGE:
+                if (!removed_edges.Contains(item)) {
+                    builder.Add(result, item);
+                }
+                break;
+            case TopAbs_VERTEX:
+                builder.Add(result, item);
+                break;
+            default: {
+                bool touched = false;
+                for (TopExp_Explorer face(item, TopAbs_FACE); face.More() && !touched; face.Next()) {
+                    touched = removed_faces.Contains(face.Current());
+                }
+                if (!touched) {
+                    builder.Add(result, item);
+                    break;
+                }
+                // The faces that remain, as the item oriented them, so that they keep facing out.
+                ShapeMap remaining;
+                for (TopExp_Explorer face(item, TopAbs_FACE); face.More(); face.Next()) {
+                    if (!removed_faces.Contains(face.Current()) && !remaining.Contains(face.Current())) {
+                        remaining.Add(face.Current());
+                        builder.Add(result, face.Current());
+                    }
+                }
+                break;
+            }
+            }
+        }
+        // The edges of the faces erased that no face holds any more stay, unless erased too.
+        ShapeMap remaining_edges;
+        TopExp::MapShapes(result, TopAbs_EDGE, remaining_edges);
+        for (int i = 1; i <= removed_faces.Extent(); ++i) {
+            for (TopExp_Explorer edge(removed_faces(i), TopAbs_EDGE); edge.More(); edge.Next()) {
+                if (!removed_edges.Contains(edge.Current()) && !remaining_edges.Contains(edge.Current())) {
+                    remaining_edges.Add(edge.Current());
+                    builder.Add(result, edge.Current());
+                }
+            }
+        }
+
+        ShapeMap result_faces;
+        TopExp::MapShapes(result, TopAbs_FACE, result_faces);
+        std::vector<int32_t> origins;
+        for (int i = 1; i <= result_faces.Extent(); ++i) {
+            origins.push_back(all_faces.FindIndex(result_faces(i)) - 1);
+        }
+        *out_edit = new mtk_edit{result, std::move(origins)};
+        return MTK_STATUS_OK;
+    });
+}
+
 mtk_status mtk_shape_face_edges(const mtk_shape* shape, int32_t face, int32_t* out_edges, int32_t capacity,
                                 int32_t* out_count) {
     return mtk::guarded([&] {

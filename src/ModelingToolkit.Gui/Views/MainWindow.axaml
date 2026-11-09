@@ -24,6 +24,7 @@
     <!-- The fields that take text handle these keys first. -->
     <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" Command="{Binding DeleteCommand}" />
+    <KeyBinding Gesture="Back" Command="{Binding DeleteCommand}" />
     <KeyBinding Gesture="Escape" Command="{Binding EscapeCommand}" />
     <!-- The arrows lock the direction of the drawing tools on an axis. -->
     <KeyBinding Gesture="Right" Command="{Binding PressToolKeyCommand}" CommandParameter="{x:Static tools:ToolKey.Right}" />

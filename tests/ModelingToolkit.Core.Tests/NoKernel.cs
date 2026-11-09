@@ -52,6 +52,9 @@ internal sealed class NoKernel : IGeometryKernel
 
     public ShapeEdit PushPull(IKernelShape shape, int face, double distance) => throw new NotSupportedException();
 
+    public ShapeEdit RemoveElements(IKernelShape shape, IReadOnlyList<int> faces, IReadOnlyList<int> edges) =>
+        throw new NotSupportedException();
+
     public IReadOnlyList<int> GetFaceEdges(IKernelShape shape, int face) => throw new NotSupportedException();
 
     public Point3d GetVertexPoint(IKernelShape shape, int vertex) => throw new NotSupportedException();

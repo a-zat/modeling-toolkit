@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 16
+#define MTK_OCCT_BRIDGE_ABI_VERSION 17
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -177,6 +177,15 @@ MTK_API mtk_status mtk_shape_push_pull(const mtk_shape* shape, int32_t face, dou
  */
 MTK_API mtk_status mtk_shape_face_edges(const mtk_shape* shape, int32_t face, int32_t* out_edges, int32_t capacity,
                                         int32_t* out_count);
+
+/*
+ * Erases faces and edges of a shape, by their index, and gives the result in a new edit; the shape is not changed. A
+ * face erased leaves its edges; an edge erased takes with it the faces it bounds, and the vertices that no edge holds
+ * any more. A solid or a shell that loses a face is left as the faces that remain, still sharing their edges. Erasing
+ * everything gives an empty shape. An index that the shape does not have is an invalid argument.
+ */
+MTK_API mtk_status mtk_shape_remove_elements(const mtk_shape* shape, const int32_t* faces, int32_t face_count,
+                                             const int32_t* edges, int32_t edge_count, mtk_edit** out_edit);
 
 /* The shape made by the edit, in a new handle. */
 MTK_API mtk_status mtk_edit_get_shape(const mtk_edit* edit, mtk_shape** out_shape);

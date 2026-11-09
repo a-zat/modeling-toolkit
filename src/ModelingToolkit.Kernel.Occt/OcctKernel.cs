@@ -175,6 +175,17 @@ public sealed class OcctKernel : IGeometryKernel
         return Take(edit);
     }
 
+    public ShapeEdit RemoveElements(IKernelShape shape, IReadOnlyList<int> faces, IReadOnlyList<int> edges)
+    {
+        ArgumentNullException.ThrowIfNull(faces);
+        ArgumentNullException.ThrowIfNull(edges);
+        int[] faceIndices = [.. faces];
+        int[] edgeIndices = [.. edges];
+        NativeMethods.ShapeRemoveElements(Unwrap(shape), faceIndices, faceIndices.Length, edgeIndices,
+            edgeIndices.Length, out EditHandle edit).ThrowIfFailed();
+        return Take(edit);
+    }
+
     public IReadOnlyList<int> GetFaceEdges(IKernelShape shape, int face)
     {
         NativeMethods.ShapeFaceEdges(Unwrap(shape), face, [], 0, out int count).ThrowIfOutOfRange(nameof(face));

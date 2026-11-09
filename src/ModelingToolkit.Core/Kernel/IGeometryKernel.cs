@@ -119,6 +119,14 @@ public interface IGeometryKernel
     /// <summary>The area of a face and its plane, if it has one, in the coordinates of the shape.</summary>
     FaceInfo GetFaceInfo(IKernelShape shape, int face);
 
+    /// <summary>
+    /// Erases faces and edges of a shape, in a new shape. A face erased leaves its edges; an edge erased takes the
+    /// faces it bounds with it. A solid that loses a face is left as the faces that remain. Erasing everything gives an
+    /// empty shape, without faces or edges.
+    /// </summary>
+    /// <exception cref="ArgumentException">An index is not one of the shape.</exception>
+    ShapeEdit RemoveElements(IKernelShape shape, IReadOnlyList<int> faces, IReadOnlyList<int> edges);
+
     /// <summary>The edges that bound a face, each once, wire after wire.</summary>
     IReadOnlyList<int> GetFaceEdges(IKernelShape shape, int face);
 
