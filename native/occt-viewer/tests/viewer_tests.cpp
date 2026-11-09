@@ -447,7 +447,8 @@ TEST(Viewer, ShowsTheFacesOfAShapeInMaterialsOfTheirOwn) {
     const int32_t grey_material = add_material(viewer.get(), grey());
     const int32_t red = add_material(viewer.get(), grey());
     const std::array<int32_t, 2> face_materials{red, -1}; // the second face takes the material of the instance
-    mtk_viewer_mesh mesh = SquareShape().mesh();
+    const SquareShape square_shape; // the mesh points into it
+    mtk_viewer_mesh mesh = square_shape.mesh();
     mesh.face_materials = face_materials.data();
     const int32_t shape = add_mesh(viewer.get(), mesh);
     const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
@@ -489,7 +490,8 @@ TEST(Viewer, ShowsMeshesWithEdgesOfTheirOwnInEveryDisplayMode) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);
     const int32_t outlined = add_mesh(viewer.get(), OutlinedSquare().mesh());
-    mtk_viewer_mesh without_edges = Square().mesh();
+    const Square square; // the mesh points into it
+    mtk_viewer_mesh without_edges = square.mesh();
     const int32_t none = 0;
     without_edges.edge_first_points = &none; // edges of its own, but none: not those of the triangles either
     const int32_t bare = add_mesh(viewer.get(), without_edges);
@@ -517,9 +519,10 @@ TEST(Viewer, RejectsEdgesItCannotShow) {
     one_point.edge_first_points = {0, 1};
     OutlinedSquare infinite;
     infinite.edge_points[7] = std::numeric_limits<double>::infinity();
-    mtk_viewer_mesh without_points = OutlinedSquare().mesh();
+    const OutlinedSquare outlined; // the meshes point into it
+    mtk_viewer_mesh without_points = outlined.mesh();
     without_points.edge_points = nullptr;
-    mtk_viewer_mesh negative = OutlinedSquare().mesh();
+    mtk_viewer_mesh negative = outlined.mesh();
     negative.edge_count = -1;
 
     for (const mtk_viewer_mesh& mesh :
@@ -733,7 +736,8 @@ TEST(Viewer, NullArgumentsAreRejected) {
     EXPECT_EQ(mtk_viewer_redraw(nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_redraw(viewer.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_get_diagnostics(nullptr, &text), MTK_STATUS_INVALID_ARGUMENT);
-    const mtk_viewer_mesh mesh = Square().mesh();
+    const Square square; // the mesh points into it
+    const mtk_viewer_mesh mesh = square.mesh();
     const mtk_viewer_material material = grey();
     const uint8_t pixel[4] = {};
     EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), nullptr, &flag), MTK_STATUS_INVALID_ARGUMENT);
