@@ -1,6 +1,5 @@
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
-using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Editing.Tools;
 
@@ -9,30 +8,25 @@ namespace ModelingToolkit.Core.Editing.Tools;
 /// from, a second click the point to move to, both snapped to what is inferred, or a distance typed towards the
 /// pointer. The arrow keys lock the direction on an axis; with Option (Alt) held, a copy is moved and the entity stays.
 /// </summary>
-public sealed class MoveTool(IGeometryKernel kernel) : DrawingTool(kernel)
+public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
 {
     private const string StartHint = "Click a point of the selection, or of what to move";
     private const string NextHint = "Click where to move or type the distance · arrows lock · ⌥ copies";
 
-    private Entity? _target;
     private Point3d? _start;
-    private bool _copy;
-    private IReadOnlyList<PreviewLine> _box = [];
 
     public override string Name => "Move";
 
     public override void Hover(ToolInput input)
     {
-        ArgumentNullException.ThrowIfNull(input);
-        _copy = input.Modifiers.HasFlag(ToolModifiers.Alt);
+        Follow(input);
         Last = Infer(input.Pick, _start, Locked);
         Show();
     }
 
     public override void Click(ToolInput input)
     {
-        ArgumentNullException.ThrowIfNull(input);
-        _copy = input.Modifiers.HasFlag(ToolModifiers.Alt);
+        Follow(input);
         Inference point = Infer(input.Pick, _start, Locked);
         Last = point;
         if (point.Kind == InferenceKind.None)
@@ -41,16 +35,12 @@ public sealed class MoveTool(IGeometryKernel kernel) : DrawingTool(kernel)
         }
         if (_start is not { } start)
         {
-            if (TargetOf(input.Pick) is not { } target)
+            if (TakeTarget(input.Pick))
             {
-                Host.Report("Select an object, or click on one, to move it.");
-                return;
+                _start = point.Point;
+                Hint = NextHint;
+                Show();
             }
-            _target = target;
-            _start = point.Point;
-            _box = BoxOf(target);
-            Hint = NextHint;
-            Show();
             return;
         }
         MoveTo(start, point.Point);
@@ -86,63 +76,23 @@ public sealed class MoveTool(IGeometryKernel kernel) : DrawingTool(kernel)
         return true;
     }
 
-    // The entity of the block being edited that holds the selection, or else what is under the pointer.
-    private Entity? TargetOf(ToolPick pick)
-    {
-        IReadOnlyList<Entity>? path = Host.SelectedEntity ?? pick.Path;
-        return path is null ? null : Host.Context.Within(path) is { Count: > 0 } within ? within[0] : null;
-    }
-
-    // The edges of the box of an entity, in the model space.
-    private List<PreviewLine> BoxOf(Entity entity)
-    {
-        BoundingBox box = entity.GetBoundingBox();
-        if (box.IsEmpty)
-        {
-            return [];
-        }
-        Transform placement = Host.Context.Placement;
-        Point3d Corner(int i) => placement.Apply(new Point3d(
-            (i & 1) == 0 ? box.Min.X : box.Max.X, (i & 2) == 0 ? box.Min.Y : box.Max.Y, (i & 4) == 0 ? box.Min.Z : box.Max.Z));
-        var lines = new List<PreviewLine>();
-        for (int i = 0; i < 8; i++)
-        {
-            foreach (int bit in new[] { 1, 2, 4 })
-            {
-                if ((i & bit) == 0)
-                {
-                    lines.Add(new PreviewLine(Corner(i), Corner(i | bit)));
-                }
-            }
-        }
-        return lines;
-    }
-
     private void MoveTo(Point3d start, Point3d end)
     {
-        if (_target is not { } target || start.DistanceTo(end) < 1e-6)
+        Vector3d along = end - start;
+        if (along.Length < 1e-6)
         {
             return;
         }
-        Vector3d along = Host.Context.Placement.Inverse().ApplyVector(end - start);
-        try
+        if (Apply(Transform.Translation(along.X, along.Y, along.Z)))
         {
-            Host.Session.Execute(TransformCommands.Of(
-                _copy ? "Copy" : "Move", target, Transform.Translation(along.X, along.Y, along.Z), _copy));
+            Restart();
         }
-        catch (Exception exception) when (exception is GeometryKernelException or ArgumentException or EditRefusedException)
-        {
-            Host.Report($"The object could not be moved: {exception.Message}");
-            return;
-        }
-        Restart();
     }
 
     protected override void Restart()
     {
-        _target = null;
         _start = null;
-        _box = [];
+        ReleaseTarget();
         Unlock();
         MeasurementName = "Distance";
         Hint = StartHint;
@@ -162,7 +112,7 @@ public sealed class MoveTool(IGeometryKernel kernel) : DrawingTool(kernel)
             Vector3d offset = last.Point - start;
             InferenceKind along = last.Direction is null ? InferenceKind.None : last.Kind;
             Host.ShowPreview(new ToolPreview(
-                [new PreviewLine(start, last.Point, along), .. _box.Select(line => new PreviewLine(line.Start + offset, line.End + offset))],
+                [new PreviewLine(start, last.Point, along), .. Transformed(Box, Transform.Translation(offset.X, offset.Y, offset.Z))],
                 last));
             return;
         }

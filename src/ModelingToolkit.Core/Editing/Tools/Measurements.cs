@@ -16,6 +16,29 @@ public static class Measurements
     public static string Format(double first, double second) =>
         $"{Math.Round(first, 1).ToString("0.#", CultureInfo.InvariantCulture)} × {Format(second)}";
 
+    /// <summary>An angle in degrees as the field shows it: "45°", "-12.5°".</summary>
+    public static string FormatAngle(double degrees) =>
+        $"{Math.Round(degrees, 1).ToString("0.#", CultureInfo.InvariantCulture)}°";
+
+    /// <summary>
+    /// An angle typed, in degrees: a number, possibly negative, followed or not by "°" or "deg"; the decimal separator
+    /// is a point or a comma. False for anything else, and for zero.
+    /// </summary>
+    public static bool TryParseAngle(string? text, out double degrees)
+    {
+        string value = (text ?? string.Empty).Trim().ToLowerInvariant().Replace(',', '.');
+        foreach (string unit in new[] { "°", "deg" })
+        {
+            if (value.EndsWith(unit, StringComparison.Ordinal))
+            {
+                value = value[..^unit.Length].TrimEnd();
+                break;
+            }
+        }
+        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out degrees) &&
+            double.IsFinite(degrees) && degrees != 0;
+    }
+
     /// <summary>
     /// Two lengths typed, as for the sides of a rectangle: separated by a comma, a semicolon, "x" or "×", each as
     /// <see cref="TryParseLength"/> takes it, with a point as the decimal separator.

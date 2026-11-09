@@ -24,6 +24,27 @@ public sealed record Transform(
         0, 1, 0, y,
         0, 0, 1, z);
 
+    /// <summary>
+    /// The rotation by an angle, in radians, around an axis through a point: counterclockwise looking against the
+    /// direction of the axis, which must not be zero.
+    /// </summary>
+    public static Transform Rotation(Point3d centre, Vector3d axis, double angle)
+    {
+        Vector3d k = axis.Normalized();
+        if (k.Length == 0)
+        {
+            throw new ArgumentException("The axis of a rotation must not be zero.", nameof(axis));
+        }
+        double c = Math.Cos(angle), s = Math.Sin(angle), t = 1 - c;
+        double r00 = t * k.X * k.X + c, r01 = t * k.X * k.Y - s * k.Z, r02 = t * k.X * k.Z + s * k.Y;
+        double r10 = t * k.X * k.Y + s * k.Z, r11 = t * k.Y * k.Y + c, r12 = t * k.Y * k.Z - s * k.X;
+        double r20 = t * k.X * k.Z - s * k.Y, r21 = t * k.Y * k.Z + s * k.X, r22 = t * k.Z * k.Z + c;
+        return new Transform(
+            r00, r01, r02, centre.X - (r00 * centre.X + r01 * centre.Y + r02 * centre.Z),
+            r10, r11, r12, centre.Y - (r10 * centre.X + r11 * centre.Y + r12 * centre.Z),
+            r20, r21, r22, centre.Z - (r20 * centre.X + r21 * centre.Y + r22 * centre.Z));
+    }
+
     public Point3d Apply(Point3d point) => new(
         M00 * point.X + M01 * point.Y + M02 * point.Z + M03,
         M10 * point.X + M11 * point.Y + M12 * point.Z + M13,

@@ -57,6 +57,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 new ToolItemViewModel(new ArcTool(kernel), "Icon.Arc"),
                 new ToolItemViewModel(new PushPullTool(kernel), "Icon.PushPull"),
                 new ToolItemViewModel(new MoveTool(kernel), "Icon.Move"),
+                new ToolItemViewModel(new RotateTool(kernel), "Icon.Rotate"),
             ];
         ActiveTool.HintChanged += OnToolHintChanged;
         ActiveTool.MeasurementChanged += OnToolMeasurementChanged;
