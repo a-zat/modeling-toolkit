@@ -79,6 +79,17 @@ public interface IGeometryKernel
     IKernelShape Intersect(IKernelShape first, IKernelShape second, IProgress<double>? progress = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Adds curves to a shape, as a drawing does, one after the other, in a new shape. Each curve splits the edges it
+    /// meets and the faces it crosses, and lies on the faces it touches; a closed loop drawn on a face splits it in two.
+    /// Curves off the faces that close a planar loop with the edges of the shape make a face, as a circle alone does.
+    /// Points closer than 1e-7 mm are the same point, so drawings snap to the points of the shape.
+    /// </summary>
+    /// <param name="shape">The shape drawn on; null for nothing yet.</param>
+    /// <exception cref="ArgumentException">There are no curves, or one is degenerate or not finite.</exception>
+    /// <exception cref="GeometryKernelException">The result would not be a valid shape.</exception>
+    ShapeEdit AddEdges(IKernelShape? shape, IReadOnlyList<Curve> curves);
+
     /// <summary>The volume of the solids of the shape, in cubic millimetres.</summary>
     double ComputeVolume(IKernelShape shape);
 
@@ -97,8 +108,8 @@ public interface IGeometryKernel
     /// <summary>The area of a face and its plane, if it has one, in the coordinates of the shape.</summary>
     FaceInfo GetFaceInfo(IKernelShape shape, int face);
 
-    /// <summary>The length of an edge, in millimetres.</summary>
-    double GetEdgeLength(IKernelShape shape, int edge);
+    /// <summary>The kind, the length, the ends, the middle and the tangents of an edge, and its circle if it has one.</summary>
+    EdgeInfo GetEdgeInfo(IKernelShape shape, int edge);
 
     /// <summary>The point of a vertex, in the coordinates of the shape.</summary>
     Point3d GetVertexPoint(IKernelShape shape, int vertex);

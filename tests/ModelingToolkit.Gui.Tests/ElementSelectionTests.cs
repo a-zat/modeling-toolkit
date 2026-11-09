@@ -50,7 +50,7 @@ public sealed class ElementSelectionTests : IDisposable
         ElementReference vertex = new([box], ElementKind.Vertex, 0);
 
         viewModel.ViewInputCommand.Execute(Click(first));
-        Assert.Equal([new PropertyRow("Length", "100.0 mm")], viewModel.Properties.Rows);
+        Assert.Equal([new PropertyRow("Length", "100.0 mm"), new PropertyRow("Curve", "Line")], viewModel.Properties.Rows);
         viewModel.ViewInputCommand.Execute(Click(second, KeyModifiers.Shift));
 
         Assert.Equal([first, second], viewModel.SelectedElements);

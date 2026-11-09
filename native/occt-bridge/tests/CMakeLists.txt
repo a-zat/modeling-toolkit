@@ -4,6 +4,7 @@ include(GoogleTest)
 
 add_executable(mtk_occt_bridge_tests
     bridge_tests.cpp
+    edges_tests.cpp
     header_is_valid_c.c
     scene_tests.cpp)
 

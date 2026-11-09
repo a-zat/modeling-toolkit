@@ -46,7 +46,9 @@ internal sealed class FailingKernel : IGeometryKernel
 
     public FaceInfo GetFaceInfo(IKernelShape shape, int face) => throw new NotSupportedException();
 
-        public double GetEdgeLength(IKernelShape shape, int edge) => throw new NotSupportedException();
+        public EdgeInfo GetEdgeInfo(IKernelShape shape, int edge) => throw new NotSupportedException();
+
+        public ShapeEdit AddEdges(IKernelShape? shape, IReadOnlyList<Curve> curves) => throw new NotSupportedException();
 
         public Point3d GetVertexPoint(IKernelShape shape, int vertex) => throw new NotSupportedException();
 

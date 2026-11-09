@@ -6,7 +6,7 @@ namespace ModelingToolkit.Kernel.Occt.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_BRIDGE_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 13;
+    public const int AbiVersion = 14;
 
     private const string LibraryName = "mtk_occt_bridge";
 
@@ -50,8 +50,26 @@ internal static partial class NativeMethods
     public static partial NativeStatus ShapeFaceInfo(
         ShapeHandle shape, int face, out double area, out int planar, Span<double> origin, Span<double> normal);
 
-    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_edge_length")]
-    public static partial NativeStatus ShapeEdgeLength(ShapeHandle shape, int edge, out double length);
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_edge_info")]
+    public static partial NativeStatus ShapeEdgeInfo(ShapeHandle shape, int edge, out NativeEdgeInfo info);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_add_edges")]
+    public static partial NativeStatus ShapeAddEdges(
+        ShapeHandle shape, ReadOnlySpan<NativeCurve> curves, int curveCount, out EditHandle edit);
+
+    /// <summary>As <see cref="ShapeAddEdges"/>, on a shape without anything yet (null).</summary>
+    [LibraryImport(LibraryName, EntryPoint = "mtk_shape_add_edges")]
+    public static partial NativeStatus ShapeAddEdgesToNothing(
+        nint noShape, ReadOnlySpan<NativeCurve> curves, int curveCount, out EditHandle edit);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_edit_get_shape")]
+    public static partial NativeStatus EditGetShape(EditHandle edit, out ShapeHandle shape);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_edit_get_face_origins")]
+    public static unsafe partial NativeStatus EditGetFaceOrigins(EditHandle edit, out int* origins, out int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_edit_release")]
+    public static partial void EditRelease(nint edit);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_shape_vertex_point")]
     public static partial NativeStatus ShapeVertexPoint(ShapeHandle shape, int vertex, Span<double> point);

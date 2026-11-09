@@ -255,9 +255,9 @@ TEST(Shape, MeasuresTheFacesEdgesAndVerticesWherePlaced) {
 
     double length = 0.0;
     for (int32_t edge = 0; edge < 12; ++edge) {
-        double edge_length = 0.0;
-        ASSERT_EQ(mtk_shape_edge_length(box.get(), edge, &edge_length), MTK_STATUS_OK) << mtk_last_error_message();
-        length += edge_length;
+        mtk_edge_info info{};
+        ASSERT_EQ(mtk_shape_edge_info(box.get(), edge, &info), MTK_STATUS_OK) << mtk_last_error_message();
+        length += info.length;
     }
     EXPECT_NEAR(length, 4 * (10 + 20 + 30), 1e-9);
 
@@ -307,12 +307,13 @@ TEST(Shape, RejectsElementsThatTheShapeDoesNotHave) {
         EXPECT_EQ(mtk_shape_face_info(box.get(), face, &value, &planar, origin.data(), normal.data()),
                   MTK_STATUS_INVALID_ARGUMENT);
     }
-    EXPECT_EQ(mtk_shape_edge_length(box.get(), 12, &value), MTK_STATUS_INVALID_ARGUMENT);
+    mtk_edge_info info{};
+    EXPECT_EQ(mtk_shape_edge_info(box.get(), 12, &info), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_shape_vertex_point(box.get(), 8, point.data()), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_shape_face_info(nullptr, 0, &value, &planar, origin.data(), normal.data()),
               MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_shape_face_info(box.get(), 0, &value, &planar, origin.data(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_shape_edge_length(box.get(), 0, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_edge_info(box.get(), 0, nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_shape_vertex_point(nullptr, 0, point.data()), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_STRNE(mtk_last_error_message(), "");
 }

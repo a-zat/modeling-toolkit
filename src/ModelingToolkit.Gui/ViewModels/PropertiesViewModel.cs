@@ -244,7 +244,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
     }
 
     private static double Length(ElementReference edge) =>
-        edge.Entity.Kernel.GetEdgeLength(edge.Entity.Shape, edge.Index);
+        edge.Entity.Kernel.GetEdgeInfo(edge.Entity.Shape, edge.Index).Length;
 
     private static FaceInfo FaceOf(ElementReference face) => face.Entity.Kernel.GetFaceInfo(face.Entity.Shape, face.Index);
 
@@ -267,7 +267,17 @@ public sealed partial class PropertiesViewModel : ObservableObject
                 }
                 return rows;
             case ElementKind.Edge:
-                return [new("Length", $"{Formatting.Length(Length(element))} mm")];
+                EdgeInfo edge = element.Entity.Kernel.GetEdgeInfo(element.Entity.Shape, element.Index);
+                List<PropertyRow> edgeRows =
+                [
+                    new("Length", $"{Formatting.Length(edge.Length)} mm"),
+                    new("Curve", edge.Kind.ToString()),
+                ];
+                if (edge.Circle is { } circle)
+                {
+                    edgeRows.Add(new("Radius", $"{Formatting.Length(circle.Radius)} mm"));
+                }
+                return edgeRows;
             default:
                 Point3d point = element.Entity.Kernel.GetVertexPoint(element.Entity.Shape, element.Index);
                 return [new("Position", Formatting.Point(point.X, point.Y, point.Z))];

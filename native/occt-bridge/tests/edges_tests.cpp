@@ -1,0 +1,295 @@
+#include "mtk/occt_bridge.h"
+
+#include <gtest/gtest.h>
+
+#include <array>
+#include <cmath>
+#include <limits>
+#include <memory>
+#include <set>
+#include <vector>
+
+namespace {
+
+struct ShapeDeleter {
+    void operator()(mtk_shape* shape) const noexcept { mtk_shape_release(shape); }
+};
+
+using ShapePtr = std::unique_ptr<mtk_shape, ShapeDeleter>;
+
+using Point = std::array<double, 3>;
+
+mtk_curve line(Point a, Point b) {
+    mtk_curve curve{};
+    curve.kind = MTK_CURVE_LINE;
+    std::copy(a.begin(), a.end(), curve.points);
+    std::copy(b.begin(), b.end(), curve.points + 3);
+    return curve;
+}
+
+mtk_curve circle(Point centre, double radius) {
+    mtk_curve curve{};
+    curve.kind = MTK_CURVE_CIRCLE;
+    std::copy(centre.begin(), centre.end(), curve.points);
+    curve.points[5] = 1.0;
+    curve.radius = radius;
+    return curve;
+}
+
+mtk_curve arc(Point a, Point through, Point b) {
+    mtk_curve curve = line(a, b);
+    curve.kind = MTK_CURVE_ARC;
+    std::copy(through.begin(), through.end(), curve.points + 3);
+    std::copy(b.begin(), b.end(), curve.points + 6);
+    return curve;
+}
+
+std::vector<mtk_curve> polygon(const std::vector<Point>& points) {
+    std::vector<mtk_curve> curves;
+    for (size_t i = 0; i < points.size(); ++i) {
+        curves.push_back(line(points[i], points[(i + 1) % points.size()]));
+    }
+    return curves;
+}
+
+struct Edited {
+    ShapePtr shape;
+    std::vector<int32_t> origins;
+};
+
+Edited add(const mtk_shape* shape, const std::vector<mtk_curve>& curves) {
+    mtk_edit* edit = nullptr;
+    EXPECT_EQ(mtk_shape_add_edges(shape, curves.data(), static_cast<int32_t>(curves.size()), &edit), MTK_STATUS_OK)
+        << mtk_last_error_message();
+    Edited result;
+    if (edit == nullptr) {
+        return result;
+    }
+    mtk_shape* made = nullptr;
+    EXPECT_EQ(mtk_edit_get_shape(edit, &made), MTK_STATUS_OK);
+    result.shape.reset(made);
+    const int32_t* origins = nullptr;
+    int32_t count = 0;
+    EXPECT_EQ(mtk_edit_get_face_origins(edit, &origins, &count), MTK_STATUS_OK);
+    result.origins.assign(origins, origins + count);
+    mtk_edit_release(edit);
+    return result;
+}
+
+struct Counts {
+    int32_t solids, faces, edges, vertices;
+};
+
+Counts counts_of(const ShapePtr& shape) {
+    std::array<int32_t, 4> values{};
+    EXPECT_EQ(mtk_shape_count_elements(shape.get(), values.data()), MTK_STATUS_OK);
+    return {values[0], values[1], values[2], values[3]};
+}
+
+bool is_valid(const ShapePtr& shape) {
+    int32_t valid = 0;
+    EXPECT_EQ(mtk_shape_is_valid(shape.get(), &valid), MTK_STATUS_OK);
+    return valid == 1;
+}
+
+double area_of(const ShapePtr& shape) {
+    double total = 0.0;
+    for (int32_t face = 0; face < counts_of(shape).faces; ++face) {
+        double area = 0.0;
+        int32_t planar = 0;
+        std::array<double, 3> origin{}, normal{};
+        EXPECT_EQ(mtk_shape_face_info(shape.get(), face, &area, &planar, origin.data(), normal.data()), MTK_STATUS_OK);
+        total += area;
+    }
+    return total;
+}
+
+ShapePtr square(double size) {
+    Edited made = add(nullptr, polygon({{0, 0, 0}, {size, 0, 0}, {size, size, 0}, {0, size, 0}}));
+    return std::move(made.shape);
+}
+
+ShapePtr box(double size) {
+    mtk_shape* shape = nullptr;
+    EXPECT_EQ(mtk_shape_make_box(size, size, size, &shape), MTK_STATUS_OK);
+    return ShapePtr(shape);
+}
+
+TEST(AddEdges, ALoopOnTheGroundMakesAFaceWhenItCloses) {
+    Edited open = add(nullptr, {line({0, 0, 0}, {100, 0, 0}), line({100, 0, 0}, {100, 60, 0}),
+                                line({100, 60, 0}, {0, 60, 0})});
+    EXPECT_EQ(counts_of(open.shape).faces, 0);
+    EXPECT_EQ(counts_of(open.shape).edges, 3);
+
+    Edited closed = add(open.shape.get(), {line({0, 60, 0}, {0, 0, 0})});
+    EXPECT_EQ(counts_of(closed.shape).faces, 1);
+    EXPECT_EQ(counts_of(closed.shape).edges, 4);
+    EXPECT_EQ(closed.origins, std::vector<int32_t>{-1});
+    EXPECT_NEAR(area_of(closed.shape), 6000.0, 1e-6);
+    EXPECT_TRUE(is_valid(closed.shape));
+}
+
+TEST(AddEdges, AConcaveLoopMakesAFace) {
+    Edited made = add(nullptr, polygon({{0, 0, 0}, {100, 0, 0}, {100, 10, 0}, {10, 10, 0}, {10, 100, 0}, {0, 100, 0}}));
+    EXPECT_EQ(counts_of(made.shape).faces, 1);
+    EXPECT_NEAR(area_of(made.shape), 1900.0, 1e-6);
+}
+
+TEST(AddEdges, AnEdgeAcrossAFaceSplitsItAndBothPartsComeFromIt) {
+    ShapePtr face = square(100);
+    Edited split = add(face.get(), {line({0, 50, 0}, {100, 50, 0})});
+    EXPECT_EQ(counts_of(split.shape).faces, 2);
+    EXPECT_EQ(split.origins, (std::vector<int32_t>{0, 0}));
+    EXPECT_NEAR(area_of(split.shape), 10000.0, 1e-6);
+    EXPECT_TRUE(is_valid(split.shape));
+}
+
+TEST(AddEdges, AnEdgeIntoAFaceLiesOnIt) {
+    ShapePtr face = square(100);
+    Edited edited = add(face.get(), {line({0, 50, 0}, {50, 50, 0})});
+    EXPECT_EQ(counts_of(edited.shape).faces, 1);
+    EXPECT_EQ(counts_of(edited.shape).edges, 6); // the left side split, and the new edge
+    EXPECT_EQ(edited.origins, std::vector<int32_t>{0});
+}
+
+TEST(AddEdges, ALoopOnAFaceSplitsItIntoARingAndAnInnerFace) {
+    ShapePtr face = square(100);
+    Edited ring = add(face.get(), polygon({{30, 30, 0}, {70, 30, 0}, {70, 70, 0}, {30, 70, 0}}));
+    EXPECT_EQ(counts_of(ring.shape).faces, 2);
+    EXPECT_EQ(ring.origins, (std::vector<int32_t>{0, 0}));
+    EXPECT_NEAR(area_of(ring.shape), 10000.0, 1e-6);
+
+    Edited disc = add(face.get(), {circle({50, 50, 0}, 20)});
+    EXPECT_EQ(counts_of(disc.shape).faces, 2);
+    EXPECT_EQ(disc.origins, (std::vector<int32_t>{0, 0}));
+}
+
+TEST(AddEdges, ACircleMakesADiscAndAnArcClosedByALineAHalfDisc) {
+    Edited disc = add(nullptr, {circle({0, 0, 0}, 20)});
+    EXPECT_EQ(counts_of(disc.shape).faces, 1);
+    EXPECT_NEAR(area_of(disc.shape), M_PI * 400, 1e-6);
+
+    Edited half = add(nullptr, {arc({-20, 0, 0}, {0, 20, 0}, {20, 0, 0}), line({20, 0, 0}, {-20, 0, 0})});
+    EXPECT_EQ(counts_of(half.shape).faces, 1);
+    EXPECT_NEAR(area_of(half.shape), M_PI * 200, 1e-6);
+}
+
+TEST(AddEdges, ARectangleOnASolidSplitsItsTopAndKeepsTheSolid) {
+    ShapePtr solid = box(100);
+    Edited edited = add(solid.get(), polygon({{20, 20, 100}, {80, 20, 100}, {80, 80, 100}, {20, 80, 100}}));
+    const Counts counts = counts_of(edited.shape);
+    EXPECT_EQ(counts.solids, 1);
+    EXPECT_EQ(counts.faces, 7);
+    EXPECT_TRUE(is_valid(edited.shape));
+    double volume = 0.0;
+    EXPECT_EQ(mtk_shape_volume(edited.shape.get(), &volume), MTK_STATUS_OK);
+    EXPECT_NEAR(volume, 1e6, 1e-3);
+
+    // Every face comes from a face of the box; the top, and only the top, from two.
+    std::array<int, 6> pieces{};
+    for (int32_t origin : edited.origins) {
+        ASSERT_GE(origin, 0);
+        ++pieces[origin];
+    }
+    EXPECT_EQ(std::count(pieces.begin(), pieces.end(), 2), 1);
+    EXPECT_EQ(std::count(pieces.begin(), pieces.end(), 1), 5);
+}
+
+TEST(AddEdges, EdgesUpFromABoxCloseALoopWithItsEdge) {
+    ShapePtr solid = box(100);
+    Edited edited =
+        add(solid.get(), {line({0, 0, 100}, {0, 0, 150}), line({0, 0, 150}, {100, 0, 150}),
+                          line({100, 0, 150}, {100, 0, 100})});
+    EXPECT_EQ(counts_of(edited.shape).solids, 1);
+    EXPECT_EQ(counts_of(edited.shape).faces, 7);
+    EXPECT_EQ(std::count(edited.origins.begin(), edited.origins.end(), -1), 1);
+    EXPECT_TRUE(is_valid(edited.shape));
+}
+
+TEST(AddEdges, PointsWithinTheToleranceAreTheSamePoint) {
+    Edited joined = add(nullptr, {line({0, 0, 0}, {100, 0, 0}), line({100, 0, 0}, {100, 100, 0}),
+                                  line({100, 100, 0}, {1e-8, 1e-8, 0})});
+    EXPECT_EQ(counts_of(joined.shape).vertices, 3);
+    EXPECT_EQ(counts_of(joined.shape).faces, 1);
+
+    Edited apart = add(nullptr, {line({0, 0, 0}, {100, 0, 0}), line({100, 0, 0}, {100, 100, 0}),
+                                 line({100, 100, 0}, {1e-4, 1e-4, 0})});
+    EXPECT_EQ(counts_of(apart.shape).vertices, 4);
+    EXPECT_EQ(counts_of(apart.shape).faces, 0);
+}
+
+TEST(AddEdges, ManyCrossingEdgesKeepTheShapeValid) {
+    ShapePtr shape = square(1000);
+    unsigned state = 7;
+    const auto next = [&] { return (state = state * 1103515245u + 12345u) >> 16; };
+    for (int i = 0; i < 40; ++i) {
+        const Point a{50.0 * (next() % 21), 50.0 * (next() % 21), 0}, b{50.0 * (next() % 21), 50.0 * (next() % 21), 0};
+        if (a == b) {
+            continue;
+        }
+        Edited edited = add(shape.get(), {line(a, b)});
+        ASSERT_TRUE(edited.shape) << "edge " << i;
+        shape = std::move(edited.shape);
+    }
+    EXPECT_TRUE(is_valid(shape));
+    EXPECT_GT(counts_of(shape).faces, 40);
+    EXPECT_NEAR(area_of(shape), 1e6, 1e-3);
+}
+
+TEST(AddEdges, RejectsDegenerateCurvesAndNullArguments) {
+    mtk_edit* edit = reinterpret_cast<mtk_edit*>(1);
+    const mtk_curve point = line({1, 1, 1}, {1, 1, 1});
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, &point, 1, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(edit, nullptr);
+    const mtk_curve straight = arc({0, 0, 0}, {1, 0, 0}, {2, 0, 0});
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, &straight, 1, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    const mtk_curve flat = circle({0, 0, 0}, 0);
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, &flat, 1, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    mtk_curve infinite = line({0, 0, 0}, {1, 0, 0});
+    infinite.points[4] = std::numeric_limits<double>::infinity();
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, &infinite, 1, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    mtk_curve other = line({0, 0, 0}, {1, 0, 0});
+    other.kind = MTK_CURVE_OTHER;
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, &other, 1, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    const mtk_curve good = line({0, 0, 0}, {1, 0, 0});
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, &good, 0, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, nullptr, 1, &edit), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_add_edges(nullptr, &good, 1, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_edit_get_shape(nullptr, nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    mtk_edit_release(nullptr);
+}
+
+TEST(EdgeInfo, DescribesLinesArcsAndCircles) {
+    Edited lines = add(nullptr, {line({0, 0, 0}, {30, 40, 0})});
+    mtk_edge_info info{};
+    ASSERT_EQ(mtk_shape_edge_info(lines.shape.get(), 0, &info), MTK_STATUS_OK) << mtk_last_error_message();
+    EXPECT_EQ(info.kind, MTK_CURVE_LINE);
+    EXPECT_EQ(info.closed, 0);
+    EXPECT_NEAR(info.length, 50.0, 1e-9);
+    EXPECT_NEAR(info.middle[0], 15.0, 1e-9);
+    EXPECT_NEAR(info.middle[1], 20.0, 1e-9);
+    EXPECT_NEAR(info.start_tangent[0], 0.6, 1e-9);
+    EXPECT_NEAR(info.end_tangent[1], 0.8, 1e-9);
+    EXPECT_EQ(info.radius, 0.0);
+
+    Edited half = add(nullptr, {arc({20, 0, 0}, {0, 20, 0}, {-20, 0, 0})});
+    ASSERT_EQ(mtk_shape_edge_info(half.shape.get(), 0, &info), MTK_STATUS_OK);
+    EXPECT_EQ(info.kind, MTK_CURVE_ARC);
+    EXPECT_NEAR(info.length, M_PI * 20, 1e-9);
+    EXPECT_NEAR(info.middle[1], 20.0, 1e-9);
+    EXPECT_NEAR(info.radius, 20.0, 1e-9);
+    EXPECT_NEAR(std::abs(info.normal[2]), 1.0, 1e-9);
+    EXPECT_NEAR(info.start[0], 20.0, 1e-9);
+    EXPECT_NEAR(info.start_tangent[1], 1.0, 1e-9); // leaving (20, 0) towards (0, 20)
+
+    Edited disc = add(nullptr, {circle({5, 5, 0}, 10)});
+    ASSERT_EQ(mtk_shape_edge_info(disc.shape.get(), 0, &info), MTK_STATUS_OK);
+    EXPECT_EQ(info.kind, MTK_CURVE_CIRCLE);
+    EXPECT_EQ(info.closed, 1);
+    EXPECT_NEAR(info.centre[0], 5.0, 1e-9);
+
+    EXPECT_EQ(mtk_shape_edge_info(disc.shape.get(), 1, &info), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_shape_edge_info(nullptr, 0, &info), MTK_STATUS_INVALID_ARGUMENT);
+}
+
+} // namespace

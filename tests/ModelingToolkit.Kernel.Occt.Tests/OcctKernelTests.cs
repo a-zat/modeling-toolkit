@@ -75,7 +75,7 @@ public sealed class OcctKernelTests
         Assert.Equal(2 * (10 * 20 + 20 * 30 + 10 * 30),
             Enumerable.Range(0, 6).Sum(face => _kernel.GetFaceInfo(placed, face).Area), precision: 6);
         Assert.Equal(4 * (10 + 20 + 30),
-            Enumerable.Range(0, 12).Sum(edge => _kernel.GetEdgeLength(placed, edge)), precision: 9);
+            Enumerable.Range(0, 12).Sum(edge => _kernel.GetEdgeInfo(placed, edge).Length), precision: 9);
         Assert.Equal(new ShapeTopology(1, 6, 12, 8), _kernel.CountElements(placed));
         Assert.Equal(tessellation.Vertices.ToArray(), Enumerable.Range(0, 8).Select(v => _kernel.GetVertexPoint(placed, v)));
     }
@@ -90,7 +90,7 @@ public sealed class OcctKernelTests
         Assert.Null(side.Plane);
         Assert.Equal(2 * Math.PI * 5 * 10, side.Area, precision: 6);
         Assert.Throws<ArgumentOutOfRangeException>(() => _kernel.GetFaceInfo(cylinder, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => _kernel.GetEdgeLength(cylinder, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _kernel.GetEdgeInfo(cylinder, -1));
         Assert.Throws<ArgumentOutOfRangeException>(() => _kernel.GetVertexPoint(cylinder, 2));
     }
 

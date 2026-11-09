@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 13
+#define MTK_OCCT_BRIDGE_ABI_VERSION 14
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -104,8 +104,6 @@ MTK_API mtk_status mtk_shape_count_elements(const mtk_shape* shape, int32_t* out
 MTK_API mtk_status mtk_shape_face_info(const mtk_shape* shape, int32_t face, double* out_area, int32_t* out_planar,
                                        double* out_origin, double* out_normal);
 
-MTK_API mtk_status mtk_shape_edge_length(const mtk_shape* shape, int32_t edge, double* out_length);
-
 /* The point of a vertex: x, y, z in out_point. */
 MTK_API mtk_status mtk_shape_vertex_point(const mtk_shape* shape, int32_t vertex, double* out_point);
 
@@ -124,6 +122,75 @@ typedef enum mtk_boolean_operation {
 MTK_API mtk_status mtk_shape_boolean(const mtk_shape* first, const mtk_shape* second,
                                      int32_t operation /* mtk_boolean_operation */, const mtk_progress* progress,
                                      mtk_shape** out_shape);
+
+typedef enum mtk_curve_kind {
+    MTK_CURVE_LINE = 0,   /* a straight segment */
+    MTK_CURVE_CIRCLE = 1, /* a whole circle */
+    MTK_CURVE_ARC = 2,    /* a part of a circle */
+    MTK_CURVE_OTHER = 3   /* any other curve, such as a spline; only described, never drawn */
+} mtk_curve_kind;
+
+/*
+ * A curve to draw. points holds 9 values: for a line its start and end; for an arc its start, a point on it between
+ * the ends and its end; for a circle its centre and the normal of its plane, of any length, with radius.
+ */
+typedef struct mtk_curve {
+    int32_t kind; /* mtk_curve_kind, not MTK_CURVE_OTHER */
+    double points[9];
+    double radius;
+} mtk_curve;
+
+/*
+ * The result of an edit of a shape: the new shape and, for each of its faces, the face of the old shape it comes from.
+ * Faces are numbered from 0 as mtk_shape_count_elements counts them.
+ */
+typedef struct mtk_edit mtk_edit;
+
+/*
+ * Adds curves to a shape, as a drawing does, one after the other, and gives the result in a new edit; the shape is
+ * not changed, and null stands for a shape without anything yet. Each curve becomes edges of the shape: it splits the
+ * edges it meets and the faces it crosses, and lies on the faces it touches; a closed loop drawn on a face splits it in
+ * two. Curves that are not on a face and close a planar loop with the edges of the shape make a face, as does a
+ * circle on its own. Only the parts of the shape near the curves take part, so the time grows with what the curves
+ * meet, not with the size of the shape. Points closer than 1e-7 mm are the same point: drawings snap to the points of
+ * the shape. A curve that is degenerate (a line of no length, an arc through three points on a line, a circle without
+ * a radius or a normal) or not finite is an invalid argument; a result that would not be valid is a kernel error.
+ */
+MTK_API mtk_status mtk_shape_add_edges(const mtk_shape* shape, const mtk_curve* curves, int32_t curve_count,
+                                       mtk_edit** out_edit);
+
+/* The shape made by the edit, in a new handle. */
+MTK_API mtk_status mtk_edit_get_shape(const mtk_edit* edit, mtk_shape** out_shape);
+
+/*
+ * For each face of the shape made by the edit, in order, the index of the face of the old shape it comes from: a part
+ * of a face that was split comes from that face; a face made by the edit, from none, -1. out_origins has out_count
+ * values, valid until mtk_edit_release.
+ */
+MTK_API mtk_status mtk_edit_get_face_origins(const mtk_edit* edit, const int32_t** out_origins, int32_t* out_count);
+
+MTK_API void mtk_edit_release(mtk_edit* edit);
+
+/*
+ * The geometry of an edge, as a tool infers points from it, in the coordinates of the shape. start and end follow the
+ * orientation of the edge, and the tangents are unit vectors in that direction; middle is the point at half its
+ * length. centre, normal and radius describe the circle of a circle or an arc, and are zero for other curves.
+ */
+typedef struct mtk_edge_info {
+    int32_t kind; /* mtk_curve_kind */
+    int32_t closed; /* 1 when its ends are the same point, as for a circle */
+    double length;
+    double start[3];
+    double end[3];
+    double middle[3];
+    double start_tangent[3];
+    double end_tangent[3];
+    double centre[3];
+    double normal[3];
+    double radius;
+} mtk_edge_info;
+
+MTK_API mtk_status mtk_shape_edge_info(const mtk_shape* shape, int32_t edge, mtk_edge_info* out_info);
 
 /* The smallest box with the sides along the axes that contains the shape: out_bounds receives the minimum x, y and z,
  * then the maximum x, y and z. A shape without geometry, such as an empty compound, has an empty box: its minimum is

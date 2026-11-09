@@ -1,4 +1,5 @@
 using ModelingToolkit.Core.Editing;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Tests.Model;
@@ -60,6 +61,25 @@ public sealed class FaceMaterialsTests
         Assert.IsType<ShapeReplaced>(Assert.Single(_changes));
 
         replacement.Revert();
+        Assert.Equal([0, 1], _shape.FaceMaterials.Keys.Order());
+    }
+
+    [Fact]
+    public void A_shape_edited_by_the_kernel_paints_each_face_as_the_face_it_comes_from()
+    {
+        _shape.Paint([0], _red);
+        _shape.Paint([1], _blue);
+        var session = new EditSession(_document);
+
+        // Face 0 split into faces 0 and 2, face 1 now 3, face 1 made by the edit.
+        session.Execute(new ReplaceShapeCommand("Line", _shape, new ShapeEdit(new NoShape(), [0, -1, 0, 1])));
+
+        Assert.Same(_red, _shape.MaterialOf(0));
+        Assert.Null(_shape.MaterialOf(1));
+        Assert.Same(_red, _shape.MaterialOf(2));
+        Assert.Same(_blue, _shape.MaterialOf(3));
+        session.Undo();
+        Assert.Same(_blue, _shape.MaterialOf(1));
         Assert.Equal([0, 1], _shape.FaceMaterials.Keys.Order());
     }
 

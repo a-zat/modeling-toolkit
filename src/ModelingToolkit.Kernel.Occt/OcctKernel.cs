@@ -133,10 +133,69 @@ public sealed class OcctKernel : IGeometryKernel
         return new FaceInfo(area, new Plane(new Vector3d(normal[0], normal[1], normal[2]), offset));
     }
 
-    public double GetEdgeLength(IKernelShape shape, int edge)
+    public unsafe EdgeInfo GetEdgeInfo(IKernelShape shape, int edge)
     {
-        NativeMethods.ShapeEdgeLength(Unwrap(shape), edge, out double length).ThrowIfOutOfRange(nameof(edge));
-        return length;
+        NativeMethods.ShapeEdgeInfo(Unwrap(shape), edge, out NativeEdgeInfo info).ThrowIfOutOfRange(nameof(edge));
+        var kind = (CurveKind)info.Kind;
+        CircleInfo? circle = kind is CurveKind.Circle or CurveKind.Arc
+            ? new CircleInfo(PointOf(info.Centre), VectorOf(info.Normal), info.Radius)
+            : null;
+        return new EdgeInfo(kind, info.Closed != 0, info.Length, PointOf(info.Start), PointOf(info.End),
+            PointOf(info.Middle), VectorOf(info.StartTangent), VectorOf(info.EndTangent), circle);
+
+        static Point3d PointOf(double* values) => new(values[0], values[1], values[2]);
+        static Vector3d VectorOf(double* values) => new(values[0], values[1], values[2]);
+    }
+
+    public unsafe ShapeEdit AddEdges(IKernelShape? shape, IReadOnlyList<Curve> curves)
+    {
+        ArgumentNullException.ThrowIfNull(curves);
+        if (curves.Count == 0)
+        {
+            throw new ArgumentException("There are no curves to add.", nameof(curves));
+        }
+
+        var native = new NativeCurve[curves.Count];
+        for (int i = 0; i < curves.Count; i++)
+        {
+            native[i] = ToNative(curves[i]);
+        }
+
+        EditHandle edit;
+        NativeStatus status = shape is null
+            ? NativeMethods.ShapeAddEdgesToNothing(0, native, native.Length, out edit)
+            : NativeMethods.ShapeAddEdges(Unwrap(shape), native, native.Length, out edit);
+        status.ThrowIfFailed();
+        using (edit)
+        {
+            NativeMethods.EditGetFaceOrigins(edit, out int* origins, out int count).ThrowIfFailed();
+            int[] faceOrigins = new ReadOnlySpan<int>(origins, count).ToArray();
+            NativeMethods.EditGetShape(edit, out ShapeHandle made).ThrowIfFailed();
+            return new ShapeEdit(new OcctShape(made), faceOrigins);
+        }
+    }
+
+    private static unsafe NativeCurve ToNative(Curve curve)
+    {
+        (int kind, Point3d first, Point3d second, Point3d third, double radius) = curve switch
+        {
+            LineCurve line => (0, line.Start, line.End, default, 0.0),
+            CircleCurve circle => (1, circle.Centre, new Point3d(circle.Normal.X, circle.Normal.Y, circle.Normal.Z),
+                default(Point3d), circle.Radius),
+            ArcCurve arc => (2, arc.Start, arc.Through, arc.End, 0.0),
+            _ => throw new ArgumentException(
+                $"A curve of type {curve?.GetType().Name ?? "null"} cannot be drawn.", nameof(curve)),
+        };
+
+        var native = new NativeCurve { Kind = kind, Radius = radius };
+        Point3d[] points = [first, second, third];
+        for (int i = 0; i < 3; i++)
+        {
+            native.Points[3 * i] = points[i].X;
+            native.Points[3 * i + 1] = points[i].Y;
+            native.Points[3 * i + 2] = points[i].Z;
+        }
+        return native;
     }
 
     public Point3d GetVertexPoint(IKernelShape shape, int vertex)

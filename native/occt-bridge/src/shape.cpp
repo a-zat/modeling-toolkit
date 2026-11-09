@@ -292,24 +292,6 @@ mtk_status mtk_shape_face_info(const mtk_shape* shape, int32_t face, double* out
     });
 }
 
-mtk_status mtk_shape_edge_length(const mtk_shape* shape, int32_t edge, double* out_length) {
-    return mtk::guarded([&] {
-        mtk::clear_outputs(out_length);
-        if (shape == nullptr || out_length == nullptr) {
-            return mtk::invalid_argument("shape and out_length must not be null.");
-        }
-        const std::optional<TopoDS_Shape> element = element_of(shape->value, TopAbs_EDGE, edge);
-        if (!element) {
-            return mtk::invalid_argument("edge is not an edge of the shape.");
-        }
-
-        GProp_GProps properties;
-        BRepGProp::LinearProperties(*element, properties);
-        *out_length = properties.Mass();
-        return MTK_STATUS_OK;
-    });
-}
-
 mtk_status mtk_shape_vertex_point(const mtk_shape* shape, int32_t vertex, double* out_point) {
     return mtk::guarded([&] {
         if (out_point != nullptr) {

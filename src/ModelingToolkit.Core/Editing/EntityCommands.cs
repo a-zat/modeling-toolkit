@@ -155,7 +155,32 @@ public sealed class ReplaceShapeCommand : IEditCommand
         _afterMaterials = faceMaterials;
     }
 
+    /// <summary>
+    /// Replaces the shape with the result of an edit by the kernel. Each face of the new shape takes the material of
+    /// the face it comes from, so that the parts of a painted face that was split stay painted; the faces the edit made
+    /// have none. The kernel has checked the parts it changed, so the result is not checked again.
+    /// </summary>
+    public ReplaceShapeCommand(string name, BrepEntity entity, ShapeEdit edit)
+        : this(name, entity, (edit ?? throw new ArgumentNullException(nameof(edit))).Shape, MaterialsAfter(entity, edit))
+    {
+        _checked = true;
+    }
+
     public string Name { get; }
+
+    private static Dictionary<int, Material> MaterialsAfter(BrepEntity entity, ShapeEdit edit)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        var materials = new Dictionary<int, Material>();
+        for (int face = 0; face < edit.FaceOrigins.Count; face++)
+        {
+            if (edit.FaceOrigins[face] is >= 0 and int origin && entity.MaterialOf(origin) is { } material)
+            {
+                materials[face] = material;
+            }
+        }
+        return materials;
+    }
 
     /// <exception cref="EditRefusedException">The new shape is not valid.</exception>
     public void Apply()
