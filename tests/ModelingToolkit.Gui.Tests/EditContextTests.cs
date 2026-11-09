@@ -85,7 +85,7 @@ public sealed class EditContextTests : IDisposable
     public async Task ADoubleClickOnANodeOfAReferenceEntersItAndSelectingANodeOutsideLeaves()
     {
         await OpenParts();
-        ModelNodeViewModel right = _viewModel.ModelTree.Roots[0].Children[1];
+        ModelNodeViewModel right = _viewModel.ModelTree.Roots[1];
 
         _viewModel.ModelTree.EnterCommand!.Execute(right);
         Assert.Equal([_right], _viewModel.Context!.Path);
@@ -117,30 +117,30 @@ public sealed class EditContextTests : IDisposable
     public async Task TheTreeMarksTheReferenceWhoseBlockIsBeingEdited()
     {
         await OpenParts();
-        ModelNodeViewModel left = _viewModel.ModelTree.Roots[0].Children[0];
+        ModelNodeViewModel left = _viewModel.ModelTree.Roots[0];
 
         _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
         Assert.True(left.IsContext);
         Assert.True(left.IsExpanded);
-        Assert.Equal("1 solid · 6 faces · 12 edges", Assert.Single(left.Children).Detail);
+        Assert.Equal("1 solid · 6 faces", Assert.Single(left.Children).Detail);
 
-        _viewModel.EnterNodeCommand.Execute(_viewModel.ModelTree.Roots[0].Children[1]);
+        _viewModel.EnterNodeCommand.Execute(_viewModel.ModelTree.Roots[1]);
         Assert.False(left.IsContext);
-        Assert.True(_viewModel.ModelTree.Roots[0].Children[1].IsContext);
+        Assert.True(_viewModel.ModelTree.Roots[1].IsContext);
 
         _viewModel.LeaveContextCommand.Execute(null);
-        Assert.DoesNotContain(_viewModel.ModelTree.Roots[0].Children, node => node.IsContext);
+        Assert.DoesNotContain(_viewModel.ModelTree.Roots, node => node.IsContext);
     }
 
     [Fact]
     public async Task TheCountsOfAGeometryFollowItsShapes()
     {
         await OpenParts();
-        ModelNodeViewModel geometry = Assert.Single(_viewModel.ModelTree.Roots[0].Children[0].Children);
+        ModelNodeViewModel geometry = Assert.Single(_viewModel.ModelTree.Roots[0].Children);
 
         _viewModel.Edit(new Core.Editing.ReplaceShapeCommand("Cylinder", _box, _kernel.MakeCylinder(5, 10)));
 
-        Assert.Equal("1 solid · 3 faces · 3 edges", geometry.Detail);
+        Assert.Equal("1 solid · 3 faces", geometry.Detail);
     }
 
     [Fact]

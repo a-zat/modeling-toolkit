@@ -23,7 +23,7 @@ public sealed class ScreenshotTests(HeadlessSession headless)
             var viewModel = HeadlessSession.Services.GetRequiredService<MainWindowViewModel>();
             await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
             // The whole tree open, with a mesh selected: references and meshes at a glance.
-            ModelNodeViewModel[] nodes = [.. Flatten(viewModel.ModelTree.Roots[0])];
+            ModelNodeViewModel[] nodes = [.. Flatten(viewModel.ModelTree.Model!)];
             foreach (ModelNodeViewModel node in nodes)
             {
                 node.IsExpanded = true;

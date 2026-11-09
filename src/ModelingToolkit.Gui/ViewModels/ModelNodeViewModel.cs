@@ -9,9 +9,10 @@ namespace ModelingToolkit.Gui.ViewModels;
 /// geometry of a block, or a mesh or a B-rep shape of that geometry, as placed in the model.
 /// </summary>
 /// <remarks>
-/// The children of the model and of a reference are the references of its block, then the geometry of the block, one
-/// node with its counts, when the block has entities that are not references; the children of the geometry are those
-/// entities. A block placed twice appears twice. The children of a node are created when the tree first asks for them,
+/// The children of the model and of a reference are the references of its block, then the entities of the block that
+/// are not references: the entity itself when there is one, as there is when the geometry of the block is one shape;
+/// a geometry node with them, when there are several, such as the meshes of a glTF node. A block placed twice appears
+/// twice. The children of a node are created when the tree first asks for them,
 /// so that only the expanded part of a large model is built.
 /// </remarks>
 public sealed partial class ModelNodeViewModel : ObservableObject
@@ -118,10 +119,13 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         {
             (Name, Detail) = Label(Entity);
         }
-        if (IsGeometry && (ReferenceEquals(changed, _block) ||
-                           (change is ShapeReplaced shape && ReferenceEquals(shape.Entity.Owner, _block))))
+        if (IsGeometry && ReferenceEquals(changed, _block))
         {
             Detail = GeometryDetail(_block!);
+        }
+        else if (change is ShapeReplaced replacedShape && ReferenceEquals(replacedShape.Entity, Entity))
+        {
+            (Name, Detail) = Label(Entity);
         }
 
         foreach (ModelNodeViewModel child in _children ?? [])
@@ -189,7 +193,12 @@ public sealed partial class ModelNodeViewModel : ObservableObject
 
         List<ModelNodeViewModel> children = [.. _block.Entities.OfType<BlockReference>()
             .Select(entity => kept.GetValueOrDefault(entity) ?? Child(entity))];
-        if (_block.Entities.Any(entity => entity is not BlockReference))
+        Entity[] geometry = [.. _block.Entities.Where(entity => entity is not BlockReference)];
+        if (geometry.Length == 1)
+        {
+            children.Add(kept.GetValueOrDefault(geometry[0]) ?? Child(geometry[0]));
+        }
+        else if (geometry.Length > 1)
         {
             children.Add(previous.FirstOrDefault(child => child.IsGeometry) ??
                 new ModelNodeViewModel("Geometry", GeometryDetail(_block), null, Path, _block, null, isGeometry: true));
@@ -197,24 +206,28 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         return children;
     }
 
-    // The counts of the entities of a block that are not references: "1 solid · 6 faces · 12 edges".
+    // What the entities of a block that are not references are: "2 shapes · 3 meshes".
     private static string GeometryDetail(Block block)
     {
         List<string> parts = [];
-        BrepEntity[] shapes = [.. block.Entities.OfType<BrepEntity>()];
-        if (shapes.Length > 0)
+        int shapes = block.Entities.Count(entity => entity is BrepEntity);
+        int meshes = block.Entities.Count(entity => entity is MeshEntity);
+        if (shapes > 0)
         {
-            ShapeTopology[] counts = [.. shapes.Select(shape => shape.Kernel.CountElements(shape.Shape))];
-            parts.Add(Formatting.Count(counts.Sum(count => count.Solids), "solid", "solids"));
-            parts.Add(Formatting.Count(counts.Sum(count => count.Faces), "face", "faces"));
-            parts.Add(Formatting.Count(counts.Sum(count => count.Edges), "edge", "edges"));
+            parts.Add(Formatting.Count(shapes, "shape", "shapes"));
         }
-        MeshEntity[] meshes = [.. block.Entities.OfType<MeshEntity>()];
-        if (meshes.Length > 0)
+        if (meshes > 0)
         {
-            parts.Add(Formatting.Count(meshes.Sum(mesh => (long)mesh.Triangles.Length), "triangle", "triangles"));
+            parts.Add(Formatting.Count(meshes, "mesh", "meshes"));
         }
         return string.Join(" · ", parts);
+    }
+
+    // The solids and faces of a shape: "1 solid · 7 faces".
+    private static string ShapeDetail(BrepEntity shape)
+    {
+        ShapeTopology counts = shape.Kernel.CountElements(shape.Shape);
+        return $"{Formatting.Count(counts.Solids, "solid", "solids")} · {Formatting.Count(counts.Faces, "face", "faces")}";
     }
 
     private ModelNodeViewModel Child(Entity entity)
@@ -233,8 +246,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
             case MeshEntity mesh:
                 // The meshes read from glTF files have no names: their materials tell them apart.
                 return (entity.Name ?? entity.Material?.Name ?? "Mesh", $"{Formatting.Count(mesh.Triangles.Length)} triangles");
-            case BrepEntity:
-                return (entity.Name ?? entity.Material?.Name ?? "Shape", null);
+            case BrepEntity shape:
+                return (entity.Name ?? "Geometry", ShapeDetail(shape));
             default:
                 return (entity.Name ?? entity.GetType().Name, null);
         }

@@ -19,7 +19,7 @@ public sealed class MainWindowViewModelTests
 
         Assert.Equal("CesiumMilkTruck.glb", viewModel.DocumentName);
         Assert.Equal("4 meshes (5 placed) · 3,624 triangles · 4 materials · mm · Z up", viewModel.Summary);
-        ModelNodeViewModel model = Assert.Single(viewModel.ModelTree.Roots);
+        ModelNodeViewModel model = viewModel.ModelTree.Model!;
         Assert.Equal(2, Flatten(model).Count(node => node.Entity is BlockReference { Block.Name: "Wheels" }));
         Assert.Equal(4, viewModel.Document!.Materials.Count);
         Assert.True(viewModel.SaveCommand.CanExecute(null));
@@ -128,7 +128,7 @@ public sealed class MainWindowViewModelTests
         MainWindowViewModel viewModel = Create();
         await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
 
-        viewModel.ModelTree.SelectedNode = Flatten(viewModel.ModelTree.Roots[0]).First(node => node.IsMesh);
+        viewModel.ModelTree.SelectedNode = Flatten(viewModel.ModelTree.Model!).First(node => node.IsMesh);
 
         Assert.True(viewModel.Properties.HasSelection);
         Assert.Equal("Mesh", viewModel.Properties.Kind);
@@ -145,7 +145,7 @@ public sealed class MainWindowViewModelTests
 
         Assert.Equal(
             ["wheels", "wheels", "truck", "glass", "window_trim"],
-            Flatten(viewModel.ModelTree.Roots[0]).Where(node => node.IsMesh).Select(node => node.Name));
+            Flatten(viewModel.ModelTree.Model!).Where(node => node.IsMesh).Select(node => node.Name));
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public sealed class MainWindowViewModelTests
     {
         MainWindowViewModel viewModel = Create();
         await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
-        ModelNodeViewModel model = viewModel.ModelTree.Roots[0];
+        ModelNodeViewModel model = viewModel.ModelTree.Model!;
 
         ModelNodeViewModel[] wheels =
         [
@@ -184,14 +184,14 @@ public sealed class MainWindowViewModelTests
 
         viewModel.ModelTree.SelectCommand.Execute(path);
 
-        // The mesh is in the geometry of the last block, opened too.
-        ModelNodeViewModel node = viewModel.ModelTree.Roots[0];
+        // The mesh is in the last block, in its geometry, opened too, when the block has several meshes.
+        ModelNodeViewModel node = viewModel.ModelTree.Model!;
         foreach (Entity step in path)
         {
             Assert.True(node.IsExpanded);
-            if (step is not BlockReference)
+            if (step is not BlockReference && node.Children.SingleOrDefault(child => child.IsGeometry) is { } geometry)
             {
-                node = node.Children.Single(child => child.IsGeometry);
+                node = geometry;
                 Assert.True(node.IsExpanded);
             }
             node = node.Children.Single(child => child.Entity == step);
@@ -202,7 +202,7 @@ public sealed class MainWindowViewModelTests
         viewModel.ModelTree.SelectCommand.Execute(null);
 
         Assert.Null(viewModel.ModelTree.SelectedNode);
-        Assert.False(viewModel.Properties.HasSelection);
+        Assert.Equal("Model", viewModel.Properties.Kind);
     }
 
     [Fact]
@@ -216,10 +216,11 @@ public sealed class MainWindowViewModelTests
         document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(10, 10, 10)) { Name = "Cube" });
         viewModel.ModelTree.Show(document);
 
-        ModelNodeViewModel model = Assert.Single(viewModel.ModelTree.Roots);
+        ModelNodeViewModel model = viewModel.ModelTree.Model!;
         ModelNodeViewModel geometry = Assert.Single(model.Children);
-        Assert.Equal(("Geometry", "2 solids · 12 faces · 24 edges"), (geometry.Name, geometry.Detail));
-        Assert.Equal(["Steel", "Cube"], geometry.Children.Select(node => node.Name));
+        Assert.Equal(("Geometry", "2 shapes"), (geometry.Name, geometry.Detail));
+        Assert.Equal("1 solid · 6 faces", geometry.Children[0].Detail);
+        Assert.Equal(["Geometry", "Cube"], geometry.Children.Select(node => node.Name)); // unnamed, then named
         Assert.All(geometry.Children, node => Assert.True(node.IsBrep));
 
         viewModel.ModelTree.SelectedNode = geometry;

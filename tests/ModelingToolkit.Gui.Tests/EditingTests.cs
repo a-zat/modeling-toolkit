@@ -87,7 +87,7 @@ public sealed class EditingTests
 
         Assert.DoesNotContain(entity, block.Entities);
         Assert.Null(viewModel.ModelTree.SelectedNode);
-        Assert.False(viewModel.Properties.HasSelection);
+        Assert.Equal("Model", viewModel.Properties.Kind);
         Assert.False(viewModel.DeleteCommand.CanExecute(null));
 
         viewModel.UndoCommand.Execute(null);
@@ -99,7 +99,7 @@ public sealed class EditingTests
     {
         MainWindowViewModel viewModel = await OpenBox();
 
-        viewModel.ModelTree.SelectedNode = viewModel.ModelTree.Roots[0];
+        viewModel.ModelTree.SelectedNode = viewModel.ModelTree.Model!;
 
         Assert.False(viewModel.DeleteCommand.CanExecute(null));
         Assert.False(viewModel.Properties.IsEditable);
@@ -114,7 +114,7 @@ public sealed class EditingTests
 
     private static ModelNodeViewModel SelectMesh(MainWindowViewModel viewModel)
     {
-        ModelNodeViewModel mesh = Flatten(viewModel.ModelTree.Roots[0]).First(node => node.IsMesh);
+        ModelNodeViewModel mesh = Flatten(viewModel.ModelTree.Model!).First(node => node.IsMesh);
         viewModel.ModelTree.SelectCommand.Execute(mesh.Path);
         return viewModel.ModelTree.SelectedNode!;
     }

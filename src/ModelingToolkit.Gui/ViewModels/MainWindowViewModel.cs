@@ -353,7 +353,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ShowProperties();
     }
 
-    // The elements selected, or else the node.
+    // The elements selected, or else the node, or else the model.
     private void ShowProperties(bool refresh = false)
     {
         if (SelectedElements.Count > 0)
@@ -362,11 +362,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         else if (refresh)
         {
-            Properties.Refresh(ModelTree.SelectedNode);
+            Properties.Refresh(ModelTree.SelectedNode ?? ModelTree.Model);
         }
         else
         {
-            Properties.Show(ModelTree.SelectedNode);
+            Properties.Show(ModelTree.SelectedNode ?? ModelTree.Model);
         }
     }
 
@@ -778,6 +778,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         Properties.Know(document, statistics);
         ModelTree.Show(document);
+        ShowProperties(); // of the model, nothing being selected
         Document = document;
         OnEditingChanged();
     }

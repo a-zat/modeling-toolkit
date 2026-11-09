@@ -19,7 +19,7 @@ public sealed class ModelTreeUpdateTests
         document.Root.Entities.Add(reference);
         var tree = new ModelTreeViewModel();
         tree.Show(document);
-        ModelNodeViewModel model = tree.Roots[0];
+        ModelNodeViewModel model = tree.Model!;
         ModelNodeViewModel referenceNode = model.Children[0];
         referenceNode.IsExpanded = true;
         _ = referenceNode.Children; // built, as the tree does when it opens a node
@@ -30,18 +30,21 @@ public sealed class ModelTreeUpdateTests
         document.Root.Entities.Add(body);
         wheel.Entities.Add(Square());
 
-        // The geometry of the model appears with its first entity; the one of the wheel counts another square.
+        // The one entity of the model is a node of its own; the two of the wheel are grouped in its geometry.
         Assert.Equal([nameof(ModelNodeViewModel.Children)], changed);
         Assert.Same(referenceNode, model.Children[0]);
         Assert.True(referenceNode.IsExpanded);
+        Assert.Same(body, model.Children[1].Entity);
+        Assert.Equal([body], model.Children[1].Path);
+        ModelNodeViewModel wheelGeometry = Assert.Single(referenceNode.Children);
+        Assert.True(wheelGeometry.IsGeometry);
+        Assert.Equal("2 meshes", wheelGeometry.Detail);
+        Assert.Equal([reference, wheel.Entities[1]], wheelGeometry.Children[1].Path);
+
+        document.Root.Entities.Add(Square());
         ModelNodeViewModel geometry = model.Children[1];
         Assert.True(geometry.IsGeometry);
-        Assert.Equal("2 triangles", geometry.Detail);
         Assert.Same(body, geometry.Children[0].Entity);
-        Assert.Equal([body], geometry.Children[0].Path);
-        ModelNodeViewModel wheelGeometry = Assert.Single(referenceNode.Children);
-        Assert.Equal("4 triangles", wheelGeometry.Detail);
-        Assert.Equal([reference, wheel.Entities[1]], wheelGeometry.Children[1].Path);
     }
 
     [Fact]
@@ -77,19 +80,17 @@ public sealed class ModelTreeUpdateTests
         document.Root.Entities.Add(body);
         var tree = new ModelTreeViewModel();
         tree.Show(document);
-        ModelNodeViewModel model = tree.Roots[0];
+        ModelNodeViewModel model = tree.Model!;
 
         wheel.Name = "Front wheel";
         body.Material = new Material("Paint");
 
-        Assert.Equal(["Front wheel", "Geometry"], model.Children.Select(node => node.Name));
-        Assert.Equal("Paint", model.Children[1].Children[0].Name);
+        Assert.Equal(["Front wheel", "Paint"], model.Children.Select(node => node.Name));
 
         reference.Name = "Left";
         body.Name = "Body";
 
-        Assert.Equal("Left", model.Children[0].Name);
-        Assert.Equal("Body", model.Children[1].Children[0].Name);
+        Assert.Equal(["Left", "Body"], model.Children.Select(node => node.Name));
         Assert.Equal("Front wheel", model.Children[0].Detail);
     }
 
@@ -99,14 +100,15 @@ public sealed class ModelTreeUpdateTests
         var viewModel = new MainWindowViewModel(new DocumentFormats([new GltfReader()], []), new NoAppearance());
         await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
         Document document = viewModel.Document!;
-        viewModel.ModelTree.SelectedNode = viewModel.ModelTree.Roots[0];
+        Assert.Equal("Model", viewModel.Properties.Kind); // nothing selected
         Assert.Contains(new PropertyRow("Meshes", "1 (1 placed)"), viewModel.Properties.Rows);
 
         document.Root.Entities.Add(Square());
 
         Assert.Contains(new PropertyRow("Meshes", "2 (2 placed)"), viewModel.Properties.Rows);
 
-        ModelNodeViewModel squareNode = viewModel.ModelTree.Roots[0].Children[^1].Children[^1];
+        ModelNodeViewModel squareNode = viewModel.ModelTree.Roots[^1]; // the one geometry of the model
+        Assert.IsType<MeshEntity>(squareNode.Entity);
         viewModel.ModelTree.SelectedNode = squareNode;
         squareNode.Entity!.Name = "Floor";
 
