@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <set>
 #include <vector>
 
@@ -168,11 +169,11 @@ TEST(AddEdges, ALoopOnAFaceSplitsItIntoARingAndAnInnerFace) {
 TEST(AddEdges, ACircleMakesADiscAndAnArcClosedByALineAHalfDisc) {
     Edited disc = add(nullptr, {circle({0, 0, 0}, 20)});
     EXPECT_EQ(counts_of(disc.shape).faces, 1);
-    EXPECT_NEAR(area_of(disc.shape), M_PI * 400, 1e-6);
+    EXPECT_NEAR(area_of(disc.shape), std::numbers::pi * 400, 1e-6);
 
     Edited half = add(nullptr, {arc({-20, 0, 0}, {0, 20, 0}, {20, 0, 0}), line({20, 0, 0}, {-20, 0, 0})});
     EXPECT_EQ(counts_of(half.shape).faces, 1);
-    EXPECT_NEAR(area_of(half.shape), M_PI * 200, 1e-6);
+    EXPECT_NEAR(area_of(half.shape), std::numbers::pi * 200, 1e-6);
 }
 
 TEST(AddEdges, ARectangleOnASolidSplitsItsTopAndKeepsTheSolid) {
@@ -323,7 +324,7 @@ TEST(EdgeInfo, DescribesLinesArcsAndCircles) {
     Edited half = add(nullptr, {arc({20, 0, 0}, {0, 20, 0}, {-20, 0, 0})});
     ASSERT_EQ(mtk_shape_edge_info(half.shape.get(), 0, &info), MTK_STATUS_OK);
     EXPECT_EQ(info.kind, MTK_CURVE_ARC);
-    EXPECT_NEAR(info.length, M_PI * 20, 1e-9);
+    EXPECT_NEAR(info.length, std::numbers::pi * 20, 1e-9);
     EXPECT_NEAR(info.middle[1], 20.0, 1e-9);
     EXPECT_NEAR(info.radius, 20.0, 1e-9);
     EXPECT_NEAR(std::abs(info.normal[2]), 1.0, 1e-9);
@@ -699,7 +700,7 @@ TEST(OffsetFace, OnTheTopOfABoxKeepsTheSolidAndRejectsWhatCannotBeOffset) {
     Edited disc = add(nullptr, {circle({0, 0, 0}, 50)});
     Edited ring = offset(disc.shape, 0, -10);
     EXPECT_EQ(counts_of(ring.shape).faces, 2);
-    EXPECT_NEAR(area_of(ring.shape), M_PI * 2500, 1e-6);
+    EXPECT_NEAR(area_of(ring.shape), std::numbers::pi * 2500, 1e-6);
 }
 
 } // namespace

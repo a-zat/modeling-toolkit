@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -289,12 +290,12 @@ TEST(Shape, MeasuresACurvedFaceWithoutAPlane) {
     // The side, then the top and the bottom.
     const FaceInfo side = face_info(shape, 0);
     EXPECT_EQ(side.planar, 0);
-    EXPECT_NEAR(side.area, 2 * M_PI * 5 * 10, 1e-6);
+    EXPECT_NEAR(side.area, 2 * std::numbers::pi * 5 * 10, 1e-6);
     EXPECT_EQ(side.normal, (std::array<double, 3>{0, 0, 0}));
     const FaceInfo top = face_info(shape, 1), bottom = face_info(shape, 2);
     EXPECT_EQ(top.planar + bottom.planar, 2);
     EXPECT_NEAR(top.normal[2] * bottom.normal[2], -1.0, 1e-12);
-    EXPECT_NEAR(top.area, M_PI * 25, 1e-6);
+    EXPECT_NEAR(top.area, std::numbers::pi * 25, 1e-6);
 }
 
 TEST(Shape, RejectsElementsThatTheShapeDoesNotHave) {
@@ -695,7 +696,7 @@ TEST(Tessellation, GivesTextureCoordinatesInMillimetresAlongEachFace) {
     ASSERT_EQ(mtk_shape_make_cylinder(10.0, 40.0, &made), MTK_STATUS_OK);
     ShapePtr cylinder(made);
     for (const auto& [shape, expected_u, expected_v] :
-         {std::tuple{box.get(), 0.0, 0.0}, std::tuple{cylinder.get(), 2 * M_PI * 10.0, 40.0}}) {
+         {std::tuple{box.get(), 0.0, 0.0}, std::tuple{cylinder.get(), 2 * std::numbers::pi * 10.0, 40.0}}) {
         mtk_tessellation* tessellation = nullptr;
         ASSERT_EQ(mtk_shape_tessellate(shape, 0.01, 0.1, nullptr, &tessellation), MTK_STATUS_OK)
             << mtk_last_error_message();
