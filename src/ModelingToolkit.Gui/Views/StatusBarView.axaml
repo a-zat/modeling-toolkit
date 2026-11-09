@@ -31,8 +31,17 @@
       </StackPanel>
 
       <StackPanel Orientation="Horizontal" Spacing="10">
-        <TextBlock Classes="label" Text="MODEL" />
-        <TextBlock Text="{Binding Summary}" />
+        <TextBlock Classes="label" Text="MODEL" IsVisible="{Binding !IsEditingBlock}" />
+        <TextBlock Text="{Binding Summary}" IsVisible="{Binding !IsEditingBlock}" />
+        <!-- The block being edited, in place of the summary of the model. -->
+        <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsEditingBlock}">
+          <TextBlock Classes="label" Text="EDITING" />
+          <TextBlock Text="{Binding ContextName}" FontWeight="SemiBold" />
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Border Classes="key"><TextBlock Text="Esc" /></Border>
+            <TextBlock Classes="secondary" Text="leave" />
+          </StackPanel>
+        </StackPanel>
         <TextBlock Text="{Binding StatusMessage}" Classes="secondary" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding StatusDetails}" />
         <!-- The file being opened or saved. -->

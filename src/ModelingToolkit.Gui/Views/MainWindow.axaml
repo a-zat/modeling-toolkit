@@ -21,6 +21,7 @@
     <!-- The fields that take text handle these keys first. -->
     <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" Command="{Binding DeleteCommand}" />
+    <KeyBinding Gesture="Escape" Command="{Binding LeaveContextCommand}" />
   </Window.KeyBindings>
 
   <!-- The menu goes to the menu bar of macOS; on the other platforms the layout shows it with a NativeMenuBar. -->

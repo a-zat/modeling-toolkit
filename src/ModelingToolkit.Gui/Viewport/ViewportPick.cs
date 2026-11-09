@@ -12,5 +12,7 @@ namespace ModelingToolkit.Gui.Viewport;
 /// <param name="Element">The face, edge or vertex of a shape under the pointer; null on a mesh or on nothing.</param>
 /// <param name="Point">The point picked, in the model space.</param>
 /// <param name="Normal">The normal of the face at the point, of unit length; zero elsewhere.</param>
+/// <param name="ClickCount">1 for a click, 2 for the second click of a double click, and so on.</param>
 public sealed record ViewportPick(
-    IReadOnlyList<Entity>? Path, ElementReference? Element, Point3d Point, Vector3 Normal, KeyModifiers Modifiers);
+    IReadOnlyList<Entity>? Path, ElementReference? Element, Point3d Point, Vector3 Normal, KeyModifiers Modifiers,
+    int ClickCount = 1);

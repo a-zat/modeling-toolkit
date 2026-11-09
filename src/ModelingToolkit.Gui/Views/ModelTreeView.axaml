@@ -5,7 +5,8 @@
              x:DataType="vm:ModelTreeViewModel">
 
   <Panel>
-    <TreeView ItemsSource="{Binding Roots}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+    <TreeView ItemsSource="{Binding Roots}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+              DoubleTapped="OnTreeDoubleTapped">
       <TreeView.Styles>
         <Style Selector="TreeViewItem" x:DataType="vm:ModelNodeViewModel">
           <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />

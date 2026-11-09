@@ -36,14 +36,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsGridVisible = true;
 
         Properties.Edit = Edit;
+        ModelTree.EnterCommand = EnterNodeCommand;
         ModelTree.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ModelTreeViewModel.SelectedNode))
             {
-                // A node and elements are not selected together.
-                if (ModelTree.SelectedNode is not null)
+                // A node and elements are not selected together; a node outside the context leaves it.
+                if (ModelTree.SelectedNode is { } node)
                 {
                     Elements?.Clear();
+                    LeaveTo(node.Path);
                 }
                 ShowProperties();
                 OnEditingChanged();
@@ -148,14 +150,57 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial IReadOnlyList<ElementReference> SelectedElements { get; private set; } = [];
 
+    /// <summary>Where the edits happen: the model, or the block of a reference entered; null without a document.</summary>
+    public EditContext? Context { get; private set; }
+
+    /// <summary>Whether a block is being edited rather than the model.</summary>
+    public bool IsEditingBlock => Context is { IsModel: false };
+
+    /// <summary>The references entered, by name, from the model: "Car › Front wheel".</summary>
+    public string ContextName => Context is null
+        ? string.Empty
+        : string.Join(" › ", Context.Path.Select(reference => reference.Name ?? reference.Block.Name));
+
     /// <summary>
-    /// Selects what a click of the 3D view picks: the face, edge or vertex of a shape, Shift adding it to the elements
-    /// selected or taking it out; the node of a mesh; nothing, on the ground.
+    /// Selects what a click of the 3D view picks, in the context: a reference of the block being edited, which a double
+    /// click enters; the face, edge or vertex of a shape of that block, Shift adding it to the elements selected or
+    /// taking it out; a mesh of that block. A click on what is outside the context leaves it, to the block that has
+    /// what was clicked, and a click on nothing to the model.
     /// </summary>
     [RelayCommand]
     private void Pick(ViewportPick pick)
     {
-        if (pick.Element is { } element && Elements is { } elements)
+        if (Context is not { } context || Elements is not { } elements)
+        {
+            return;
+        }
+        if (pick.Path is null)
+        {
+            ModelTree.SelectedNode = null;
+            elements.Clear();
+            context.LeaveAll();
+            return;
+        }
+
+        IReadOnlyList<Entity> within = LeaveTo(pick.Path);
+        if (within[0] is BlockReference reference)
+        {
+            if (pick.ClickCount == 2)
+            {
+                ModelTree.SelectedNode = null;
+                context.Enter(reference);
+            }
+            else
+            {
+                elements.Clear();
+                ModelTree.SelectCommand.Execute(pick.Path.Take(pick.Path.Count - within.Count + 1).ToArray());
+            }
+        }
+        else if (pick.ClickCount > 1)
+        {
+            // The first click selected it.
+        }
+        else if (pick.Element is { } element)
         {
             ModelTree.SelectedNode = null;
             if (pick.Modifiers.HasFlag(KeyModifiers.Shift))
@@ -166,11 +211,68 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 elements.Select(element);
             }
+        }
+        else
+        {
+            elements.Clear();
+            ModelTree.SelectCommand.Execute(pick.Path);
+        }
+    }
+
+    // Leaves the context until it holds the path of entities, and gives the path from the block being edited.
+    private IReadOnlyList<Entity> LeaveTo(IReadOnlyList<Entity> path)
+    {
+        if (Context is null)
+        {
+            return path;
+        }
+        while (true)
+        {
+            if (Context.Within(path) is { } within)
+            {
+                return within;
+            }
+            if (Context.IsModel)
+            {
+                return []; // the model node
+            }
+            Context.Leave();
+        }
+    }
+
+    /// <summary>Edits the block of the reference of a node of the model tree, from the model.</summary>
+    [RelayCommand]
+    private void EnterNode(ModelNodeViewModel? node)
+    {
+        if (Context is not { } context || node?.Entity is not BlockReference || IsBusy)
+        {
             return;
         }
 
+        ModelTree.SelectedNode = null;
+        context.LeaveAll();
+        foreach (Entity entity in node.Path)
+        {
+            context.Enter((BlockReference)entity);
+        }
+    }
+
+    /// <summary>Goes back to the block the one being edited was entered from.</summary>
+    [RelayCommand]
+    private void LeaveContext()
+    {
+        if (Context is { IsModel: false } context)
+        {
+            ModelTree.SelectedNode = null;
+            context.Leave();
+        }
+    }
+
+    private void OnContextChanged(object? sender, EventArgs e)
+    {
         Elements?.Clear();
-        ModelTree.SelectCommand.Execute(pick.Path);
+        OnPropertyChanged(nameof(IsEditingBlock));
+        OnPropertyChanged(nameof(ContextName));
     }
 
     private void OnElementsChanged(object? sender, EventArgs e)
@@ -583,10 +685,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             Elements.Changed -= OnElementsChanged;
         }
+        if (Context is not null)
+        {
+            Context.Changed -= OnContextChanged;
+        }
         // Before the properties, which show the elements that remain after a change.
         Elements = new ElementSelection(document);
         Elements.Changed += OnElementsChanged;
         SelectedElements = [];
+        Context = new EditContext(document);
+        Context.Changed += OnContextChanged;
+        OnContextChanged(this, EventArgs.Empty);
 
         Properties.Know(document, statistics);
         ModelTree.Show(document);

@@ -18,6 +18,9 @@ public sealed partial class ModelTreeViewModel : ObservableObject
 
     public bool IsEmpty => Roots.Count == 0;
 
+    /// <summary>Executed with a node that is double-clicked: one of a reference enters its block.</summary>
+    public System.Windows.Input.ICommand? EnterCommand { get; set; }
+
     private Document? _document;
 
     /// <summary>Shows the structure of a document, and follows its changes.</summary>

@@ -64,6 +64,7 @@ public sealed class ViewportView : Border, IViewCamera
     private ViewportScene? _shownScene;
     private Document? _followedDocument;
     private KeyModifiers _clickModifiers; // held when a button was last released, which ends a click
+    private int _clickCount = 1; // of the button last pressed, 2 for a double click
     private bool _updatePosted;
 
     public ViewportView()
@@ -241,6 +242,7 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        _clickCount = e.ClickCount;
         SendButtons(e);
     }
 
@@ -324,7 +326,7 @@ public sealed class ViewportView : Border, IViewCamera
             if (picked is { } pick)
             {
                 var detailed = new ViewportPick(_shownScene?.PathOfShown(pick.Instance), _shownScene?.ElementOf(pick),
-                    pick.Point, pick.Normal, _clickModifiers);
+                    pick.Point, pick.Normal, _clickModifiers, _clickCount);
                 if (PickCommand is { } command && command.CanExecute(detailed))
                 {
                     command.Execute(detailed);
