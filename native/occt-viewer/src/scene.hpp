@@ -163,8 +163,9 @@ void apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode mode, 
 EdgeAspects make_edge_aspects();
 
 // The program of the line aspects that draws their lines a width in pixels, thick also where OpenGL draws them one pixel
-// wide at most, and a little closer to the camera than they are, over the faces they bound.
-occ::handle<Graphic3d_ShaderProgram> outline_program(float width);
+// wide at most, and a little closer to the camera than they are, over the faces they bound. Caps fill the corners of
+// lines that meet, going on beyond their ends by half the width.
+occ::handle<Graphic3d_ShaderProgram> outline_program(float width, bool caps = true);
 void apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges);
 
 // The matrix as a placement that OpenCASCADE can apply to a shared presentation: a rotation, possibly with a

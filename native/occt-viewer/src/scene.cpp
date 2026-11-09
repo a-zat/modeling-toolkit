@@ -117,10 +117,12 @@ occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& m
 // instead as quads of a width in pixels. OpenCASCADE does not give the width of lines to the shaders of line aspects
 // (occLineWidth stays 0), so each width has a program of its own. The outlines are drawn a little closer to the camera
 // than they are, a fraction of their distance, so that the faces they bound do not cover half of them; a depth offset
-// would not do, as the depth of perspective is far from linear.
-occ::handle<Graphic3d_ShaderProgram> make_outline_program(float width) {
+// would not do, as the depth of perspective is far from linear. With caps, each segment goes on beyond its ends by half
+// the width, so that the corners where segments meet are filled.
+occ::handle<Graphic3d_ShaderProgram> make_outline_program(float width, bool caps) {
     occ::handle<Graphic3d_ShaderProgram> program = new Graphic3d_ShaderProgram();
-    program->SetId(TCollection_AsciiString("mtk_outlines_") + TCollection_AsciiString(static_cast<int>(width * 100)));
+    program->SetId(TCollection_AsciiString(caps ? "mtk_outlines_" : "mtk_lines_") +
+                   TCollection_AsciiString(static_cast<int>(width * 100)));
     program->SetHeader("#version 150");
     program->SetNbLightsMax(0);
     program->SetNbClipPlanesMax(0);
@@ -131,7 +133,8 @@ void main() {
     gl_Position = occProjectionMatrix * position;
 })"));
     program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(
-        Graphic3d_TOS_GEOMETRY, TCollection_AsciiString("const float width = ") + TCollection_AsciiString(width) + ";" + R"(
+        Graphic3d_TOS_GEOMETRY, TCollection_AsciiString("const float width = ") + TCollection_AsciiString(width) +
+                                    "; const float cap = " + (caps ? "0.5" : "0.0") + ";" + R"(
 layout(lines) in;
 layout(triangle_strip, max_vertices = 4) out;
 uniform vec4 occViewport;
@@ -141,8 +144,8 @@ void main() {
     vec2 half_size = 0.5 * occViewport.zw;
     vec2 along = (end.xy / end.w - start.xy / start.w) * half_size;
     float length = max(length(along), 1.0e-6);
-    // Half the width across the segment, and as much beyond its ends, so that the segments of a polyline join.
-    vec2 forward = along / length * 0.5 * width / half_size;
+    // Half the width across the segment, and the cap beyond its ends.
+    vec2 forward = along / length * cap * width / half_size;
     vec2 across = vec2(-along.y, along.x) / length * 0.5 * width / half_size;
     gl_Position = vec4(start.xy + (-forward + across) * start.w, start.zw);
     EmitVertex();
@@ -186,11 +189,11 @@ void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode m
     apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
 }
 
-occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width) {
-    static std::map<float, occ::handle<Graphic3d_ShaderProgram>> programs;
-    occ::handle<Graphic3d_ShaderProgram>& program = programs[width];
+occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width, bool caps) {
+    static std::map<std::pair<float, bool>, occ::handle<Graphic3d_ShaderProgram>> programs;
+    occ::handle<Graphic3d_ShaderProgram>& program = programs[{width, caps}];
     if (program.IsNull()) {
-        program = make_outline_program(width);
+        program = make_outline_program(width, caps);
     }
     return program;
 }
@@ -344,7 +347,8 @@ void mtk::ElementOwner::draw(const occ::handle<Prs3d_Presentation>& presentation
         group->AddPrimitiveArray(face);
     } else if (kind_ == MTK_VIEWER_ELEMENT_EDGE) {
         occ::handle<Graphic3d_AspectLine3d> aspect = new Graphic3d_AspectLine3d(color, Aspect_TOL_SOLID, 1.0);
-        aspect->SetShaderProgram(outline_program(static_cast<float>(style.LineAspect()->Aspect()->Width())));
+        // Without caps, which would go on beyond the vertices at the ends of the edge.
+        aspect->SetShaderProgram(outline_program(static_cast<float>(style.LineAspect()->Aspect()->Width()), false));
         group->SetGroupPrimitivesAspect(aspect);
         const std::vector<gp_Pnt> points = polyline_points(*mesh_.edges, polyline_);
         occ::handle<Graphic3d_ArrayOfPolylines> line = new Graphic3d_ArrayOfPolylines(static_cast<int>(points.size()));
