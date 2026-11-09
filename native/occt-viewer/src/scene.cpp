@@ -4,6 +4,7 @@
 
 #include <Graphic3d_ArrayOfPoints.hxx>
 #include <Graphic3d_AspectMarker3d.hxx>
+#include <Graphic3d_Camera.hxx>
 #include <Graphic3d_Group.hxx>
 #include <Graphic3d_MaterialAspect.hxx>
 #include <Graphic3d_PBRMaterial.hxx>
@@ -15,6 +16,7 @@
 #include <Select3D_SensitivePoly.hxx>
 #include <Select3D_SensitivePrimitiveArray.hxx>
 #include <SelectMgr_EntityOwner.hxx>
+#include <SelectMgr_SelectingVolumeManager.hxx>
 #include <SelectMgr_Selection.hxx>
 #include <gp_Mat.hxx>
 
@@ -43,31 +45,61 @@ gp_Mat linear_part(const double* matrix) {
 // opacity.
 constexpr float faded_opacity = 0.25f;
 
-occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& material,
-                                                    const occ::handle<Graphic3d_Texture2D>& texture) {
+// In the CAD render style the faces are lit mostly by the ambient light, and a little by the light at the camera, so
+// that they keep about the colour of their material, faces at an angle a little darker, without highlights: a
+// face towards the camera gets the whole colour, one seen edge-on two thirds of it.
+constexpr float cad_ambient = 0.65f;
+constexpr float cad_diffuse = 0.35f;
+
+Quantity_Color scaled(const Quantity_Color& color, float factor) {
+    return Quantity_Color(color.Red() * factor, color.Green() * factor, color.Blue() * factor, Quantity_TOC_RGB);
+}
+
+Graphic3d_MaterialAspect make_material(const mtk_viewer_material& material, mtk_viewer_render_style style) {
     const Quantity_Color color(material.base_color[0], material.base_color[1], material.base_color[2],
                                Quantity_TOC_RGB);
     const float opacity = material.base_color[3];
 
-    // The view shades as OpenCASCADE does the metallic-roughness materials of glTF without physically based rendering
-    // (XCAFDoc_VisMaterial): the metallic factor becomes the specular colour, the roughness the inverse of the
-    // shininess. The material keeps them too, for a physically based shading.
     Graphic3d_MaterialAspect aspect_material(Graphic3d_NameOfMaterial_UserDefined);
-    aspect_material.SetColor(color);
-    aspect_material.SetSpecularColor(
-        Quantity_Color(material.metallic, material.metallic, material.metallic, Quantity_TOC_RGB));
-    aspect_material.SetShininess(1.0f - material.roughness);
+    if (style == MTK_VIEWER_RENDER_CAD) {
+        aspect_material.SetAmbientColor(scaled(color, cad_ambient));
+        aspect_material.SetDiffuseColor(scaled(color, cad_diffuse));
+        aspect_material.SetSpecularColor(Quantity_NOC_BLACK);
+        aspect_material.SetEmissiveColor(Quantity_NOC_BLACK);
+        aspect_material.SetShininess(0.0f);
+    } else {
+        // The view shades as OpenCASCADE does the metallic-roughness materials of glTF without physically based
+        // rendering (XCAFDoc_VisMaterial): the metallic factor becomes the specular colour, the roughness the inverse
+        // of the shininess.
+        aspect_material.SetColor(color);
+        aspect_material.SetSpecularColor(
+            Quantity_Color(material.metallic, material.metallic, material.metallic, Quantity_TOC_RGB));
+        aspect_material.SetShininess(1.0f - material.roughness);
+    }
     aspect_material.SetTransparency(1.0f - opacity);
+    // The material keeps them too, for a physically based shading.
     Graphic3d_PBRMaterial physical;
     physical.SetColor(Quantity_ColorRGBA(color, opacity));
     physical.SetMetallic(material.metallic);
     physical.SetRoughness(material.roughness);
     aspect_material.SetPBRMaterial(physical);
+    return aspect_material;
+}
 
+void apply_render_style_to(Graphic3d_AspectFillArea3d& aspect, const mtk_viewer_material& material,
+                           mtk_viewer_render_style style) {
+    const Graphic3d_MaterialAspect aspect_material = make_material(material, style);
+    aspect.SetFrontMaterial(aspect_material);
+    aspect.SetBackMaterial(aspect_material);
+}
+
+occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& material,
+                                                    const occ::handle<Graphic3d_Texture2D>& texture,
+                                                    mtk_viewer_render_style style) {
+    const float opacity = material.base_color[3];
     occ::handle<Graphic3d_AspectFillArea3d> aspect = new Graphic3d_AspectFillArea3d();
     aspect->SetInteriorStyle(Aspect_IS_SOLID);
-    aspect->SetFrontMaterial(aspect_material);
-    aspect->SetBackMaterial(aspect_material);
+    apply_render_style_to(*aspect, material, style);
     if (opacity < 1.0f) {
         aspect->SetAlphaMode(Graphic3d_AlphaMode_Blend);
     }
@@ -164,6 +196,41 @@ constexpr float hovered_face_opacity = 0.35f;
 constexpr float selected_face_opacity = 0.6f;
 constexpr float highlighted_edge_width = 2.0f; // drawn 1 pixel wide where OpenGL has only thin lines, as on macOS
 constexpr double highlighted_vertex_scale = 3.0;
+
+// Near an edge or a vertex, OpenCASCADE keeps the closest of the face and the edge, whatever their priorities, as
+// edges and vertices have no normal (SelectMgr_SortCriterion::IsCloserDepth). Faces are therefore picked as if
+// farther by this part of the height of the view at their depth, about as many pixels as the pick tolerance, so that
+// the edges and vertices on them win, while those hidden behind them still lose.
+constexpr double face_depth_offset = 0.01;
+
+class FaceSensitive : public Select3D_SensitivePrimitiveArray {
+    DEFINE_STANDARD_RTTI_INLINE(FaceSensitive, Select3D_SensitivePrimitiveArray)
+
+public:
+    using Select3D_SensitivePrimitiveArray::Select3D_SensitivePrimitiveArray;
+
+    bool Matches(SelectBasics_SelectingVolumeManager& manager, SelectBasics_PickResult& result) override {
+        if (!Select3D_SensitivePrimitiveArray::Matches(manager, result)) {
+            return false;
+        }
+        auto* volumes = dynamic_cast<SelectMgr_SelectingVolumeManager*>(&manager);
+        if (volumes == nullptr || volumes->GetActiveSelectionType() != SelectMgr_SelectionType_Point ||
+            volumes->Camera().IsNull()) {
+            return true;
+        }
+        if (!result.HasPickedPoint()) {
+            result.SetPickedPoint(volumes->DetectedPoint(result.Depth())); // the point picked, not the moved one
+        }
+        // The depth counts from the near plane, in the units of the scene, whatever the placement of the object. The
+        // size of the window is not known here: the volumes of an object with a placement are a transformed copy.
+        const Graphic3d_Camera& camera = *volumes->Camera();
+        const double view_height = camera.IsOrthographic()
+                                       ? camera.ViewDimensions().Y()
+                                       : camera.ViewDimensions(camera.ZNear() + result.Depth()).Y();
+        result.SetDepth(result.Depth() + face_depth_offset * view_height);
+        return true;
+    }
+};
 
 // Element owners are picked with priority to vertices, then edges, then faces, at about the same depth.
 int priority_of(mtk_viewer_element_kind kind) {
@@ -271,8 +338,8 @@ void mtk::add_element_sensitives(const occ::handle<SelectMgr_Selection>& selecti
         if (first == end) {
             continue;
         }
-        occ::handle<Select3D_SensitivePrimitiveArray> sensitive = new Select3D_SensitivePrimitiveArray(
-            new ElementOwner(object, mesh, MTK_VIEWER_ELEMENT_FACE, static_cast<int>(face)));
+        occ::handle<Select3D_SensitivePrimitiveArray> sensitive =
+            new FaceSensitive(new ElementOwner(object, mesh, MTK_VIEWER_ELEMENT_FACE, static_cast<int>(face)));
         // The range of the indices includes its last one.
         sensitive->InitTriangulation(mesh.triangles->Attributes(), mesh.triangles->Indices(), TopLoc_Location(),
                                      3 * first, 3 * end - 1);
@@ -496,15 +563,25 @@ occ::handle<Graphic3d_Texture2D> mtk::make_texture(const uint8_t* pixels, int wi
 }
 
 mtk::MaterialAspects mtk::make_aspects(const mtk_viewer_material& material,
-                                       const occ::handle<Graphic3d_Texture2D>& texture) {
+                                       const occ::handle<Graphic3d_Texture2D>& texture,
+                                       mtk_viewer_render_style style) {
     // Faded, only the fronts of the triangles are drawn, so that what is behind shows through fewer layers.
     mtk_viewer_material faded = material;
     faded.base_color[3] *= faded_opacity;
-    MaterialAspects aspects{make_aspect(material, texture), make_aspect(faded, texture), make_aspect(material, texture),
-                            make_aspect(faded, texture)};
+    MaterialAspects aspects{make_aspect(material, texture, style), make_aspect(faded, texture, style),
+                            make_aspect(material, texture, style), make_aspect(faded, texture, style), material};
     aspects.faded->SetFaceCulling(Graphic3d_TypeOfBackfacingModel_BackCulled);
     aspects.faded_faces->SetFaceCulling(Graphic3d_TypeOfBackfacingModel_BackCulled);
     return aspects;
+}
+
+void mtk::apply_render_style(MaterialAspects& aspects, mtk_viewer_render_style style) {
+    mtk_viewer_material faded = aspects.material;
+    faded.base_color[3] *= faded_opacity;
+    apply_render_style_to(*aspects.shaded, aspects.material, style);
+    apply_render_style_to(*aspects.faded, faded, style);
+    apply_render_style_to(*aspects.shaded_faces, aspects.material, style);
+    apply_render_style_to(*aspects.faded_faces, faded, style);
 }
 
 std::optional<gp_Trsf> mtk::to_placement(const double* matrix) {
