@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Input;
 using ModelingToolkit.Core.Geometry;
@@ -319,6 +320,99 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         fixed (ViewerElement* values = elements)
         {
             NativeMethods.SetHighlightedElements(_handle, values, elements.Length).ThrowIfFailed();
+        }
+    }
+
+    /// <summary>Shows an overlay in place of the previous one; an empty one shows none.</summary>
+    /// <exception cref="ArgumentException">The viewer refuses the overlay: points that are not finite, for example.</exception>
+    public unsafe void SetOverlay(ViewOverlay overlay)
+    {
+        ArgumentNullException.ThrowIfNull(overlay);
+        if (overlay.IsEmpty)
+        {
+            NativeMethods.SetOverlay(_handle, null).ThrowIfFailed();
+            return;
+        }
+
+        // The points and the texts in native memory for the call only.
+        var allocations = new List<nint>();
+        nint Allocate(int bytes)
+        {
+            nint memory = (nint)NativeMemory.Alloc((nuint)Math.Max(bytes, 1));
+            allocations.Add(memory);
+            return memory;
+        }
+
+        try
+        {
+            var lines = (NativeOverlayLine*)Allocate(overlay.Lines.Count * sizeof(NativeOverlayLine));
+            for (int i = 0; i < overlay.Lines.Count; i++)
+            {
+                OverlayLine line = overlay.Lines[i];
+                var points = (double*)Allocate(line.Points.Count * 3 * sizeof(double));
+                for (int p = 0; p < line.Points.Count; p++)
+                {
+                    points[3 * p] = line.Points[p].X;
+                    points[3 * p + 1] = line.Points[p].Y;
+                    points[3 * p + 2] = line.Points[p].Z;
+                }
+                lines[i] = new NativeOverlayLine
+                {
+                    Points = points, PointCount = line.Points.Count, Width = (float)line.Width, Dash = (float)line.Dash,
+                };
+                SetColor(lines[i].Color, line.Color);
+            }
+
+            var markers = (NativeOverlayMarker*)Allocate(overlay.Markers.Count * sizeof(NativeOverlayMarker));
+            for (int i = 0; i < overlay.Markers.Count; i++)
+            {
+                OverlayMarker marker = overlay.Markers[i];
+                markers[i] = new NativeOverlayMarker { Shape = (int)marker.Shape };
+                SetPoint(markers[i].Point, marker.Point);
+                SetColor(markers[i].Color, marker.Color);
+            }
+
+            var labels = (NativeOverlayLabel*)Allocate(overlay.Labels.Count * sizeof(NativeOverlayLabel));
+            for (int i = 0; i < overlay.Labels.Count; i++)
+            {
+                OverlayLabel label = overlay.Labels[i];
+                byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(label.Text);
+                var text = (byte*)Allocate(utf8.Length + 1);
+                utf8.CopyTo(new Span<byte>(text, utf8.Length));
+                text[utf8.Length] = 0;
+                labels[i] = new NativeOverlayLabel { Text = text };
+                SetPoint(labels[i].Point, label.Point);
+                SetColor(labels[i].Color, label.Color);
+                SetColor(labels[i].Background, label.Background);
+            }
+
+            var native = new NativeOverlay
+            {
+                Lines = lines, LineCount = overlay.Lines.Count, Markers = markers, MarkerCount = overlay.Markers.Count,
+                Labels = labels, LabelCount = overlay.Labels.Count,
+            };
+            NativeMethods.SetOverlay(_handle, &native).ThrowIfFailed();
+        }
+        finally
+        {
+            foreach (nint memory in allocations)
+            {
+                NativeMemory.Free((void*)memory);
+            }
+        }
+
+        static void SetPoint(double* values, Point3d point)
+        {
+            values[0] = point.X;
+            values[1] = point.Y;
+            values[2] = point.Z;
+        }
+
+        static void SetColor(float* values, Avalonia.Media.Color color)
+        {
+            values[0] = color.R / 255f;
+            values[1] = color.G / 255f;
+            values[2] = color.B / 255f;
         }
     }
 

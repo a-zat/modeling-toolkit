@@ -1,5 +1,5 @@
 # A library of its own, next to the bridge: the command line tool loads the bridge, and never OpenGL.
-add_library(mtk_occt_viewer SHARED src/viewer.cpp src/scene.cpp)
+add_library(mtk_occt_viewer SHARED src/viewer.cpp src/scene.cpp src/overlay.cpp)
 
 if(APPLE)
     target_sources(mtk_occt_viewer PRIVATE src/native_view_cocoa.mm)

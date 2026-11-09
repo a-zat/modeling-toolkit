@@ -24,6 +24,10 @@ public sealed class ViewerInteropTests
         Assert.Equal(IntPtr.Size == 8 ? 120 : 60, Unsafe.SizeOf<NativeMesh>());
         Assert.Equal(56, Unsafe.SizeOf<NativePick>());
         Assert.Equal(12, Unsafe.SizeOf<ViewerElement>());
+        Assert.Equal(32, Unsafe.SizeOf<NativeOverlayLine>());
+        Assert.Equal(40, Unsafe.SizeOf<NativeOverlayMarker>());
+        Assert.Equal(56, Unsafe.SizeOf<NativeOverlayLabel>());
+        Assert.Equal(48, Unsafe.SizeOf<NativeOverlay>());
         Assert.Equal(28, Unsafe.SizeOf<NativeMaterial>());
     }
 

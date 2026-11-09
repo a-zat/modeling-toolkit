@@ -54,6 +54,9 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<bool> IsGridVisibleProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsGridVisible), defaultValue: true);
 
+    public static readonly StyledProperty<ViewOverlay> OverlayProperty =
+        AvaloniaProperty.Register<ViewportView, ViewOverlay>(nameof(Overlay), ViewOverlay.Empty);
+
     // A pinch that doubles the size of the view zooms as much as about 13 notches of the wheel.
     private const double PinchToWheelNotches = 200.0 / 15.0;
 
@@ -96,6 +99,13 @@ public sealed class ViewportView : Border, IViewCamera
             e.Handled = true;
         };
         ActualThemeVariantChanged += (_, _) => ApplyColors();
+    }
+
+    /// <summary>What the active tool draws over the scene, such as the line it draws.</summary>
+    public ViewOverlay Overlay
+    {
+        get => GetValue(OverlayProperty);
+        set => SetValue(OverlayProperty, value);
     }
 
     /// <summary>The document shown, which replaces the previous one; the camera turns to it.</summary>
@@ -229,6 +239,14 @@ public sealed class ViewportView : Border, IViewCamera
             Send(viewer =>
             {
                 scene.ShowSelectionIn(viewer, Selection);
+                return true;
+            });
+        }
+        else if (change.Property == OverlayProperty)
+        {
+            Send(viewer =>
+            {
+                viewer.SetOverlay(Overlay);
                 return true;
             });
         }
@@ -437,6 +455,7 @@ public sealed class ViewportView : Border, IViewCamera
             {
                 viewer.Clear();
             }
+            viewer.SetOverlay(Overlay); // which clearing the viewer removed
 
             return true;
         });
@@ -515,6 +534,7 @@ public sealed class ViewportView : Border, IViewCamera
         viewer.SetRenderStyle(RenderStyle);
         viewer.SetPerspective(IsPerspective);
         viewer.SetGridVisible(IsGridVisible);
+        viewer.SetOverlay(Overlay);
         return true;
     }
 

@@ -44,6 +44,10 @@ static_assert(sizeof(mtk_viewer_material) == 28);
 static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 120);
 static_assert(sizeof(mtk_viewer_element) == 12);
 static_assert(sizeof(mtk_viewer_pick) == 56);
+static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_overlay_line) == 32);
+static_assert(sizeof(mtk_viewer_overlay_marker) == 40);
+static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_overlay_label) == 56);
+static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_overlay) == 48);
 
 namespace {
 
@@ -406,6 +410,7 @@ void mtk::Viewer::set_selection(const int32_t* instances, int count) {
 
 void mtk::Viewer::clear() {
     set_highlighted_elements(nullptr, 0);
+    set_overlay({});
     for (const occ::handle<AIS_InteractiveObject>& instance : instances_) {
         if (!instance.IsNull()) {
             context_->Remove(instance, false);
@@ -419,6 +424,20 @@ void mtk::Viewer::clear() {
     textures_.clear();
     meshes_.clear();
     set_grid_step(default_grid_step);
+    view_->Invalidate();
+}
+
+void mtk::Viewer::set_overlay(Overlay overlay) {
+    if (!overlay_object_.IsNull()) {
+        context_->Remove(overlay_object_, false);
+        overlay_object_.Nullify();
+    }
+    overlay_ = std::move(overlay);
+    if (!overlay_.empty()) {
+        overlay_object_ = new OverlayObject(overlay_, scale_);
+        overlay_object_->SetZLayer(Graphic3d_ZLayerId_Topmost);
+        context_->Display(overlay_object_, 0, -1, false); // never picked
+    }
     view_->Invalidate();
 }
 
@@ -781,6 +800,9 @@ void mtk::Viewer::apply_scale(double scale) {
     }
     for (const auto& [instance, owner] : highlighted_) {
         owner->highlight_selected(context_->MainPrsMgr(), context_->HighlightStyle(Prs3d_TypeOfHighlight_Selected));
+    }
+    if (!overlay_object_.IsNull()) {
+        set_overlay(overlay_); // in sizes of the new scale
     }
 }
 
@@ -1268,6 +1290,25 @@ mtk_status mtk_viewer_set_highlighted_elements(mtk_viewer* viewer, const mtk_vie
             }
         }
         viewer->set_highlighted_elements(elements, count);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_overlay(mtk_viewer* viewer, const mtk_viewer_overlay* overlay) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        if (overlay == nullptr) {
+            viewer->set_overlay({});
+            return MTK_STATUS_OK;
+        }
+        std::string error;
+        std::optional<mtk::Overlay> checked = mtk::make_overlay(*overlay, error);
+        if (!checked) {
+            return mtk::invalid_argument(error.c_str());
+        }
+        viewer->set_overlay(std::move(*checked));
         return MTK_STATUS_OK;
     });
 }

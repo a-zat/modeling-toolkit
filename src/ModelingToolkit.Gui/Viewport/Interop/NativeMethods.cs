@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 14;
+    public const int AbiVersion = 15;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -95,6 +95,9 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_highlighted_elements")]
     public static unsafe partial NativeStatus SetHighlightedElements(
         ViewerHandle viewer, ViewerElement* elements, int count);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_overlay")]
+    public static unsafe partial NativeStatus SetOverlay(ViewerHandle viewer, NativeOverlay* overlay);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_scroll")]
     public static partial NativeStatus Scroll(ViewerHandle viewer, double x, double y, double delta, out int redraw);

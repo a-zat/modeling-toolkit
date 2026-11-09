@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 14
+#define MTK_OCCT_VIEWER_ABI_VERSION 15
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -274,6 +274,56 @@ MTK_VIEWER_API mtk_status mtk_viewer_get_hovered(mtk_viewer* viewer, mtk_viewer_
  */
 MTK_VIEWER_API mtk_status mtk_viewer_set_highlighted_elements(mtk_viewer* viewer, const mtk_viewer_element* elements,
                                                               int32_t count);
+
+/*
+ * The overlay: what the tools draw over the scene while they work, such as the line being drawn, the point it snaps to
+ * and its length. It is drawn in front of the scene, in sizes of device-independent units, and never picked.
+ */
+
+/* A polyline: point_count points, 3 values each, in millimetres, in the coordinates of the scene. */
+typedef struct mtk_viewer_overlay_line {
+    const double* points;
+    int32_t point_count; /* 2 or more */
+    float color[3];      /* sRGB, from 0 to 1 */
+    float width;         /* greater than 0 */
+    float dash;          /* the length of the dashes and of the gaps between them; 0 for a solid line */
+} mtk_viewer_overlay_line;
+
+typedef enum mtk_viewer_marker_shape {
+    MTK_VIEWER_MARKER_DOT = 0,    /* a filled disc */
+    MTK_VIEWER_MARKER_CIRCLE = 1, /* a ring */
+    MTK_VIEWER_MARKER_CROSS = 2,  /* an X */
+    MTK_VIEWER_MARKER_PLUS = 3    /* a + */
+} mtk_viewer_marker_shape;
+
+typedef struct mtk_viewer_overlay_marker {
+    double point[3];
+    float color[3];
+    int32_t shape; /* mtk_viewer_marker_shape */
+} mtk_viewer_overlay_marker;
+
+/* A text by a point, on a background of its own colour. */
+typedef struct mtk_viewer_overlay_label {
+    double point[3];
+    const char* text; /* UTF-8, not empty */
+    float color[3];
+    float background[3];
+} mtk_viewer_overlay_label;
+
+typedef struct mtk_viewer_overlay {
+    const mtk_viewer_overlay_line* lines; /* each array may be null when its count is 0 */
+    int32_t line_count;
+    const mtk_viewer_overlay_marker* markers;
+    int32_t marker_count;
+    const mtk_viewer_overlay_label* labels;
+    int32_t label_count;
+} mtk_viewer_overlay;
+
+/*
+ * Shows an overlay in place of the previous one; null, or one with nothing, shows none. mtk_viewer_clear removes it
+ * too. The arrays are read during the call only.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_set_overlay(mtk_viewer* viewer, const mtk_viewer_overlay* overlay);
 
 /* Zooms at (x, y) by delta notches of the mouse wheel, positive to zoom in; fractions come from touchpads. */
 MTK_VIEWER_API mtk_status mtk_viewer_scroll(mtk_viewer* viewer, double x, double y, double delta,

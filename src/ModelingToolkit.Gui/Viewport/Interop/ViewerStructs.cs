@@ -95,3 +95,41 @@ internal enum NativeElementKind
 /// <summary>An element of the shape that an instance of the viewer shows, numbered as in the shape.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct ViewerElement(int Instance, NativeElementKind Kind, int Index);
+
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeOverlayLine
+{
+    public double* Points;
+    public int PointCount;
+    public fixed float Color[3];
+    public float Width;
+    public float Dash;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeOverlayMarker
+{
+    public fixed double Point[3];
+    public fixed float Color[3];
+    public int Shape;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeOverlayLabel
+{
+    public fixed double Point[3];
+    public byte* Text;
+    public fixed float Color[3];
+    public fixed float Background[3];
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeOverlay
+{
+    public NativeOverlayLine* Lines;
+    public int LineCount;
+    public NativeOverlayMarker* Markers;
+    public int MarkerCount;
+    public NativeOverlayLabel* Labels;
+    public int LabelCount;
+}

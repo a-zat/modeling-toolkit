@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cstring>
 #include <map>
+#include <tuple>
 
 namespace {
 
@@ -120,11 +121,13 @@ occ::handle<Graphic3d_AspectFillArea3d> make_aspect(const mtk_viewer_material& m
 // (occLineWidth stays 0), so each width has a program of its own. The outlines are drawn a little closer to the camera
 // than they are, a fraction of their distance, so that the faces they bound do not cover half of them; a depth offset
 // would not do, as the depth of perspective is far from linear. With caps, each segment goes on beyond its ends by half
-// the width, so that the corners where segments meet are filled.
-occ::handle<Graphic3d_ShaderProgram> make_outline_program(float width, bool caps) {
+// the width, so that the corners where segments meet are filled. With a dash length, in pixels, the segments are
+// dashed, each from its start.
+occ::handle<Graphic3d_ShaderProgram> make_outline_program(float width, bool caps, float dash) {
     occ::handle<Graphic3d_ShaderProgram> program = new Graphic3d_ShaderProgram();
     program->SetId(TCollection_AsciiString(caps ? "mtk_outlines_" : "mtk_lines_") +
-                   TCollection_AsciiString(static_cast<int>(width * 100)));
+                   TCollection_AsciiString(static_cast<int>(width * 100)) + "_" +
+                   TCollection_AsciiString(static_cast<int>(dash * 100)));
     program->SetHeader("#version 150");
     program->SetNbLightsMax(0);
     program->SetNbClipPlanesMax(0);
@@ -140,6 +143,7 @@ void main() {
 layout(lines) in;
 layout(triangle_strip, max_vertices = 4) out;
 uniform vec4 occViewport;
+out float along_pixels; // the distance from the start of the segment, for dashes
 void main() {
     vec4 start = gl_in[0].gl_Position;
     vec4 end = gl_in[1].gl_Position;
@@ -149,18 +153,27 @@ void main() {
     // Half the width across the segment, and the cap beyond its ends.
     vec2 forward = along / length * cap * width / half_size;
     vec2 across = vec2(-along.y, along.x) / length * 0.5 * width / half_size;
+    along_pixels = -cap * width;
     gl_Position = vec4(start.xy + (-forward + across) * start.w, start.zw);
     EmitVertex();
     gl_Position = vec4(start.xy + (-forward - across) * start.w, start.zw);
     EmitVertex();
+    along_pixels = length + cap * width;
     gl_Position = vec4(end.xy + (forward + across) * end.w, end.zw);
     EmitVertex();
     gl_Position = vec4(end.xy + (forward - across) * end.w, end.zw);
     EmitVertex();
     EndPrimitive();
 })"));
-    program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(Graphic3d_TOS_FRAGMENT, R"(
+    program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(
+        Graphic3d_TOS_FRAGMENT, TCollection_AsciiString("const float dash = ") + TCollection_AsciiString(dash) + ";" +
+                                    R"(
+in float along_pixels;
 void main() {
+    // Dashes as long as the gaps between them.
+    if (dash > 0.0 && mod(along_pixels, 2.0 * dash) > dash) {
+        discard;
+    }
     occSetFragColor(occColor);
 })"));
     return program;
@@ -191,11 +204,11 @@ void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode m
     apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
 }
 
-occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width, bool caps) {
-    static std::map<std::pair<float, bool>, occ::handle<Graphic3d_ShaderProgram>> programs;
-    occ::handle<Graphic3d_ShaderProgram>& program = programs[{width, caps}];
+occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width, bool caps, float dash) {
+    static std::map<std::tuple<float, bool, float>, occ::handle<Graphic3d_ShaderProgram>> programs;
+    occ::handle<Graphic3d_ShaderProgram>& program = programs[{width, caps, dash}];
     if (program.IsNull()) {
-        program = make_outline_program(width, caps);
+        program = make_outline_program(width, caps, dash);
     }
     return program;
 }

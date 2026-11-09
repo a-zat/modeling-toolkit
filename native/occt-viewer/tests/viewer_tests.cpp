@@ -68,7 +68,7 @@ struct Square {
 
     mtk_viewer_mesh mesh() const {
         return {positions.data(), normals.data(), uvs.data(), 4, triangles.data(), 2, nullptr, nullptr, 0,
-                nullptr, 0, nullptr, nullptr, 0};
+                nullptr, 0, nullptr, nullptr, 0, nullptr};
     }
 };
 
@@ -332,6 +332,60 @@ TEST(Viewer, HighlightsTheElementsOfTheShapesOfItsInstances) {
     EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), nullptr, 0), MTK_STATUS_OK);
     EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), elements, 1), MTK_STATUS_OK);
     EXPECT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
+}
+
+TEST(Viewer, ShowsAnOverlayInPlaceOfThePreviousOne) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const double points[] = {0, 0, 0, 1000, 0, 0, 1000, 500, 0};
+    const mtk_viewer_overlay_line lines[] = {{points, 3, {0.1f, 0.2f, 0.9f}, 2.0f, 0.0f},
+                                             {points, 2, {0.5f, 0.5f, 0.5f}, 1.0f, 4.0f}};
+    const mtk_viewer_overlay_marker markers[] = {{{1000, 0, 0}, {0.0f, 0.8f, 0.0f}, MTK_VIEWER_MARKER_DOT},
+                                                 {{500, 0, 0}, {0.0f, 0.8f, 0.8f}, MTK_VIEWER_MARKER_CIRCLE}};
+    const mtk_viewer_overlay_label labels[] = {{{500, 0, 0}, "1000 mm", {0, 0, 0}, {1, 1, 1}}};
+    const mtk_viewer_overlay overlay{lines, 2, markers, 2, labels, 1};
+
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &overlay), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    const mtk_viewer_colors darker = colors(0.3f);
+    EXPECT_EQ(mtk_viewer_set_colors(viewer.get(), &darker), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_fit_all(viewer.get()), MTK_STATUS_OK); // the overlay is not part of the scene
+    const mtk_viewer_overlay nothing{};
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &nothing), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &overlay), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), nullptr), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &overlay), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
+}
+
+TEST(Viewer, RejectsOverlaysItCannotShow) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const double points[] = {0, 0, 0, 1, 0, 0};
+    const double infinite[] = {0, 0, 0, std::numeric_limits<double>::infinity(), 0, 0};
+    const mtk_viewer_overlay_line lines[] = {{points, 1, {0, 0, 0}, 1.0f, 0.0f},
+                                             {nullptr, 2, {0, 0, 0}, 1.0f, 0.0f},
+                                             {infinite, 2, {0, 0, 0}, 1.0f, 0.0f},
+                                             {points, 2, {2, 0, 0}, 1.0f, 0.0f},
+                                             {points, 2, {0, 0, 0}, 0.0f, 0.0f},
+                                             {points, 2, {0, 0, 0}, 1.0f, -1.0f}};
+    for (const mtk_viewer_overlay_line& line : lines) {
+        const mtk_viewer_overlay overlay{&line, 1, nullptr, 0, nullptr, 0};
+        EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &overlay), MTK_STATUS_INVALID_ARGUMENT);
+    }
+    const mtk_viewer_overlay_marker marker{{0, 0, 0}, {0, 0, 0}, 9};
+    const mtk_viewer_overlay with_marker{nullptr, 0, &marker, 1, nullptr, 0};
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &with_marker), MTK_STATUS_INVALID_ARGUMENT);
+    const mtk_viewer_overlay_label labels[] = {{{0, 0, 0}, "", {0, 0, 0}, {1, 1, 1}},
+                                               {{0, 0, 0}, nullptr, {0, 0, 0}, {1, 1, 1}}};
+    for (const mtk_viewer_overlay_label& label : labels) {
+        const mtk_viewer_overlay overlay{nullptr, 0, nullptr, 0, &label, 1};
+        EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &overlay), MTK_STATUS_INVALID_ARGUMENT);
+    }
+    const mtk_viewer_overlay missing{nullptr, 1, nullptr, 0, nullptr, 0};
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &missing), MTK_STATUS_INVALID_ARGUMENT);
+    const mtk_viewer_overlay negative{nullptr, 0, nullptr, -1, nullptr, 0};
+    EXPECT_EQ(mtk_viewer_set_overlay(viewer.get(), &negative), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_overlay(nullptr, nullptr), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(Viewer, ShowsTheFacesOfAShapeInMaterialsOfTheirOwn) {

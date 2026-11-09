@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mtk/occt_viewer.h"
+#include "overlay.hpp"
 #include "scene.hpp"
 
 #include <AIS_InteractiveContext.hxx>
@@ -114,6 +115,9 @@ public:
     // What is under the pointer as of the last redraw; nothing on the ViewCube.
     mtk_viewer_pick hovered() const;
 
+    // Shows an overlay in place of the previous one; an empty one shows none.
+    void set_overlay(Overlay overlay);
+
     // Highlights checked elements as selected, in place of those highlighted before.
     void set_highlighted_elements(const mtk_viewer_element* elements, int count);
 
@@ -172,6 +176,8 @@ private:
     Graphic3d_ZLayerId faded_layer_ = Graphic3d_ZLayerId_UNKNOWN;
     std::optional<mtk_viewer_pick> pick_; // what was clicked, not yet taken
     std::vector<std::pair<int, occ::handle<ElementOwner>>> highlighted_; // by instance
+    Overlay overlay_;
+    occ::handle<OverlayObject> overlay_object_; // null when the overlay is empty
     bool needs_next_frame_ = false; // whether the last redraw asked for another frame, see handleViewRedraw()
     double scale_ = 0.0;
     std::string failure_;
