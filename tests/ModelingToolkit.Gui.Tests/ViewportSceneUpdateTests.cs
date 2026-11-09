@@ -8,7 +8,8 @@ using ModelingToolkit.Kernel.Occt;
 namespace ModelingToolkit.Gui.Tests;
 
 /// <summary>The scene follows the changes of the document, changing in the viewer only the instances concerned.</summary>
-public sealed class ViewportSceneUpdateTests
+[Collection(HeadlessCollection.Name)]
+public sealed class ViewportSceneUpdateTests(HeadlessSession headless)
 {
     private readonly OcctKernel _kernel = new();
 
@@ -72,8 +73,10 @@ public sealed class ViewportSceneUpdateTests
     }
 
     [Fact]
-    public void TheTexturesOfFacesRepeatEveryTextureSize()
+    public async Task TheTexturesOfFacesRepeatEveryTextureSize()
     {
+        // The scene decodes the textures, which needs Avalonia started, as the headless session does.
+        await headless.Session.Dispatch(() => 0, TestContext.Current.CancellationToken);
         var brep = new BrepEntity(_kernel, _kernel.MakeBox(500, 500, 500));
         var document = new Document();
         document.Root.Entities.Add(brep);

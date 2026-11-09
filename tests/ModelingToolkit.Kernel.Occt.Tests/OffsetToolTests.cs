@@ -45,7 +45,8 @@ public sealed class OffsetToolTests
 
         Assert.Equal(new ShapeTopology(0, 2, 8, 8), _kernel.CountElements(_square.Shape));
         Assert.Equal(1e6, Area, precision: 3);
-        Assert.Contains(new Point3d(300, 300, 0), Enumerable.Range(0, 8).Select(v => _kernel.GetVertexPoint(_square.Shape, v)));
+        Assert.Contains(Enumerable.Range(0, 8).Select(v => _kernel.GetVertexPoint(_square.Shape, v)),
+            point => point.DistanceTo(new Point3d(300, 300, 0)) < 1e-6);
     }
 
     [Fact]
