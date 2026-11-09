@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 15
+#define MTK_OCCT_VIEWER_ABI_VERSION 16
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -252,6 +252,13 @@ typedef struct mtk_viewer_pick {
     int32_t index;    /* of the element in the shape; 0 for the whole instance */
     double point[3];  /* the point picked, in the scene: on the face, the edge or the vertex */
     float normal[3];  /* the normal of the face at the point, of unit length; 0 for edges, vertices and meshes */
+    /* The ray of the pointer, also over nothing: from a point in front of the camera, along a direction of unit
+     * length into the scene. */
+    double ray_origin[3];
+    double ray_direction[3];
+    /* The size of a device-independent unit of the view, in millimetres, at a distance t along the ray from its
+     * origin: pixel_size[0] + t * pixel_size[1]; for snapping within a few units of the pointer. */
+    double pixel_size[2];
 } mtk_viewer_pick;
 
 /*

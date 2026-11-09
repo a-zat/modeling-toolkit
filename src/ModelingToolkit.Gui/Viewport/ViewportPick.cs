@@ -27,6 +27,7 @@ public enum ViewportInputKind
 /// <param name="Normal">The normal of the face at the point, of unit length; zero elsewhere.</param>
 /// <param name="ClickCount">1 for a click, 2 for the second click of a double click, and so on.</param>
 /// <param name="Kind">The input.</param>
+/// <param name="Ray">The ray of the pointer, in the model space; null when the view has none.</param>
 public sealed record ViewportPick(
     IReadOnlyList<Entity>? Path, ElementReference? Element, Point3d Point, Vector3 Normal, KeyModifiers Modifiers,
-    int ClickCount = 1, ViewportInputKind Kind = ViewportInputKind.Click);
+    int ClickCount = 1, ViewportInputKind Kind = ViewportInputKind.Click, PointerRay? Ray = null);

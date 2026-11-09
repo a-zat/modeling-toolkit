@@ -14,7 +14,8 @@ namespace ModelingToolkit.Gui.Viewport;
 /// What a click of the view picks: an instance, -1 for none, and the element of its shape under the pointer, with the
 /// point picked and, on a face, its normal.
 /// </summary>
-internal readonly record struct ViewerPick(int Instance, NativeElementKind Kind, int Index, Point3d Point, Vector3 Normal);
+internal readonly record struct ViewerPick(
+    int Instance, NativeElementKind Kind, int Index, Point3d Point, Vector3 Normal, PointerRay? Ray = null);
 
 /// <summary>
 /// The OpenCASCADE viewer of the native library (native/occt-viewer) and the native view it draws into. Every method
@@ -306,9 +307,16 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         return ToPick(native);
     }
 
-    private static unsafe ViewerPick ToPick(NativePick native) => new(
-        native.Instance, native.Kind, native.Index, new Point3d(native.Point[0], native.Point[1], native.Point[2]),
-        new Vector3(native.Normal[0], native.Normal[1], native.Normal[2]));
+    private static unsafe ViewerPick ToPick(NativePick native)
+    {
+        var direction = new Vector3d(native.RayDirection[0], native.RayDirection[1], native.RayDirection[2]);
+        PointerRay? ray = direction == default ? null : new PointerRay(
+            new Point3d(native.RayOrigin[0], native.RayOrigin[1], native.RayOrigin[2]), direction,
+            native.PixelSize[0], native.PixelSize[1]);
+        return new ViewerPick(
+            native.Instance, native.Kind, native.Index, new Point3d(native.Point[0], native.Point[1], native.Point[2]),
+            new Vector3(native.Normal[0], native.Normal[1], native.Normal[2]), ray);
+    }
 
     /// <summary>
     /// Highlights elements of the shapes of instances as selected, in place of those highlighted before. An element

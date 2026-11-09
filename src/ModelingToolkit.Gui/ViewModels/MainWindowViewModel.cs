@@ -223,7 +223,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         var toolInput = new ToolInput(
-            new ToolPick(input.Path, input.Element, input.Point, new Vector3d(input.Normal.X, input.Normal.Y, input.Normal.Z)),
+            new ToolPick(input.Path, input.Element, input.Point, new Vector3d(input.Normal.X, input.Normal.Y, input.Normal.Z),
+                input.Ray),
             ToToolModifiers(input.Modifiers), input.ClickCount);
         switch (input.Kind)
         {

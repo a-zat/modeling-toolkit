@@ -312,7 +312,7 @@ public sealed class ViewportView : Border, IViewCamera
 
     private ViewportPick ToInput(ViewerPick pick, KeyModifiers modifiers, int clickCount, ViewportInputKind kind) =>
         new(_shownScene?.PathOfShown(pick.Instance), _shownScene?.ElementOf(pick), pick.Point, pick.Normal, modifiers,
-            clickCount, kind);
+            clickCount, kind, pick.Ray);
 
     protected override void OnPointerExited(PointerEventArgs e)
     {

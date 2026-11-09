@@ -8,7 +8,9 @@ namespace ModelingToolkit.Core.Editing.Tools;
 /// <param name="Element">The face, edge or vertex of a shape under the pointer; null on a mesh or on nothing.</param>
 /// <param name="Point">The point picked, in the model space.</param>
 /// <param name="Normal">The normal of the face at the point, of unit length; zero elsewhere.</param>
-public sealed record ToolPick(IReadOnlyList<Entity>? Path, ElementReference? Element, Point3d Point, Vector3d Normal)
+/// <param name="Ray">The ray of the pointer, in the model space, also over nothing; null when the view has none.</param>
+public sealed record ToolPick(
+    IReadOnlyList<Entity>? Path, ElementReference? Element, Point3d Point, Vector3d Normal, PointerRay? Ray = null)
 {
     public static ToolPick Nothing { get; } = new(null, null, default, default);
 }

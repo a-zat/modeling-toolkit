@@ -136,6 +136,8 @@ private:
                           const occ::handle<V3d_View>& view) override;
 
     std::optional<mtk_viewer_pick> detected_pick() const;
+    // A pick of nothing, with the ray of the pointer.
+    mtk_viewer_pick nothing_picked() const;
     // The edges that the display mode and the render style draw.
     EdgeStyle edge_style() const;
     void apply_lights();

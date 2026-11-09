@@ -71,6 +71,9 @@ internal unsafe struct NativePick
     public int Index;
     public fixed double Point[3];
     public fixed float Normal[3];
+    public fixed double RayOrigin[3];
+    public fixed double RayDirection[3];
+    public fixed double PixelSize[2];
 }
 
 /// <summary>A material of the metallic-roughness model of glTF.</summary>

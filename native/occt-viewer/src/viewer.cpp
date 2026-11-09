@@ -43,7 +43,7 @@ static_assert(sizeof(mtk_viewer_colors) == 144);
 static_assert(sizeof(mtk_viewer_material) == 28);
 static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_mesh) == 120);
 static_assert(sizeof(mtk_viewer_element) == 12);
-static_assert(sizeof(mtk_viewer_pick) == 56);
+static_assert(sizeof(mtk_viewer_pick) == 120);
 static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_overlay_line) == 32);
 static_assert(sizeof(mtk_viewer_overlay_marker) == 40);
 static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_overlay_label) == 56);
@@ -651,10 +651,43 @@ void mtk::Viewer::forget_highlighted(int instance) {
 
 // What the context detects under the pointer: an instance, possibly one of its elements, or nothing; no value for the
 // ViewCube, which is not part of the scene.
+mtk_viewer_pick mtk::Viewer::nothing_picked() const {
+    mtk_viewer_pick pick{};
+    pick.instance = -1;
+    pick.kind = MTK_VIEWER_ELEMENT_INSTANCE;
+    if (!is_attached()) {
+        return pick;
+    }
+    // The ray of the pointer, and that of the pointer one unit to the right: how far apart they are grows linearly
+    // along the ray, from the near plane, in perspective, and stays the same in orthographic projection.
+    const NCollection_Vec2<int> pixel = LastMousePosition();
+    const int unit = std::max(1, static_cast<int>(std::lround(scale_)));
+    double origin[3], direction[3], next_origin[3], next_direction[3];
+    view_->ConvertWithProj(pixel.x(), pixel.y(), origin[0], origin[1], origin[2], direction[0], direction[1],
+                           direction[2]);
+    view_->ConvertWithProj(pixel.x() + unit, pixel.y(), next_origin[0], next_origin[1], next_origin[2],
+                           next_direction[0], next_direction[1], next_direction[2]);
+    const gp_Vec ray(direction[0], direction[1], direction[2]), next_ray(next_direction[0], next_direction[1],
+                                                                          next_direction[2]);
+    if (ray.Magnitude() <= gp::Resolution() || next_ray.Magnitude() <= gp::Resolution()) {
+        return pick;
+    }
+    const gp_Vec unit_ray = ray.Normalized(), unit_next = next_ray.Normalized();
+    for (int i = 0; i < 3; ++i) {
+        pick.ray_origin[i] = origin[i];
+        pick.ray_direction[i] = unit_ray.Coord(i + 1);
+    }
+    pick.pixel_size[0] = gp_Pnt(origin[0], origin[1], origin[2]).Distance(
+        gp_Pnt(next_origin[0], next_origin[1], next_origin[2]));
+    pick.pixel_size[1] = (unit_next - unit_ray).Magnitude();
+    return pick;
+}
+
 std::optional<mtk_viewer_pick> mtk::Viewer::detected_pick() const {
     const occ::handle<SelectMgr_EntityOwner>& detected = context_->DetectedOwner();
+    mtk_viewer_pick pick = nothing_picked();
     if (detected.IsNull()) {
-        return mtk_viewer_pick{-1, MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
+        return pick;
     }
     const auto picked = std::find_if(instances_.begin(), instances_.end(), [&](const auto& instance) {
         return !instance.IsNull() && instance.get() == detected->Selectable().get();
@@ -662,7 +695,7 @@ std::optional<mtk_viewer_pick> mtk::Viewer::detected_pick() const {
     if (picked == instances_.end()) {
         return std::nullopt;
     }
-    mtk_viewer_pick pick{static_cast<int>(picked - instances_.begin()), MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}};
+    pick.instance = static_cast<int>(picked - instances_.begin());
     if (const occ::handle<ElementOwner> element = occ::down_cast<ElementOwner>(detected)) {
         pick.kind = element->kind();
         pick.index = element->index();
@@ -683,7 +716,7 @@ std::optional<mtk_viewer_pick> mtk::Viewer::detected_pick() const {
 }
 
 mtk_viewer_pick mtk::Viewer::hovered() const {
-    return detected_pick().value_or(mtk_viewer_pick{-1, MTK_VIEWER_ELEMENT_INSTANCE, 0, {}, {}});
+    return detected_pick().value_or(nothing_picked());
 }
 
 // Called by FlushViewEvents for each click: on an instance, on nothing, or on the ViewCube, which has turned the view
