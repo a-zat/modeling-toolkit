@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 14
+#define MTK_OCCT_BRIDGE_ABI_VERSION 15
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -289,7 +289,8 @@ typedef struct mtk_tessellation mtk_tessellation;
 /*
  * Turns the faces of a shape into triangles. linear_deflection, in millimetres, is the largest distance allowed between
  * a triangle and the surface it stands for; angular_deflection, in radians, from 0 to pi, the largest angle between
- * the normals of neighbouring triangles. The shape is left as it was. A shape without faces is rejected.
+ * the normals of neighbouring triangles. The shape is left as it was. A shape of edges only gives no triangles and the
+ * polylines of its edges; one without faces or edges is rejected.
  */
 MTK_API mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection, double angular_deflection,
                                         const mtk_progress* progress, mtk_tessellation** out_tessellation);

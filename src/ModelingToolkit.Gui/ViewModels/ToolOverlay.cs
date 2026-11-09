@@ -1,0 +1,73 @@
+using Avalonia.Media;
+using ModelingToolkit.Core.Editing.Tools;
+using ModelingToolkit.Gui.Viewport;
+
+namespace ModelingToolkit.Gui.ViewModels;
+
+/// <summary>
+/// What a tool shows, as the 3D view draws it: lines in the colour of what they follow (the red, green and blue axes,
+/// magenta for parallels and perpendiculars), and the point inferred with a marker and the name of its kind.
+/// </summary>
+internal static class ToolOverlay
+{
+    private static readonly Color Red = Color.FromRgb(0xD8, 0x32, 0x2A);
+    private static readonly Color Green = Color.FromRgb(0x2E, 0x9E, 0x44);
+    private static readonly Color Blue = Color.FromRgb(0x2F, 0x6F, 0xDE);
+    private static readonly Color Magenta = Color.FromRgb(0xC2, 0x38, 0xC2);
+    private static readonly Color Cyan = Color.FromRgb(0x14, 0xA3, 0xB8);
+    private static readonly Color Gold = Color.FromRgb(0xE0, 0xA8, 0x16);
+
+    public static ViewOverlay Of(ToolPreview preview, bool dark)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        Color plain = dark ? Color.FromRgb(0xF2, 0xF3, 0xF5) : Color.FromRgb(0x1C, 0x1F, 0x24);
+        List<OverlayLine> lines = [.. preview.Lines.Select(line =>
+            new OverlayLine([line.Start, line.End], ColorOf(line.Along) ?? plain, 2))];
+        List<OverlayMarker> markers = [];
+        List<OverlayLabel> labels = [];
+        if (preview.Inference is { } inference && MarkerOf(inference.Kind) is { } marker)
+        {
+            markers.Add(new OverlayMarker(inference.Point, marker.Color, marker.Shape));
+            labels.Add(new OverlayLabel(inference.Point, $"  {NameOf(inference.Kind)}", Color.FromRgb(0x1C, 0x1F, 0x24),
+                Color.FromRgb(0xFF, 0xFF, 0xFF)));
+        }
+        return new ViewOverlay(lines, markers, labels);
+    }
+
+    /// <summary>The name of a kind of point, as the 3D view shows it next to the point.</summary>
+    public static string NameOf(InferenceKind kind) => kind switch
+    {
+        InferenceKind.Endpoint => "Endpoint",
+        InferenceKind.Midpoint => "Midpoint",
+        InferenceKind.OnEdge => "On edge",
+        InferenceKind.OnFace => "On face",
+        InferenceKind.Origin => "Origin",
+        InferenceKind.AxisX => "On red axis",
+        InferenceKind.AxisY => "On green axis",
+        InferenceKind.AxisZ => "On blue axis",
+        InferenceKind.Parallel => "Parallel to edge",
+        InferenceKind.Perpendicular => "Perpendicular to edge",
+        _ => string.Empty,
+    };
+
+    private static Color? ColorOf(InferenceKind along) => along switch
+    {
+        InferenceKind.AxisX => Red,
+        InferenceKind.AxisY => Green,
+        InferenceKind.AxisZ => Blue,
+        InferenceKind.Parallel or InferenceKind.Perpendicular => Magenta,
+        _ => null,
+    };
+
+    private static (Color Color, MarkerShape Shape)? MarkerOf(InferenceKind kind) => kind switch
+    {
+        InferenceKind.Endpoint => (Green, MarkerShape.Dot),
+        InferenceKind.Midpoint => (Cyan, MarkerShape.Dot),
+        InferenceKind.OnEdge => (Red, MarkerShape.Dot),
+        InferenceKind.OnFace => (Blue, MarkerShape.Circle),
+        InferenceKind.Origin => (Gold, MarkerShape.Dot),
+        InferenceKind.AxisX or InferenceKind.AxisY or InferenceKind.AxisZ or InferenceKind.Parallel
+            or InferenceKind.Perpendicular => (ColorOf(kind)!.Value, MarkerShape.Circle),
+        _ => null, // on the ground, nothing to point out
+    };
+}

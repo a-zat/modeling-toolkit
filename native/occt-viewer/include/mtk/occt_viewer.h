@@ -86,9 +86,9 @@ typedef enum mtk_viewer_view {
     MTK_VIEWER_VIEW_ISOMETRIC = 6
 } mtk_viewer_view;
 
-/* How the meshes are drawn. */
+/* How the meshes are drawn. The edges of their own, such as those of shapes, are drawn in every mode. */
 typedef enum mtk_viewer_display_mode {
-    MTK_VIEWER_DISPLAY_SHADED = 0,
+    MTK_VIEWER_DISPLAY_SHADED = 0,            /* without the edges of the triangles */
     MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES = 1, /* with the edges of the meshes */
     MTK_VIEWER_DISPLAY_WIREFRAME = 2          /* only the edges of the meshes */
 } mtk_viewer_display_mode;

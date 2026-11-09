@@ -225,9 +225,6 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
                 return mtk::invalid_argument("The shape has too many triangles for this deflection.");
             }
         }
-        if (result->triangles.empty()) {
-            return mtk::invalid_argument("The shape has no faces to turn into triangles.");
-        }
         result->first_triangles.push_back(static_cast<int32_t>(result->triangles.size() / 3));
 
         // Each edge once, with the faces it bounds.
@@ -249,6 +246,9 @@ mtk_status mtk_shape_tessellate(const mtk_shape* shape, double linear_deflection
             }
         }
         result->first_points.push_back(static_cast<int32_t>(result->edge_points.size() / 3));
+        if (result->triangles.empty() && result->edge_indices.empty()) {
+            return mtk::invalid_argument("The shape has no faces or edges to show.");
+        }
 
         NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> vertices;
         TopExp::MapShapes(copy, TopAbs_VERTEX, vertices);

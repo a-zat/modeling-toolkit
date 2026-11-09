@@ -334,6 +334,40 @@ TEST(Viewer, HighlightsTheElementsOfTheShapesOfItsInstances) {
     EXPECT_EQ(mtk_viewer_clear(viewer.get()), MTK_STATUS_OK);
 }
 
+TEST(Viewer, ShowsTheEdgesOfAShapeWithoutFaces) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const double points[] = {0, 0, 0, 1000, 0, 0, 1000, 0, 0, 1000, 500, 0};
+    const int32_t first_points[] = {0, 2, 4};
+    const int32_t edge_indices[] = {0, 1};
+    const int32_t first_triangles[] = {0};
+    const double vertices[] = {0, 0, 0, 1000, 0, 0, 1000, 500, 0};
+    mtk_viewer_mesh lines{};
+    lines.edge_points = points;
+    lines.edge_first_points = first_points;
+    lines.edge_count = 2;
+    lines.face_first_triangles = first_triangles;
+    lines.edge_indices = edge_indices;
+    lines.shape_vertices = vertices;
+    lines.shape_vertex_count = 3;
+    const int32_t mesh = add_mesh(viewer.get(), lines);
+    const int32_t material = add_material(viewer.get(), grey());
+    const int32_t instance = add_instance(viewer.get(), mesh, material, identity);
+    const double stretched[12] = {3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    add_instance(viewer.get(), mesh, material, stretched);
+
+    const mtk_viewer_element edge{instance, MTK_VIEWER_ELEMENT_EDGE, 1};
+    EXPECT_EQ(mtk_viewer_set_highlighted_elements(viewer.get(), &edge, 1), MTK_STATUS_OK)
+        << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_fit_all(viewer.get()), MTK_STATUS_OK);
+
+    lines.edge_count = 0; // nothing at all
+    lines.edge_first_points = first_points;
+    int32_t refused = -1;
+    EXPECT_EQ(mtk_viewer_add_mesh(viewer.get(), &lines, &refused), MTK_STATUS_INVALID_ARGUMENT);
+}
+
 TEST(Viewer, ShowsAnOverlayInPlaceOfThePreviousOne) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);

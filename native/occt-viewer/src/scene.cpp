@@ -242,7 +242,9 @@ void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
         return;
     }
     const bool faded = mode == faded_mode;
-    if (mesh_.face_materials.empty() || !mesh_.elements) {
+    if (mesh_.triangles.IsNull()) {
+        // Edges only.
+    } else if (mesh_.face_materials.empty() || !mesh_.elements) {
         const occ::handle<Graphic3d_Group> faces = presentation->NewGroup();
         if (mesh_.has_own_edges) {
             faces->SetGroupPrimitivesAspect(faded ? aspects_.faded_faces : aspects_.shaded_faces);
@@ -298,6 +300,9 @@ void mtk::MeshObject::ComputeSelection(const occ::handle<SelectMgr_Selection>& s
     }
     if (mesh_.elements) {
         add_element_sensitives(selection, this, mesh_);
+        return;
+    }
+    if (mesh_.triangles.IsNull()) {
         return;
     }
     const occ::handle<Select3D_SensitivePrimitiveArray> sensitive =
@@ -496,6 +501,9 @@ void mtk::ConnectedMesh::ComputeSelection(const occ::handle<SelectMgr_Selection>
 namespace {
 
 occ::handle<Graphic3d_ArrayOfTriangles> make_triangles(const mtk_viewer_mesh& mesh) {
+    if (mesh.triangle_count == 0) {
+        return nullptr;
+    }
     const bool has_uvs = mesh.uvs != nullptr;
     const auto position = [&](int vertex) {
         return gp_Pnt(mesh.positions[3 * vertex], mesh.positions[3 * vertex + 1], mesh.positions[3 * vertex + 2]);
@@ -646,7 +654,7 @@ mtk::Mesh mtk::make_mesh(const mtk_viewer_mesh& mesh) {
     if (elements && mesh.face_materials != nullptr) {
         face_materials.assign(mesh.face_materials, mesh.face_materials + mesh.face_count);
     }
-    return Mesh{make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh), std::move(elements),
+    return Mesh{true, make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh), std::move(elements),
                 std::move(face_materials)};
 }
 
@@ -660,8 +668,8 @@ mtk::Mesh mtk::transform_mesh(const Mesh& mesh, const double* matrix) {
             vertex = gp_Pnt(vertex.XYZ().Multiplied(linear) + translation);
         }
     }
-    return Mesh{transform_triangles(mesh.triangles, matrix), mesh.has_own_edges, transform_edges(mesh.edges, matrix),
-                std::move(elements), mesh.face_materials};
+    return Mesh{true, mesh.triangles.IsNull() ? nullptr : transform_triangles(mesh.triangles, matrix),
+                mesh.has_own_edges, transform_edges(mesh.edges, matrix), std::move(elements), mesh.face_materials};
 }
 
 occ::handle<Graphic3d_Texture2D> mtk::make_texture(const uint8_t* pixels, int width, int height) {

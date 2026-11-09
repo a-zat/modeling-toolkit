@@ -154,7 +154,8 @@
                              WarningsCommand="{Binding ReportViewWarningsCommand}"
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
                              IsPerspective="{Binding IsPerspective}"
-                             IsGridVisible="{Binding IsGridVisible}" />
+                             IsGridVisible="{Binding IsGridVisible}"
+                             Overlay="{Binding Overlay}" />
 
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsInspectorOpen}" />
       <!-- The inspector: the outline, which can be closed, above the properties of the selection. -->

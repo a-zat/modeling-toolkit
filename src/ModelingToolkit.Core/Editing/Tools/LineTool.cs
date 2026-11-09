@@ -1,0 +1,177 @@
+using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
+using ModelingToolkit.Core.Model;
+
+namespace ModelingToolkit.Core.Editing.Tools;
+
+/// <summary>
+/// Draws lines: a click starts a line, each next click ends a segment, which is added to the geometry of the block
+/// being edited, and starts the next one from there, until a segment closes a face or Escape. The points snap to what
+/// the <see cref="InferenceEngine"/> infers; the arrow keys lock the direction on an axis, and a length typed in the
+/// measurement field ends the segment at that length.
+/// </summary>
+public sealed class LineTool(IGeometryKernel kernel) : Tool
+{
+    private const string StartHint = "Click to start a line.";
+    private const string NextHint = "Click to end the segment or type its length · arrows lock an axis · Esc stops";
+
+    private readonly IGeometryKernel _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
+    private readonly InferenceEngine _inference = new();
+    private Point3d? _start;
+    private Inference? _last; // the point under the pointer, as last inferred
+    private Vector3d? _locked;
+    private InferenceKind _lockedKind = InferenceKind.None;
+
+    public override string Name => "Line";
+
+    /// <summary>The point the segment being drawn starts from; null when no line is being drawn.</summary>
+    public Point3d? Start => _start;
+
+    protected override void OnActivated() => Stop();
+
+    protected override void OnDeactivated()
+    {
+        Host.ShowPreview(ToolPreview.Empty);
+        _start = null;
+        _last = null;
+        Measurement = null;
+    }
+
+    public override void Hover(ToolInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        _last = _inference.Infer(input.Pick, Host.Context.Placement, _start, _locked);
+        Show();
+    }
+
+    public override void Click(ToolInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        Inference point = _inference.Infer(input.Pick, Host.Context.Placement, _start, _locked);
+        _last = point;
+        if (point.Kind == InferenceKind.None)
+        {
+            return;
+        }
+        if (_start is not { } start)
+        {
+            _start = point.Point;
+            Hint = NextHint;
+            Show();
+            return;
+        }
+        DrawTo(start, point.Point);
+    }
+
+    public override bool Key(ToolKey key, ToolModifiers modifiers)
+    {
+        switch (key)
+        {
+            case ToolKey.Escape when _start is not null:
+                Stop();
+                return true;
+            case ToolKey.Right or ToolKey.Left or ToolKey.Up or ToolKey.Down when _start is not null:
+                Lock(key);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public override bool TypeMeasurement(string text)
+    {
+        if (_start is not { } start || _last is not { } last || !Measurements.TryParseLength(text, out double length))
+        {
+            return false;
+        }
+        Vector3d direction = (last.Point - start).Normalized();
+        if (direction.Length == 0)
+        {
+            return false;
+        }
+        DrawTo(start, start + direction * length);
+        return true;
+    }
+
+    private void Lock(ToolKey key)
+    {
+        Transform placement = Host.Context.Placement;
+        (InferenceKind kind, Vector3d? direction) = key switch
+        {
+            ToolKey.Right => (InferenceKind.AxisX, placement.ApplyVector(Vector3d.UnitX)),
+            ToolKey.Left => (InferenceKind.AxisY, placement.ApplyVector(Vector3d.UnitY)),
+            ToolKey.Up => (InferenceKind.AxisZ, placement.ApplyVector(Vector3d.UnitZ)),
+            _ => (InferenceKind.Parallel, _inference.Reference),
+        };
+        bool unlock = _lockedKind == kind || direction is null;
+        _locked = unlock ? null : direction!.Value.Normalized();
+        _lockedKind = unlock ? InferenceKind.None : kind;
+    }
+
+    private void DrawTo(Point3d start, Point3d end)
+    {
+        if (start.DistanceTo(end) < 1e-6)
+        {
+            return;
+        }
+
+        Transform toBlock = Host.Context.Placement.Inverse();
+        LineCurve line = new(toBlock.Apply(start), toBlock.Apply(end));
+        Block block = Host.Context.Block;
+        BrepEntity? geometry = block.Entities.OfType<BrepEntity>().FirstOrDefault();
+        bool closed;
+        try
+        {
+            ShapeEdit edit = _kernel.AddEdges(geometry?.Shape, [line]);
+            closed = edit.FaceOrigins.Contains(-1);
+            IEditCommand command = geometry is null
+                ? new AddEntityCommand("Line", block, new BrepEntity(_kernel, edit.Shape))
+                : new ReplaceShapeCommand("Line", geometry, edit);
+            Host.Session.Execute(command);
+        }
+        catch (Exception exception) when (exception is GeometryKernelException or ArgumentException or EditRefusedException)
+        {
+            Host.Report($"The line could not be drawn: {exception.Message}");
+            return;
+        }
+
+        if (closed)
+        {
+            Stop();
+        }
+        else
+        {
+            _start = end;
+            _locked = null;
+            _lockedKind = InferenceKind.None;
+            Show();
+        }
+    }
+
+    private void Stop()
+    {
+        _start = null;
+        _locked = null;
+        _lockedKind = InferenceKind.None;
+        Hint = StartHint;
+        Measurement = null;
+        Show();
+    }
+
+    private void Show()
+    {
+        if (!IsActive)
+        {
+            return;
+        }
+        if (_start is { } start && _last is { Kind: not InferenceKind.None } last)
+        {
+            Measurement = Measurements.Format(start.DistanceTo(last.Point));
+            InferenceKind along = last.Direction is null ? InferenceKind.None : last.Kind;
+            Host.ShowPreview(new ToolPreview([new PreviewLine(start, last.Point, along)], last));
+            return;
+        }
+        Measurement = _start is null ? null : Measurements.Format(0);
+        Host.ShowPreview(_last is { Kind: not InferenceKind.None } point ? new ToolPreview([], point) : ToolPreview.Empty);
+    }
+}

@@ -5,6 +5,7 @@ using ModelingToolkit.Core.Editing;
 using ModelingToolkit.Core.Editing.Tools;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.IO;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
 
@@ -23,7 +24,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private bool _saving;
     private TaskCompletionSource _idle = Completed();
 
-    public MainWindowViewModel(DocumentFormats formats, IAppearance appearance)
+    /// <param name="kernel">The kernel the drawing tools work with; without one, only the selection tool is offered.</param>
+    public MainWindowViewModel(DocumentFormats formats, IAppearance appearance, IGeometryKernel? kernel = null)
     {
         _formats = formats;
         _appearance = appearance;
@@ -44,8 +46,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ?? Task.FromResult<string?>(null);
         ModelTree.EnterCommand = EnterNodeCommand;
         _toolHost = new ToolHost(this);
-        Tools = [new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true }];
+        Tools = kernel is null
+            ? [new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true }]
+            :
+            [
+                new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true },
+                new ToolItemViewModel(new LineTool(kernel), "Icon.Line"),
+            ];
         ActiveTool.HintChanged += OnToolHintChanged;
+        ActiveTool.MeasurementChanged += OnToolMeasurementChanged;
         ModelTree.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ModelTreeViewModel.SelectedNode))
@@ -197,20 +206,64 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         previous.Deactivate();
         previous.HintChanged -= OnToolHintChanged;
+        previous.MeasurementChanged -= OnToolMeasurementChanged;
         foreach (ToolItemViewModel tool in Tools)
         {
             tool.IsActive = ReferenceEquals(tool, item);
         }
         item.Tool.HintChanged += OnToolHintChanged;
+        item.Tool.MeasurementChanged += OnToolMeasurementChanged;
         if (Session is not null)
         {
             item.Tool.Activate(_toolHost);
         }
         OnPropertyChanged(nameof(ActiveTool));
         OnPropertyChanged(nameof(ToolHint));
+        OnToolMeasurementChanged(this, EventArgs.Empty);
     }
 
     private void OnToolHintChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(ToolHint));
+
+    private void OnToolMeasurementChanged(object? sender, EventArgs e)
+    {
+        Measurement = ActiveTool.IsActive ? ActiveTool.Measurement ?? string.Empty : string.Empty;
+        OnPropertyChanged(nameof(HasMeasurement));
+    }
+
+    /// <summary>
+    /// The measure of what the active tool is doing, such as the length of the line being drawn, which a value typed in
+    /// its place changes: see <see cref="TypeMeasurementCommand"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial string Measurement { get; set; } = string.Empty;
+
+    /// <summary>Whether the active tool takes typed values now.</summary>
+    public bool HasMeasurement => ActiveTool.IsActive && ActiveTool.Measurement is not null;
+
+    /// <summary>Gives the active tool a value typed in the measurement field, such as the length of a line.</summary>
+    [RelayCommand]
+    private void TypeMeasurement(string? text)
+    {
+        if (ActiveTool.IsActive && !IsBusy && !ActiveTool.TypeMeasurement(text ?? string.Empty))
+        {
+            StatusMessage = $"\"{text}\" is not a measure that the {ActiveTool.Name.ToLowerInvariant()} tool takes now.";
+            OnToolMeasurementChanged(this, EventArgs.Empty); // shows the measure again
+        }
+    }
+
+    /// <summary>What the active tool shows over the 3D view.</summary>
+    [ObservableProperty]
+    public partial ViewOverlay Overlay { get; private set; } = ViewOverlay.Empty;
+
+    /// <summary>Passes a key of the 3D view, such as an arrow that locks an axis, to the active tool.</summary>
+    [RelayCommand]
+    private void PressToolKey(ToolKey key)
+    {
+        if (ActiveTool.IsActive && !IsBusy)
+        {
+            ActiveTool.Key(key, ToolModifiers.None);
+        }
+    }
 
     /// <summary>Passes an input of the pointer in the 3D view to the active tool.</summary>
     [RelayCommand]
@@ -287,6 +340,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         public IReadOnlyList<Entity>? SelectedEntity => owner.ModelTree.SelectedNode?.Path;
 
         public void SelectEntity(IReadOnlyList<Entity>? path) => owner.ModelTree.SelectCommand.Execute(path);
+
+        public void ShowPreview(ToolPreview preview) => owner.Overlay = ToolOverlay.Of(preview, owner.IsDark);
+
+        public void Report(string message) => owner.StatusMessage = message;
     }
 
     // Leaves the context until it holds the path of entities, and gives the path from the block being edited.
@@ -633,6 +690,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>Starts an empty model, to draw in, saved under a name chosen when it is first saved.</summary>
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private void New()
+    {
+        var document = new Document();
+        Show(document, DocumentStatistics.Of(document), null);
+        StatusMessage = string.Empty;
+    }
+
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task Open()
     {
@@ -729,10 +795,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void OnDocumentEdited(object? sender, DocumentChange change) => ShowProperties(refresh: true);
 
-    private void Show(Document document, DocumentStatistics statistics, string path)
+    private void Show(Document document, DocumentStatistics statistics, string? path)
     {
         _path = path;
-        DocumentName = Path.GetFileName(path);
+        DocumentName = path is null ? "Untitled" : Path.GetFileName(path);
         Title = $"{DocumentName} — {ApplicationName}";
 
         bool onlyShapes = statistics.BrepShapes > 0 && statistics.Meshes == 0;
@@ -779,6 +845,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ActiveTool.Deactivate();
         ActiveTool.Activate(_toolHost);
         OnPropertyChanged(nameof(ToolHint));
+        OnToolMeasurementChanged(this, EventArgs.Empty);
 
         Properties.Know(document, statistics);
         ModelTree.Show(document);

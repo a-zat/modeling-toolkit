@@ -82,6 +82,19 @@ public sealed class AddEdgesTests
     }
 
     [Fact]
+    public void Lines_without_faces_are_tessellated_into_their_edges_only()
+    {
+        using IKernelShape shape = _kernel.AddEdges(null,
+            [new LineCurve(new(0, 0, 0), new(100, 0, 0)), new LineCurve(new(100, 0, 0), new(100, 50, 0))]).Shape;
+
+        ShapeTessellation tessellation = _kernel.Tessellate(shape, 0.1);
+
+        Assert.Empty(tessellation.Mesh.Triangles);
+        Assert.Equal(2, tessellation.Edges.Count);
+        Assert.Equal(3, tessellation.Vertices.Length);
+    }
+
+    [Fact]
     public void Degenerate_curves_and_no_curves_are_refused()
     {
         Assert.Throws<ArgumentException>(() => _kernel.AddEdges(null, []));

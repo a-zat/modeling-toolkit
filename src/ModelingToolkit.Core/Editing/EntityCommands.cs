@@ -101,6 +101,19 @@ public sealed class PaintFacesCommand : IEditCommand
     }
 }
 
+/// <summary>Adds an entity at the end of a block; undoing takes it away.</summary>
+public sealed class AddEntityCommand(string name, Block block, Entity entity) : IEditCommand
+{
+    private readonly Block _block = block ?? throw new ArgumentNullException(nameof(block));
+    private readonly Entity _entity = entity ?? throw new ArgumentNullException(nameof(entity));
+
+    public string Name { get; } = name ?? throw new ArgumentNullException(nameof(name));
+
+    public void Apply() => _block.Entities.Add(_entity);
+
+    public void Revert() => _block.Entities.Remove(_entity);
+}
+
 /// <summary>Removes an entity from its block; undoing puts it back where it was.</summary>
 public sealed class DeleteCommand : IEditCommand
 {

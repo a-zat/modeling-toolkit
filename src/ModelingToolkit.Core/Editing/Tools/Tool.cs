@@ -33,6 +33,28 @@ public abstract class Tool
 
     public event EventHandler? HintChanged;
 
+    /// <summary>
+    /// The measure of what the tool is doing, as the measurement field shows it, such as the length of the line being
+    /// drawn; null when the tool takes no typed value.
+    /// </summary>
+    public string? Measurement
+    {
+        get => field;
+        protected set
+        {
+            if (field != value)
+            {
+                field = value;
+                MeasurementChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    public event EventHandler? MeasurementChanged;
+
+    /// <summary>A value typed in the measurement field; whether the tool took it.</summary>
+    public virtual bool TypeMeasurement(string text) => false;
+
     public bool IsActive => _host is not null;
 
     /// <summary>The host of the active tool.</summary>

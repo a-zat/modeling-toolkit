@@ -3,6 +3,7 @@
         xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
         xmlns:views="using:ModelingToolkit.Gui.Views"
         xmlns:viewport="using:ModelingToolkit.Gui.Viewport"
+        xmlns:tools="using:ModelingToolkit.Core.Editing.Tools"
         x:Class="ModelingToolkit.Gui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
@@ -11,6 +12,7 @@
         WindowStartupLocation="CenterScreen">
 
   <Window.KeyBindings>
+    <KeyBinding Gesture="{OnPlatform Default=Ctrl+N, macOS=Cmd+N}" Command="{Binding NewCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+O, macOS=Cmd+O}" Command="{Binding OpenCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+S, macOS=Cmd+S}" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+Shift+S, macOS=Cmd+Shift+S}" Command="{Binding SaveAsCommand}" />
@@ -22,6 +24,11 @@
     <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" Command="{Binding DeleteCommand}" />
     <KeyBinding Gesture="Escape" Command="{Binding EscapeCommand}" />
+    <!-- The arrows lock the direction of the drawing tools on an axis. -->
+    <KeyBinding Gesture="Right" Command="{Binding PressToolKeyCommand}" CommandParameter="{x:Static tools:ToolKey.Right}" />
+    <KeyBinding Gesture="Left" Command="{Binding PressToolKeyCommand}" CommandParameter="{x:Static tools:ToolKey.Left}" />
+    <KeyBinding Gesture="Up" Command="{Binding PressToolKeyCommand}" CommandParameter="{x:Static tools:ToolKey.Up}" />
+    <KeyBinding Gesture="Down" Command="{Binding PressToolKeyCommand}" CommandParameter="{x:Static tools:ToolKey.Down}" />
   </Window.KeyBindings>
 
   <!-- The menu goes to the menu bar of macOS; on the other platforms the layout shows it with a NativeMenuBar. -->
@@ -29,6 +36,8 @@
     <NativeMenu>
       <NativeMenuItem Header="File">
         <NativeMenu>
+          <NativeMenuItem Header="New" Command="{Binding NewCommand}"
+                          Gesture="{OnPlatform Default=Ctrl+N, macOS=Cmd+N}" />
           <NativeMenuItem Header="Open…" Command="{Binding OpenCommand}"
                           Gesture="{OnPlatform Default=Ctrl+O, macOS=Cmd+O}" />
           <NativeMenuItem Header="Save" Command="{Binding SaveCommand}"

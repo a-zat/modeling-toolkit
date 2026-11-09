@@ -36,4 +36,16 @@ public enum ToolKey
 {
     Escape,
     Enter,
+
+    /// <summary>Locks drawing along the X axis (the red one), as the right arrow does.</summary>
+    Right,
+
+    /// <summary>Locks drawing along the Y axis (the green one), as the left arrow does.</summary>
+    Left,
+
+    /// <summary>Locks drawing along the Z axis (the blue one), as the up arrow does.</summary>
+    Up,
+
+    /// <summary>Locks drawing parallel to the edge last pointed at, as the down arrow does.</summary>
+    Down,
 }

@@ -133,5 +133,13 @@ public sealed class SelectToolTests
         public IReadOnlyList<Entity>? SelectedEntity { get; private set; }
 
         public void SelectEntity(IReadOnlyList<Entity>? path) => SelectedEntity = path;
+
+        public void ShowPreview(ToolPreview preview)
+        {
+        }
+
+        public void Report(string message)
+        {
+        }
     }
 }

@@ -97,7 +97,7 @@ public:
     int instance_count() const { return static_cast<int>(instances_.size()); }
 
     // Whether an index refers to a mesh or an instance that was added and not removed.
-    bool has_mesh(int mesh) const { return mesh >= 0 && mesh < mesh_count() && !meshes_[mesh].triangles.IsNull(); }
+    bool has_mesh(int mesh) const { return mesh >= 0 && mesh < mesh_count() && meshes_[mesh].present; }
     bool has_instance(int instance) const {
         return instance >= 0 && instance < instance_count() && !instances_[instance].IsNull();
     }

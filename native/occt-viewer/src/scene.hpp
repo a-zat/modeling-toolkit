@@ -31,7 +31,8 @@ struct Elements {
 
 // A mesh as the viewer keeps it: its triangles, and the polylines of the edges of its own, if it has any.
 struct Mesh {
-    occ::handle<Graphic3d_ArrayOfTriangles> triangles;
+    bool present = false; // false for a mesh removed from the viewer
+    occ::handle<Graphic3d_ArrayOfTriangles> triangles; // null for a mesh of edges only
     bool has_own_edges = false;               // otherwise the display modes with edges draw those of the triangles
     occ::handle<Graphic3d_ArrayOfPolylines> edges; // null when it has none
     std::shared_ptr<const Elements> elements;      // null for a mesh picked as a whole

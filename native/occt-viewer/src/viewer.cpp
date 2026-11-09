@@ -501,8 +501,10 @@ mtk::EdgeStyle mtk::Viewer::edge_style() const {
         return EdgeStyle{wireframe, true, !wireframe, static_cast<float>(outline_width * scale_),
                          wireframe ? edge_color_ : outline_color_};
     }
+    // The edges of their own, those of shapes, are drawn in every mode, as lines drawn without faces would otherwise
+    // not show; those of the triangles only in the modes with edges.
     const bool edges = display_mode_ != MTK_VIEWER_DISPLAY_SHADED;
-    return EdgeStyle{edges, edges, false, 1.0f, edge_color_};
+    return EdgeStyle{edges, true, false, 1.0f, edge_color_};
 }
 
 // The CAD render style lights the faces from the upper left of the camera, so that faces turned differently take
@@ -667,19 +669,34 @@ mtk_viewer_pick mtk::Viewer::nothing_picked() const {
                            direction[2]);
     view_->ConvertWithProj(pixel.x() + unit, pixel.y(), next_origin[0], next_origin[1], next_origin[2],
                            next_direction[0], next_direction[1], next_direction[2]);
-    const gp_Vec ray(direction[0], direction[1], direction[2]), next_ray(next_direction[0], next_direction[1],
-                                                                          next_direction[2]);
-    if (ray.Magnitude() <= gp::Resolution() || next_ray.Magnitude() <= gp::Resolution()) {
+    // ConvertWithProj gives a point of the projection plane, which may be in the middle of the scene: the rays start
+    // from the plane of the eye instead, along the view, so that what is in front of the camera is ahead of them.
+    const occ::handle<Graphic3d_Camera>& camera = view_->Camera();
+    const gp_Pnt eye = camera->Eye();
+    const gp_Dir forward = camera->Direction();
+    const auto make_ray = [&](const double* point, const double* along) -> std::optional<std::pair<gp_Pnt, gp_Vec>> {
+        gp_Vec direction(along[0], along[1], along[2]);
+        if (direction.Magnitude() <= gp::Resolution()) {
+            return std::nullopt;
+        }
+        direction.Normalize();
+        if (direction.Dot(gp_Vec(forward)) < 0.0) {
+            direction.Reverse();
+        }
+        const gp_Pnt on_plane(point[0], point[1], point[2]);
+        const gp_Pnt start = on_plane.Translated(-direction * gp_Vec(eye, on_plane).Dot(direction));
+        return std::make_pair(start, direction);
+    };
+    const auto ray = make_ray(origin, direction), next = make_ray(next_origin, next_direction);
+    if (!ray || !next) {
         return pick;
     }
-    const gp_Vec unit_ray = ray.Normalized(), unit_next = next_ray.Normalized();
     for (int i = 0; i < 3; ++i) {
-        pick.ray_origin[i] = origin[i];
-        pick.ray_direction[i] = unit_ray.Coord(i + 1);
+        pick.ray_origin[i] = ray->first.Coord(i + 1);
+        pick.ray_direction[i] = ray->second.Coord(i + 1);
     }
-    pick.pixel_size[0] = gp_Pnt(origin[0], origin[1], origin[2]).Distance(
-        gp_Pnt(next_origin[0], next_origin[1], next_origin[2]));
-    pick.pixel_size[1] = (unit_next - unit_ray).Magnitude();
+    pick.pixel_size[0] = ray->first.Distance(next->first);
+    pick.pixel_size[1] = (next->second - ray->second).Magnitude();
     return pick;
 }
 
@@ -866,7 +883,8 @@ mtk_status check_elements(const mtk_viewer_mesh& mesh) {
     if (mesh.face_first_triangles == nullptr) {
         return MTK_STATUS_OK;
     }
-    if (mesh.face_count <= 0 || mesh.face_count > mesh.triangle_count + 1 || mesh.face_first_triangles[0] != 0 ||
+    if (mesh.face_count < (mesh.triangle_count > 0 ? 1 : 0) || mesh.face_count > mesh.triangle_count + 1 ||
+        mesh.face_first_triangles[0] != 0 ||
         mesh.face_first_triangles[mesh.face_count] != mesh.triangle_count) {
         return mtk::invalid_argument("The faces of a mesh must take its triangles from 0 to the last one.");
     }
@@ -896,11 +914,15 @@ mtk_status check_elements(const mtk_viewer_mesh& mesh) {
 }
 
 mtk_status check_mesh(const mtk_viewer_mesh& mesh) {
-    if (mesh.vertex_count <= 0 || mesh.triangle_count <= 0 || mesh.vertex_count > max_mesh_size ||
-        mesh.triangle_count > max_mesh_size) {
-        return mtk::invalid_argument("A mesh needs from 1 to 715827882 vertices and triangles.");
+    // A mesh of edges only, such as lines drawn on the ground, has no triangles.
+    const bool edges_only = mesh.vertex_count == 0 && mesh.triangle_count == 0 && mesh.edge_first_points != nullptr &&
+                            mesh.edge_count > 0;
+    if (!edges_only && (mesh.vertex_count <= 0 || mesh.triangle_count <= 0 || mesh.vertex_count > max_mesh_size ||
+                        mesh.triangle_count > max_mesh_size)) {
+        return mtk::invalid_argument(
+            "A mesh needs from 1 to 715827882 vertices and triangles, or none and edges of its own.");
     }
-    if (mesh.positions == nullptr || mesh.triangles == nullptr) {
+    if (!edges_only && (mesh.positions == nullptr || mesh.triangles == nullptr)) {
         return mtk::invalid_argument("The positions and the triangles of a mesh must not be null.");
     }
     for (int32_t i = 0; i < 3 * mesh.vertex_count; ++i) {
