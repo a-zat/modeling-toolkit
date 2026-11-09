@@ -110,6 +110,13 @@ public sealed class OcctKernel : IGeometryKernel
         return valid != 0;
     }
 
+    public ShapeTopology CountElements(IKernelShape shape)
+    {
+        Span<int> counts = stackalloc int[4];
+        NativeMethods.ShapeCountElements(Unwrap(shape), counts).ThrowIfFailed();
+        return new ShapeTopology(counts[0], counts[1], counts[2], counts[3]);
+    }
+
     public FaceInfo GetFaceInfo(IKernelShape shape, int face)
     {
         Span<double> origin = stackalloc double[3];

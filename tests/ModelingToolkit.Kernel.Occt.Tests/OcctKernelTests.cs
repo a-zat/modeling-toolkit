@@ -76,6 +76,7 @@ public sealed class OcctKernelTests
             Enumerable.Range(0, 6).Sum(face => _kernel.GetFaceInfo(placed, face).Area), precision: 6);
         Assert.Equal(4 * (10 + 20 + 30),
             Enumerable.Range(0, 12).Sum(edge => _kernel.GetEdgeLength(placed, edge)), precision: 9);
+        Assert.Equal(new ShapeTopology(1, 6, 12, 8), _kernel.CountElements(placed));
         Assert.Equal(tessellation.Vertices.ToArray(), Enumerable.Range(0, 8).Select(v => _kernel.GetVertexPoint(placed, v)));
     }
 

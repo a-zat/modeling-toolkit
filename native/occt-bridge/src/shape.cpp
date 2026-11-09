@@ -232,6 +232,25 @@ mtk_status mtk_shape_is_valid(const mtk_shape* shape, int32_t* out_valid) {
     });
 }
 
+mtk_status mtk_shape_count_elements(const mtk_shape* shape, int32_t* out_counts) {
+    return mtk::guarded([&] {
+        if (out_counts != nullptr) {
+            std::fill_n(out_counts, 4, 0);
+        }
+        if (shape == nullptr || out_counts == nullptr) {
+            return mtk::invalid_argument("shape and out_counts must not be null.");
+        }
+
+        int index = 0;
+        for (const TopAbs_ShapeEnum kind : {TopAbs_SOLID, TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX}) {
+            NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> elements;
+            TopExp::MapShapes(shape->value, kind, elements);
+            out_counts[index++] = elements.Extent();
+        }
+        return MTK_STATUS_OK;
+    });
+}
+
 mtk_status mtk_shape_face_info(const mtk_shape* shape, int32_t face, double* out_area, int32_t* out_planar,
                                double* out_origin, double* out_normal) {
     return mtk::guarded([&] {

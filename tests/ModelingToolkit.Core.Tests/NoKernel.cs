@@ -42,6 +42,8 @@ internal sealed class NoKernel : IGeometryKernel
 
     public bool IsValid(IKernelShape shape) => throw new NotSupportedException();
 
+    public ShapeTopology CountElements(IKernelShape shape) => throw new NotSupportedException();
+
     public FaceInfo GetFaceInfo(IKernelShape shape, int face) => throw new NotSupportedException();
 
     public double GetEdgeLength(IKernelShape shape, int edge) => throw new NotSupportedException();

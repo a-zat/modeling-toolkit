@@ -269,6 +269,17 @@ TEST(Shape, MeasuresTheFacesEdgesAndVerticesWherePlaced) {
     }
 }
 
+TEST(Shape, CountsItsSolidsFacesEdgesAndVertices) {
+    ShapePtr box = make_box(10.0, 20.0, 30.0);
+    std::array<int32_t, 4> counts{};
+
+    ASSERT_EQ(mtk_shape_count_elements(box.get(), counts.data()), MTK_STATUS_OK) << mtk_last_error_message();
+    EXPECT_EQ(counts, (std::array<int32_t, 4>{1, 6, 12, 8}));
+    EXPECT_EQ(mtk_shape_count_elements(nullptr, counts.data()), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(counts, (std::array<int32_t, 4>{0, 0, 0, 0}));
+    EXPECT_EQ(mtk_shape_count_elements(box.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
+}
+
 TEST(Shape, MeasuresACurvedFaceWithoutAPlane) {
     mtk_shape* cylinder = nullptr;
     ASSERT_EQ(mtk_shape_make_cylinder(5.0, 10.0, &cylinder), MTK_STATUS_OK) << mtk_last_error_message();

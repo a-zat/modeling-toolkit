@@ -91,6 +91,9 @@ public interface IGeometryKernel
     // The faces, edges and vertices of a shape are numbered from 0, in the same order as Tessellate numbers them; an
     // index that the shape does not have throws ArgumentOutOfRangeException.
 
+    /// <summary>How many solids, faces, edges and vertices the shape has, each counted once.</summary>
+    ShapeTopology CountElements(IKernelShape shape);
+
     /// <summary>The area of a face and its plane, if it has one, in the coordinates of the shape.</summary>
     FaceInfo GetFaceInfo(IKernelShape shape, int face);
 

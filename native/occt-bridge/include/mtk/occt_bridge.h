@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 12
+#define MTK_OCCT_BRIDGE_ABI_VERSION 13
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -92,6 +92,9 @@ MTK_API mtk_status mtk_shape_is_valid(const mtk_shape* shape, int32_t* out_valid
  * TopExp::MapShapes, as mtk_shape_tessellate numbers them; an index that the shape does not have is an invalid
  * argument.
  */
+
+/* How many solids, faces, edges and vertices the shape has, in this order in out_counts, which holds 4 values. */
+MTK_API mtk_status mtk_shape_count_elements(const mtk_shape* shape, int32_t* out_counts);
 
 /*
  * The area of a face and, when the face lies on a plane, the plane: out_planar 1, out_origin the point of the plane
