@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_BRIDGE_ABI_VERSION 17
+#define MTK_OCCT_BRIDGE_ABI_VERSION 18
 
 /*
  * The progress of a long operation. report is called with the part done, from 0 to 1, as the operation goes, from the
@@ -78,6 +78,12 @@ MTK_API mtk_status mtk_shape_make_torus(double major_radius, double minor_radius
  * reflection.
  */
 MTK_API mtk_status mtk_shape_place(const mtk_shape* shape, const double* placement, mtk_shape** out_shape);
+
+/*
+ * A new shape: the shape scaled by a factor from a point (3 values), the same in every direction, as a copy of its
+ * geometry. The factor must be positive and finite.
+ */
+MTK_API mtk_status mtk_shape_scale(const mtk_shape* shape, const double* centre, double factor, mtk_shape** out_shape);
 
 MTK_API mtk_status mtk_shape_volume(const mtk_shape* shape, double* out_volume);
 

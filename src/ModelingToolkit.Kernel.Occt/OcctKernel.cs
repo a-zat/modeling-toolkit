@@ -66,6 +66,13 @@ public sealed class OcctKernel : IGeometryKernel
         return new OcctShape(handle);
     }
 
+    public IKernelShape Scale(IKernelShape shape, Point3d centre, double factor)
+    {
+        NativeMethods.ShapeScale(Unwrap(shape), [centre.X, centre.Y, centre.Z], factor, out ShapeHandle handle)
+            .ThrowIfFailed();
+        return new OcctShape(handle);
+    }
+
     // The values are those of mtk_boolean_operation in the native header.
     private enum BooleanOperation
     {

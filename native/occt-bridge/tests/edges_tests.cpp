@@ -617,4 +617,25 @@ TEST(RemoveElements, ErasingEverythingLeavesNothingAndRejectsBadIndices) {
     EXPECT_EQ(edit, nullptr);
 }
 
+TEST(Scale, ScalesAShapeFromAPointByAFactor) {
+    ShapePtr solid = box(100);
+    const std::array<double, 3> centre{100, 100, 0};
+    mtk_shape* made = nullptr;
+    ASSERT_EQ(mtk_shape_scale(solid.get(), centre.data(), 2, &made), MTK_STATUS_OK) << mtk_last_error_message();
+    ShapePtr scaled(made);
+    EXPECT_NEAR(volume_of(scaled), 8e6, 1e-3);
+    std::array<double, 6> bounds{};
+    ASSERT_EQ(mtk_shape_bounds(scaled.get(), bounds.data()), MTK_STATUS_OK);
+    EXPECT_NEAR(bounds[0], -100, 1e-6);
+    EXPECT_NEAR(bounds[3], 100, 1e-6);
+    EXPECT_NEAR(bounds[5], 200, 1e-6);
+    EXPECT_TRUE(is_valid(scaled));
+    EXPECT_NEAR(volume_of(solid), 1e6, 1e-3);
+
+    for (const double factor : {0.0, -1.0, std::numeric_limits<double>::infinity()}) {
+        EXPECT_EQ(mtk_shape_scale(solid.get(), centre.data(), factor, &made), MTK_STATUS_INVALID_ARGUMENT);
+    }
+    EXPECT_EQ(made, nullptr);
+}
+
 } // namespace

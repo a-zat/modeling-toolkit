@@ -54,6 +54,10 @@ public interface IGeometryKernel
     /// <exception cref="ArgumentException">The placement is not a rotation and a translation.</exception>
     IKernelShape Place(IKernelShape shape, Transform placement);
 
+    /// <summary>A new shape: <paramref name="shape"/> scaled by a factor from a point, the same in every direction.</summary>
+    /// <exception cref="ArgumentException">The factor is not positive and finite.</exception>
+    IKernelShape Scale(IKernelShape shape, Point3d centre, double factor);
+
     // The long operations, booleans and tessellation, report their progress, from 0 to 1, to an optional progress,
     // possibly from other threads, and stop when the token is cancelled, throwing OperationCanceledException.
 

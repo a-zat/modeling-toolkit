@@ -1,5 +1,6 @@
 using System.Numerics;
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Editing;
@@ -10,7 +11,8 @@ public static class TransformCommands
     /// <summary>
     /// Transforms an entity in the coordinates of its block, or adds a copy of it so transformed: a reference takes the
     /// transform before its own; a B-rep shape is placed again, its faces keeping their materials; a mesh has its
-    /// vertices and normals transformed. The transform must be a rotation and a translation.
+    /// vertices and normals transformed. The transform must be a rotation, a translation and a scaling the same in every
+    /// direction.
     /// </summary>
     /// <exception cref="ArgumentException">The entity is in no block.</exception>
     public static IEditCommand Of(string name, Entity entity, Transform transform, bool copy = false)
@@ -26,7 +28,7 @@ public static class TransformCommands
         if (!copy && entity is BrepEntity brep)
         {
             return new ReplaceShapeCommand(
-                name, brep, brep.Kernel.Place(brep.Shape, transform), new Dictionary<int, Material>(brep.FaceMaterials));
+                name, brep, Placed(brep, transform), new Dictionary<int, Material>(brep.FaceMaterials));
         }
         Entity made = Transformed(entity, transform);
         made.Name = entity.Name;
@@ -36,7 +38,7 @@ public static class TransformCommands
     private static Entity Transformed(Entity entity, Transform transform) => entity switch
     {
         BlockReference reference => new BlockReference(reference.Block, transform * reference.Transform),
-        BrepEntity brep => new BrepEntity(brep.Kernel, brep.Kernel.Place(brep.Shape, transform), brep.FaceMaterials),
+        BrepEntity brep => new BrepEntity(brep.Kernel, Placed(brep, transform), brep.FaceMaterials),
         MeshEntity mesh => new MeshEntity(
             [.. mesh.Vertices.Select(transform.Apply)],
             mesh.Triangles,
@@ -44,6 +46,18 @@ public static class TransformCommands
             mesh.TextureCoordinates) { Material = mesh.Material },
         _ => throw new ArgumentException($"An entity of type {entity.GetType().Name} cannot be transformed.", nameof(entity)),
     };
+
+    // The shape scaled from the origin, when the transform scales, then placed by the rest of the transform.
+    private static IKernelShape Placed(BrepEntity brep, Transform transform)
+    {
+        double factor = transform.ApplyVector(Vector3d.UnitX).Length;
+        if (Math.Abs(factor - 1) < 1e-12)
+        {
+            return brep.Kernel.Place(brep.Shape, transform);
+        }
+        using IKernelShape scaled = brep.Kernel.Scale(brep.Shape, Point3d.Origin, factor);
+        return brep.Kernel.Place(scaled, transform * Transform.Scaling(Point3d.Origin, 1 / factor));
+    }
 
     private static Vector3 Turned(Vector3 normal, Transform transform)
     {

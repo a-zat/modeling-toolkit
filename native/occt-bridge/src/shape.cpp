@@ -4,6 +4,7 @@
 #include <BRepCheck_Analyzer.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepBndLib.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
@@ -179,6 +180,26 @@ mtk_status mtk_shape_place(const mtk_shape* shape, const double* placement, mtk_
         }
 
         *out_shape = new mtk_shape{shape->value.Moved(TopLoc_Location(*rigid))};
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_shape_scale(const mtk_shape* shape, const double* centre, double factor, mtk_shape** out_shape) {
+    return mtk::guarded([&] {
+        mtk::clear_outputs(out_shape);
+        if (shape == nullptr || centre == nullptr || out_shape == nullptr) {
+            return mtk::invalid_argument("shape, centre and out_shape must not be null.");
+        }
+        if (!std::isfinite(factor) || factor <= 0 || !std::all_of(centre, centre + 3, [](double v) { return std::isfinite(v); })) {
+            return mtk::invalid_argument("The factor must be positive and finite, and the centre finite.");
+        }
+        gp_Trsf scaling;
+        scaling.SetScale(gp_Pnt(centre[0], centre[1], centre[2]), factor);
+        BRepBuilderAPI_Transform scaled(shape->value, scaling, true);
+        if (!scaled.IsDone()) {
+            throw mtk::kernel_error("The shape could not be scaled.");
+        }
+        *out_shape = new mtk_shape{scaled.Shape()};
         return MTK_STATUS_OK;
     });
 }

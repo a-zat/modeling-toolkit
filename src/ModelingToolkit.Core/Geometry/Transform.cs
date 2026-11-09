@@ -24,6 +24,12 @@ public sealed record Transform(
         0, 1, 0, y,
         0, 0, 1, z);
 
+    /// <summary>The scaling by a factor from a point, the same in every direction.</summary>
+    public static Transform Scaling(Point3d centre, double factor) => new(
+        factor, 0, 0, centre.X * (1 - factor),
+        0, factor, 0, centre.Y * (1 - factor),
+        0, 0, factor, centre.Z * (1 - factor));
+
     /// <summary>
     /// The rotation by an angle, in radians, around an axis through a point: counterclockwise looking against the
     /// direction of the axis, which must not be zero.
