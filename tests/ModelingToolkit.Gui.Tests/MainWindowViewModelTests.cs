@@ -403,6 +403,69 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void TheSettingsAreReadAtStartAndWrittenWhenChanged()
+    {
+        var store = new MemorySettingsStore(new AppSettings { DarkTheme = true, UseGlb = false, TimeOfDay = 18 });
+        var viewModel = new MainWindowViewModel(
+            new DocumentFormats([], []), new RecordingAppearance(), settings: store);
+        Assert.True(viewModel.IsDark);
+        Assert.False(viewModel.UseGlb);
+        Assert.Equal(18, viewModel.TimeOfDay);
+
+        viewModel.IsGridVisible = false;
+        viewModel.UseGlb = true;
+
+        Assert.Equal(new AppSettings { DarkTheme = true, UseGlb = true, TimeOfDay = 18, Grid = false }, store.Load());
+    }
+
+    [Fact]
+    public async Task InTheGlbModeSaveWritesTheGlbOpenedWhoseRootNodeIsTheModel()
+    {
+        string folder = Directory.CreateTempSubdirectory("mtk-glb-mode-").FullName;
+        try
+        {
+            string path = Path.Combine(folder, "truck.glb");
+            File.Copy(Paths.Asset("gltf", "CesiumMilkTruck.glb"), path);
+            MainWindowViewModel viewModel = CreateWithWriters();
+            Assert.True(viewModel.UseGlb);
+            await viewModel.LoadAsync(path);
+            Entity top = Assert.Single(viewModel.Document!.Root.Entities);
+            DateTime before = File.GetLastWriteTimeUtc(path);
+
+            await viewModel.SaveCommand.ExecuteAsync(null);
+
+            Assert.NotEqual(before, File.GetLastWriteTimeUtc(path));
+            await viewModel.LoadAsync(path);
+            // The root node written, holding the model, is not shown as a block of its own.
+            Assert.Equal(top.Name, Assert.Single(viewModel.Document!.Root.Entities).Name);
+            Assert.Single(viewModel.Document.Animations);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WithoutTheGlbModeAGlbOpenedIsNotOverwritten()
+    {
+        MainWindowViewModel viewModel = CreateWithWriters();
+        viewModel.UseGlb = false;
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        DateTime before = File.GetLastWriteTimeUtc(Paths.Asset("gltf", "Box.glb"));
+
+        await viewModel.SaveCommand.ExecuteAsync(null); // no file dialogs: Save As does nothing
+
+        Assert.Equal(before, File.GetLastWriteTimeUtc(Paths.Asset("gltf", "Box.glb")));
+    }
+
+    private static MainWindowViewModel CreateWithWriters() => new(
+        new DocumentFormats(
+            [new GltfReader(), new NativeDocumentReader(new OcctKernel())],
+            [new GltfWriter(), new NativeDocumentWriter()]),
+        new RecordingAppearance());
+
+    [Fact]
     public void TheViewCommandsMoveTheCameraAndChangeHowTheViewShowsTheModel()
     {
         MainWindowViewModel viewModel = Create();

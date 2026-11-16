@@ -23,6 +23,23 @@ public abstract class Entity
         }
     }
 
+    /// <summary>
+    /// Whether the entity is hidden, with all it places: the 3D view leaves it out, as a layer switched off. It is kept
+    /// in the document and saved.
+    /// </summary>
+    public bool IsHidden
+    {
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                Raise(new PropertyChanged(this, nameof(IsHidden)));
+            }
+        }
+    }
+
     /// <summary>The block that contains the entity; null for none.</summary>
     public Block? Owner { get; internal set; }
 

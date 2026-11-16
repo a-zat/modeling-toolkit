@@ -16,6 +16,38 @@ public sealed class RenameCommand(Entity entity, string? name) : IEditCommand
     public void Revert() => _entity.Name = _before;
 }
 
+/// <summary>Shows or hides entities, as layers are switched on or off, as one command.</summary>
+public sealed class SetHiddenCommand : IEditCommand
+{
+    private readonly (Entity Entity, bool Before)[] _entities;
+    private readonly bool _hidden;
+
+    public SetHiddenCommand(IEnumerable<Entity> entities, bool hidden)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+        _entities = [.. entities.Select(entity => (entity, entity.IsHidden))];
+        _hidden = hidden;
+    }
+
+    public string Name => _hidden ? "Hide" : "Show";
+
+    public void Apply()
+    {
+        foreach ((Entity entity, _) in _entities)
+        {
+            entity.IsHidden = _hidden;
+        }
+    }
+
+    public void Revert()
+    {
+        foreach ((Entity entity, bool before) in _entities)
+        {
+            entity.IsHidden = before;
+        }
+    }
+}
+
 /// <summary>
 /// Adds a material to the materials of a document, with its texture to the textures, as one chosen from a library or
 /// made from an image is when first used.

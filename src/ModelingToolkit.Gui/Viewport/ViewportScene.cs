@@ -393,6 +393,10 @@ internal sealed class ViewportScene
     {
         foreach (Entity entity in block.Entities)
         {
+            if (entity.IsHidden)
+            {
+                continue;
+            }
             path.Add(entity);
             switch (entity)
             {

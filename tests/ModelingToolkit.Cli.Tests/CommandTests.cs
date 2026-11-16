@@ -63,7 +63,7 @@ public sealed class CommandTests : IDisposable
         (int exitCode, _, string error) = Run("convert", Asset("CesiumMilkTruck.glb"), output);
 
         Assert.Equal(1, exitCode);
-        Assert.Equal("Error: '.obj' files cannot be written. Supported: .mtk.", error.Trim());
+        Assert.Equal("Error: '.obj' files cannot be written. Supported: .glb, .mtk.", error.Trim());
         Assert.False(File.Exists(output));
     }
 

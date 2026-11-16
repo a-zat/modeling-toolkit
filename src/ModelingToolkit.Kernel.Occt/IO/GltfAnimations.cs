@@ -217,7 +217,7 @@ internal static class GltfAnimations
             : null;
 
     // The JSON of the file and, for a .glb file, its binary chunk.
-    private static (byte[] Json, byte[]? Binary) Load(string path)
+    internal static (byte[] Json, byte[]? Binary) Load(string path)
     {
         byte[] bytes = File.ReadAllBytes(path);
         if (bytes.Length < 12 || BinaryPrimitives.ReadUInt32LittleEndian(bytes) != GlbMagic)

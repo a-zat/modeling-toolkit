@@ -1,0 +1,138 @@
+using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Model;
+using ModelingToolkit.Kernel.Occt.IO;
+
+namespace ModelingToolkit.Kernel.Occt.Tests;
+
+public sealed class GltfWriterTests : IDisposable
+{
+    private readonly GltfReader _reader = new();
+    private readonly GltfWriter _writer = new();
+    private readonly string _folder = Directory.CreateTempSubdirectory("mtk-gltf-writer-tests-").FullName;
+
+    public void Dispose() => Directory.Delete(_folder, recursive: true);
+
+    [Theory]
+    [InlineData("CesiumMilkTruck.glb")]
+    [InlineData("BoxTextured.glb")]
+    [InlineData("SimpleMeshes.gltf")]
+    public void A_model_written_and_read_again_places_the_same_vertices_with_the_same_materials(string asset)
+    {
+        Document original = _reader.Read(Asset(asset), []);
+
+        Document copy = RoundTrip(original);
+
+        AssertSame(Placed(original, new Dictionary<BlockReference, Transform>()),
+            Placed(copy, new Dictionary<BlockReference, Transform>()));
+        Assert.Equal(original.Materials.Select(material => (material.Name, material.BaseColor, material.Metallic,
+                material.Roughness, material.BaseColorTexture?.Data.Length)),
+            copy.Materials.Select(material => (material.Name, material.BaseColor, material.Metallic,
+                material.Roughness, material.BaseColorTexture?.Data.Length)));
+        // Texture coordinates come back as they were, the origin of textures being at the top in glTF only.
+        Assert.Equal(Coordinates(original), Coordinates(copy));
+    }
+
+    [Fact]
+    public void Animations_written_and_read_again_place_the_parts_as_before()
+    {
+        Document original = _reader.Read(Asset("CesiumMilkTruck.glb"), []);
+
+        Document copy = RoundTrip(original);
+
+        Animation before = Assert.Single(original.Animations), after = Assert.Single(copy.Animations);
+        Assert.Equal(before.Name, after.Name);
+        Assert.Equal(before.Duration, after.Duration, 1e-6);
+        foreach (double time in (double[])[0, 0.3, 0.77, 1.25])
+        {
+            AssertSame(Placed(original, before.PoseAt(time)), Placed(copy, after.PoseAt(time)));
+        }
+    }
+
+    [Fact]
+    public void The_model_space_becomes_the_root_node_with_its_name_and_hidden_entities_stay_hidden()
+    {
+        Document original = _reader.Read(Asset("CesiumMilkTruck.glb"), []);
+        DocumentRoot.Unwrap(original);
+        BlockReference wheel = Assert.Single(original.Blocks.SelectMany(block => block.Entities)
+            .OfType<BlockReference>(), reference => reference.Name == "Wheels");
+        wheel.IsHidden = true;
+        Material textured = original.Materials.First(material => material.BaseColorTexture is not null);
+        textured.TextureSize = 250;
+        string rootName = original.Root.Name;
+
+        Document copy = RoundTrip(original);
+
+        Assert.True(DocumentRoot.Unwrap(copy));
+        Assert.Equal(rootName, copy.Root.Name);
+        Assert.True(copy.Blocks.SelectMany(block => block.Entities).OfType<BlockReference>()
+            .Single(reference => reference.Name == "Wheels").IsHidden);
+        Assert.Equal(250, copy.Materials.Single(material => material.Name == textured.Name).TextureSize);
+    }
+
+    [Fact]
+    public void What_glTF_cannot_hold_is_reported()
+    {
+        var document = new Document();
+        document.Root.Entities.Add(new GuideEntity(default, Vector3d.UnitX));
+        var kernel = new OcctKernel();
+        document.Root.Entities.Add(new BrepEntity(kernel, kernel.MakeBox(10, 20, 30)));
+        var warnings = new List<string>();
+
+        _writer.Write(document, Path.Combine(_folder, "shapes.glb"), warnings);
+
+        Assert.Contains(warnings, warning => warning.Contains("guide"));
+        Assert.Contains(warnings, warning => warning.Contains("B-rep"));
+        Document copy = _reader.Read(Path.Combine(_folder, "shapes.glb"), []);
+        BoundingBox box = copy.GetBoundingBox();
+        Assert.Equal(10, box.Max.X - box.Min.X, 1e-3);
+        Assert.Equal(30, box.Max.Z - box.Min.Z, 1e-3);
+    }
+
+    private Document RoundTrip(Document document)
+    {
+        string path = Path.Combine(_folder, Guid.NewGuid() + ".glb");
+        _writer.Write(document, path);
+        return _reader.Read(path, []);
+    }
+
+    private static string Asset(string name) => Path.Combine(AppContext.BaseDirectory, "assets", "gltf", name);
+
+    // The vertices of the meshes in the model space, sorted, with references moved by a pose.
+    private static List<Point3d> Placed(Document document, IReadOnlyDictionary<BlockReference, Transform> pose)
+    {
+        var points = new List<Point3d>();
+        Visit(document.Root, Transform.Identity);
+        return [.. points.OrderBy(p => Math.Round(p.X, 1)).ThenBy(p => Math.Round(p.Y, 1)).ThenBy(p => Math.Round(p.Z, 1))];
+
+        void Visit(Block block, Transform placement)
+        {
+            foreach (Entity entity in block.Entities)
+            {
+                if (entity is MeshEntity mesh)
+                {
+                    points.AddRange(mesh.Vertices.Select(placement.Apply));
+                }
+                else if (entity is BlockReference reference)
+                {
+                    Visit(reference.Block, placement * pose.GetValueOrDefault(reference, reference.Transform));
+                }
+            }
+        }
+    }
+
+    private static List<(double, double)> Coordinates(Document document) =>
+        [.. document.Blocks.Prepend(document.Root).SelectMany(block => block.Entities).OfType<MeshEntity>()
+            .SelectMany(mesh => mesh.TextureCoordinates ?? [])
+            .Select(uv => (Math.Round(uv.X, 4), Math.Round(uv.Y, 4))).Order()];
+
+    private static void AssertSame(List<Point3d> expected, List<Point3d> actual)
+    {
+        Assert.Equal(expected.Count, actual.Count);
+        for (int index = 0; index < expected.Count; index++)
+        {
+            Assert.Equal(expected[index].X, actual[index].X, 0.01);
+            Assert.Equal(expected[index].Y, actual[index].Y, 0.01);
+            Assert.Equal(expected[index].Z, actual[index].Z, 0.01);
+        }
+    }
+}

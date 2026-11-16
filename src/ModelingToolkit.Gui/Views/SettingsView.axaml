@@ -8,6 +8,17 @@
   <ScrollViewer>
     <StackPanel Margin="14,0,14,14" Spacing="16">
       <StackPanel Spacing="8">
+        <TextBlock Classes="label" Text="FILES" />
+        <CheckBox IsChecked="{Binding UseGlb}">
+          <StackPanel>
+            <TextBlock Text="Open and save glTF directly" />
+            <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                       Text="Save writes the .glb opened, with warnings for what glTF cannot hold; its root node is the model." />
+          </StackPanel>
+        </CheckBox>
+      </StackPanel>
+
+      <StackPanel Spacing="8">
         <TextBlock Classes="label" Text="APPEARANCE" />
         <CheckBox Content="Dark theme" IsChecked="{Binding IsDark}" />
       </StackPanel>
@@ -28,6 +39,11 @@
                        Text="As in technical drawings: on white, flat shades without highlights, thick dark outlines." />
           </StackPanel>
         </RadioButton>
+      </StackPanel>
+
+      <StackPanel Spacing="4" IsVisible="{Binding SettingsLocation, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Classes="label" Text="SETTINGS FILE" />
+        <SelectableTextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="{Binding SettingsLocation}" />
       </StackPanel>
     </StackPanel>
   </ScrollViewer>

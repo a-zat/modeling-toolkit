@@ -49,6 +49,7 @@ public sealed class GltfReader : IDocumentReader
                 warnings.Add(warning);
             }
             ReadAnimations(fullPath, document, warnings);
+            ReadExtras(fullPath, document);
             return document;
         }
     }
@@ -70,6 +71,54 @@ public sealed class GltfReader : IDocumentReader
         {
             warnings.Add(warning);
         }
+    }
+
+    // What the toolkit writes in the extras of glTF, which OpenCASCADE ignores: the hidden nodes, found by name as the
+    // animated ones, and the size of the textures of materials. Extras that cannot be read are of no harm.
+    private static void ReadExtras(string path, Document document)
+    {
+        try
+        {
+            using JsonDocument file = JsonDocument.Parse(GltfAnimations.Load(path).Json);
+            JsonElement root = file.RootElement;
+            var entities = document.Blocks.Prepend(document.Root).SelectMany(block => block.Entities)
+                .Where(entity => entity.Name is not null).ToLookup(entity => entity.Name!);
+            foreach (JsonElement node in Items(root, "nodes"))
+            {
+                if (Extra(node, "hidden") is { ValueKind: JsonValueKind.True } &&
+                    node.TryGetProperty("name", out JsonElement name) && name.ValueKind == JsonValueKind.String &&
+                    entities[name.GetString()!].ToList() is [Entity entity])
+                {
+                    entity.IsHidden = true;
+                }
+            }
+            var materials = document.Materials.ToLookup(material => material.Name);
+            foreach (JsonElement entry in Items(root, "materials"))
+            {
+                if (Extra(entry, "textureSize") is { ValueKind: JsonValueKind.Number } size &&
+                    entry.TryGetProperty("name", out JsonElement name) && name.ValueKind == JsonValueKind.String &&
+                    size.GetDouble() > 0)
+                {
+                    foreach (Material material in materials[name.GetString()!])
+                    {
+                        material.TextureSize = (float)size.GetDouble();
+                    }
+                }
+            }
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException or IOException
+                                              or InvalidOperationException)
+        {
+        }
+
+        static IEnumerable<JsonElement> Items(JsonElement root, string property) =>
+            root.ValueKind == JsonValueKind.Object && root.TryGetProperty(property, out JsonElement array) &&
+            array.ValueKind == JsonValueKind.Array ? array.EnumerateArray() : [];
+
+        static JsonElement? Extra(JsonElement element, string name) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty("extras", out JsonElement extras) &&
+            extras.ValueKind == JsonValueKind.Object && extras.TryGetProperty(name, out JsonElement value)
+                ? value : null;
     }
 
     // OpenCASCADE starts each problem of the file with "File '<path>' defines invalid glTF!" on a line of its own.

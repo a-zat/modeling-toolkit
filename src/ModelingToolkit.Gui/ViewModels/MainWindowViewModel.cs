@@ -25,10 +25,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private TaskCompletionSource _idle = Completed();
 
     /// <param name="kernel">The kernel the drawing tools work with; without one, only the selection tool is offered.</param>
-    public MainWindowViewModel(DocumentFormats formats, IAppearance appearance, IGeometryKernel? kernel = null)
+    /// <param name="settings">Where the settings are kept; in memory without one.</param>
+    public MainWindowViewModel(DocumentFormats formats, IAppearance appearance, IGeometryKernel? kernel = null,
+        ISettingsStore? settings = null)
     {
         _formats = formats;
         _appearance = appearance;
+        _settingsStore = settings ?? new MemorySettingsStore();
 
         Title = ApplicationName;
         DocumentName = "No document";
@@ -36,9 +39,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         StatusMessage = string.Empty;
         IsInspectorOpen = true;
         IsOutlineExpanded = true;
-        IsDark = false;
-        IsPerspective = true;
-        IsGridVisible = true;
+        ApplySettings(_settingsStore.Load());
+        _settingsStore.Changed += (_, _) =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsStore.Load()));
 
         Properties.Edit = Edit;
         Properties.Picker.ChooseImage = () => FileDialogs?.OpenAsync(
@@ -775,6 +778,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             (Document document, DocumentStatistics statistics) = await Task.Run(() =>
             {
                 Document read = reader.Read(path, warnings, progress, cancellation.Token);
+                if (UseGlb && IsGltf(path))
+                {
+                    DocumentRoot.Unwrap(read);
+                }
                 return (read, DocumentStatistics.Of(read));
             }, cancellation.Token);
             Show(document, statistics, path);
@@ -867,6 +874,65 @@ public sealed partial class MainWindowViewModel : ObservableObject
             : $"{StatusMessage} The view leaves out {warnings.Count} things: {warnings[0]}";
         StatusDetails = string.Join(Environment.NewLine, details is null ? warnings : [details, .. warnings]);
     }
+
+    private readonly ISettingsStore _settingsStore;
+    private AppSettings _settings = new();
+    private bool _applyingSettings;
+
+    /// <summary>Where the settings are kept, for the user to edit them; null for nowhere.</summary>
+    public string? SettingsLocation => _settingsStore.Location;
+
+    /// <summary>
+    /// Whether files are opened and saved as glTF directly: Save writes the .glb opened, Save As offers .glb, and the
+    /// model space of a glTF file opened is its root node, without the nodes that only wrap it.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool UseGlb { get; set; }
+
+    private void ApplySettings(AppSettings settings)
+    {
+        _applyingSettings = true;
+        try
+        {
+            _settings = settings;
+            UseGlb = settings.UseGlb;
+            IsDark = settings.DarkTheme;
+            RenderStyle = settings.RenderStyle;
+            DisplayMode = settings.DisplayMode;
+            IsPerspective = settings.Perspective;
+            IsGridVisible = settings.Grid;
+            TimeOfDay = Math.Clamp(settings.TimeOfDay, 0, 24);
+        }
+        finally
+        {
+            _applyingSettings = false;
+        }
+    }
+
+    // The settings changed in the interface are written at once.
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (_applyingSettings || _settingsStore is null || e.PropertyName is not (nameof(UseGlb) or nameof(IsDark)
+                or nameof(RenderStyle) or nameof(DisplayMode) or nameof(IsPerspective) or nameof(IsGridVisible)
+                or nameof(TimeOfDay)))
+        {
+            return;
+        }
+        _settings = _settings with
+        {
+            UseGlb = UseGlb, DarkTheme = IsDark, RenderStyle = RenderStyle, DisplayMode = DisplayMode,
+            Perspective = IsPerspective, Grid = IsGridVisible, TimeOfDay = TimeOfDay,
+        };
+        _settingsStore.Save(_settings);
+    }
+
+    /// <summary>The hour of the day that the rendered display mode shows, from 0 to 24.</summary>
+    [ObservableProperty]
+    public partial double TimeOfDay { get; set; }
+
+    /// <summary>Where the model is, for the course of the sun: latitude and north, from the settings file.</summary>
+    public (double Latitude, double NorthAngle) Site => (_settings.Latitude, _settings.NorthAngle);
 
     // The initial value is applied by the application, once Avalonia is ready.
     partial void OnIsDarkChanged(bool value)
@@ -999,7 +1065,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        IDocumentWriter writer = _formats.Writers[0];
+        IDocumentWriter writer = SaveAsWriter;
         string suggestedName = Path.ChangeExtension(Path.GetFileName(_path) ?? "model", writer.Extensions[0]);
         string? path = await FileDialogs.SaveAsync(
             "Save the model", new FileType(writer.FormatName, writer.Extensions), suggestedName);
@@ -1167,12 +1233,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             IDocumentWriter writer = _formats.WriterFor(path);
             IProgress<double> progress = OperationProgressReporter();
-            await Task.Run(() => writer.Write(document, path, progress, cancellation.Token), cancellation.Token);
+            var warnings = new List<string>();
+            await Task.Run(() =>
+            {
+                if (writer is Kernel.Occt.IO.GltfWriter gltf)
+                {
+                    gltf.Write(document, path, warnings, progress, cancellation.Token);
+                }
+                else
+                {
+                    writer.Write(document, path, progress, cancellation.Token);
+                }
+            }, cancellation.Token);
             _path = path;
             DocumentName = name;
             Title = $"{name} — {ApplicationName}";
             Session?.MarkSaved();
-            StatusMessage = $"Saved {name} ({writer.FormatName}).";
+            StatusMessage = warnings.Count == 0
+                ? $"Saved {name} ({writer.FormatName})."
+                : $"Saved {name} ({writer.FormatName}), with {warnings.Count} warning(s): {warnings[0]}";
+            StatusDetails = warnings.Count > 0 ? string.Join(Environment.NewLine, warnings) : null;
         }
         catch (OperationCanceledException)
         {
@@ -1189,9 +1269,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    // A glTF file is saved as it is only in the glTF mode; otherwise, as before, in the native format.
     private bool IsWritable(string path)
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
-        return _formats.Writers.Any(writer => writer.Extensions.Contains(extension));
+        return (UseGlb || !IsGltf(path)) && _formats.Writers.Any(writer => writer.Extensions.Contains(extension));
     }
+
+    private static bool IsGltf(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".glb" or ".gltf";
+
+    // The writer of Save As: glTF in the glTF mode, the native format otherwise.
+    private IDocumentWriter SaveAsWriter =>
+        _formats.Writers.FirstOrDefault(writer => writer.Extensions.Contains(UseGlb ? ".glb" : ".mtk"))
+        ?? _formats.Writers[0];
 }

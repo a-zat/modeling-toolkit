@@ -183,6 +183,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                     _ => throw new InvalidDataException($"Unknown entity in block '{entry.Name}'."),
                 };
                 entity.Name = entityEntry.Name;
+                entity.IsHidden = entityEntry.Hidden == true;
                 block.Entities.Add(entity);
             }
         }

@@ -149,7 +149,10 @@ public sealed class NativeDocumentWriter : IDocumentWriter
 
         private BlockEntry ToEntry(Block block) => new(block.Name, block.Entities.Select(ToEntry).ToList());
 
-        private EntityEntry ToEntry(Entity entity)
+        private EntityEntry ToEntry(Entity entity) =>
+            ToEntryOf(entity) with { Hidden = entity.IsHidden ? true : null };
+
+        private EntityEntry ToEntryOf(Entity entity)
         {
             return entity switch
             {

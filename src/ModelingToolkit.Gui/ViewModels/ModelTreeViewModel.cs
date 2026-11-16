@@ -12,11 +12,14 @@ public sealed partial class ModelTreeViewModel : ObservableObject
 {
     /// <summary>The node of the model, above the nodes shown; null without a document.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Roots), nameof(IsEmpty))]
+    [NotifyPropertyChangedFor(nameof(Roots), nameof(TopNodes), nameof(IsEmpty))]
     public partial ModelNodeViewModel? Model { get; private set; }
 
     /// <summary>The nodes at the top of the outline: the references and the geometry of the model.</summary>
     public IReadOnlyList<ModelNodeViewModel> Roots => Model?.Children ?? [];
+
+    /// <summary>The top of the outline: the model, named as its root block, such as the root node of a glTF file.</summary>
+    public IReadOnlyList<ModelNodeViewModel> TopNodes => Model is null ? [] : [Model];
 
     [ObservableProperty]
     public partial ModelNodeViewModel? SelectedNode { get; set; }

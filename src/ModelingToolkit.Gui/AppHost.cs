@@ -15,6 +15,7 @@ internal static class AppHost
 
         services.AddOpenCascade().AddNativeFileFormat().AddSingleton<DocumentFormats>();
         services.AddSingleton<IAppearance, Appearance>();
+        services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddTransient<MainWindowViewModel>();
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });

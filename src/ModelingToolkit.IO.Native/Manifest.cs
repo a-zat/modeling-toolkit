@@ -33,7 +33,11 @@ internal sealed record BlockEntry(string Name, List<EntityEntry> Entities);
 [JsonDerivedType(typeof(BrepEntry), "brep")]
 [JsonDerivedType(typeof(BlockReferenceEntry), "blockReference")]
 [JsonDerivedType(typeof(GuideEntry), "guide")]
-internal abstract record EntityEntry(string? Name);
+internal abstract record EntityEntry(string? Name)
+{
+    /// <summary>True for a hidden entity; absent otherwise.</summary>
+    public bool? Hidden { get; init; }
+}
 
 internal sealed record MeshEntry(
     string? Name,
