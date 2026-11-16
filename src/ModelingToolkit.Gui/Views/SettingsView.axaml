@@ -1,51 +1,126 @@
-<!-- The settings of the application: how it looks, and how the 3D view shades the model. -->
+<!-- The settings of the application, by category: the categories on the left, the settings of the one chosen on the
+     right, and where they are kept below. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
              x:Class="ModelingToolkit.Gui.Views.SettingsView"
              x:DataType="vm:MainWindowViewModel">
 
-  <ScrollViewer>
-    <StackPanel Margin="14,0,14,14" Spacing="16">
-      <StackPanel Spacing="8">
-        <TextBlock Classes="label" Text="FILES" />
-        <CheckBox IsChecked="{Binding UseGlb}">
-          <StackPanel>
-            <TextBlock Text="Open and save glTF directly" />
-            <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                       Text="Save writes the .glb opened, with warnings for what glTF cannot hold; its root node is the model." />
-          </StackPanel>
-        </CheckBox>
-      </StackPanel>
+  <UserControl.Styles>
+    <!-- The categories as a list on the left, the chosen one marked. -->
+    <Style Selector="TabControl.settings">
+      <Setter Property="TabStripPlacement" Value="Left" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="TabControl.settings /template/ ItemsPresenter#PART_ItemsPresenter">
+      <Setter Property="Margin" Value="8" />
+    </Style>
+    <Style Selector="TabControl.settings TabItem">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="MinWidth" Value="150" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TabControl.settings TabItem:selected /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource Mtk.Selection}" />
+    </Style>
+    <Style Selector="TabControl.settings TabItem /template/ Border#PART_SelectedPipe">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="StackPanel.page">
+      <Setter Property="Margin" Value="20,14,20,14" />
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+  </UserControl.Styles>
 
-      <StackPanel Spacing="8">
-        <TextBlock Classes="label" Text="APPEARANCE" />
-        <CheckBox Content="Dark theme" IsChecked="{Binding IsDark}" />
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Mtk.Border}"
+            Padding="16,8" IsVisible="{Binding SettingsLocation, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Classes="secondary" FontSize="11" Text="Kept in" VerticalAlignment="Center" />
+        <SelectableTextBlock Classes="secondary" FontSize="11" Text="{Binding SettingsLocation}"
+                             VerticalAlignment="Center" />
       </StackPanel>
+    </Border>
 
-      <StackPanel Spacing="8">
-        <TextBlock Classes="label" Text="RENDER STYLE" />
-        <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsStandardRenderStyle}">
-          <StackPanel>
-            <TextBlock Text="Standard" />
-            <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                       Text="Lit by the materials, with their highlights." />
+    <TabControl Classes="settings">
+      <TabItem Header="Files">
+        <ScrollViewer>
+          <StackPanel Classes="page">
+            <TextBlock Classes="label" Text="GLTF" />
+            <CheckBox IsChecked="{Binding UseGlb}">
+              <StackPanel>
+                <TextBlock Text="Open and save glTF directly" />
+                <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                           Text="Save writes the .glb opened, with warnings for what glTF cannot hold; its root node is the model." />
+              </StackPanel>
+            </CheckBox>
           </StackPanel>
-        </RadioButton>
-        <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsCadRenderStyle}">
-          <StackPanel>
-            <TextBlock Text="CAD" />
-            <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                       Text="As in technical drawings: on white, flat shades without highlights, thick dark outlines." />
-          </StackPanel>
-        </RadioButton>
-      </StackPanel>
+        </ScrollViewer>
+      </TabItem>
 
-      <StackPanel Spacing="4" IsVisible="{Binding SettingsLocation, Converter={x:Static ObjectConverters.IsNotNull}}">
-        <TextBlock Classes="label" Text="SETTINGS FILE" />
-        <SelectableTextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="{Binding SettingsLocation}" />
-      </StackPanel>
-    </StackPanel>
-  </ScrollViewer>
+      <TabItem Header="Appearance">
+        <ScrollViewer>
+          <StackPanel Classes="page">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="label" Text="THEME" />
+              <CheckBox Content="Dark theme" IsChecked="{Binding IsDark}" />
+            </StackPanel>
+            <StackPanel Spacing="8">
+              <TextBlock Classes="label" Text="RENDER STYLE" />
+              <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsStandardRenderStyle}">
+                <StackPanel>
+                  <TextBlock Text="Standard" />
+                  <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                             Text="Lit by the materials, with their highlights." />
+                </StackPanel>
+              </RadioButton>
+              <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsCadRenderStyle}">
+                <StackPanel>
+                  <TextBlock Text="CAD" />
+                  <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                             Text="As in technical drawings: on white, flat shades without highlights, thick dark outlines." />
+                </StackPanel>
+              </RadioButton>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Rendered view">
+        <ScrollViewer>
+          <StackPanel Classes="page">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="label" Text="SITE" />
+              <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                         Text="Where the model is, for the course of the sun." />
+              <Grid ColumnDefinitions="140,160" RowDefinitions="Auto,Auto" RowSpacing="6">
+                <TextBlock Text="Latitude (°N)" VerticalAlignment="Center" />
+                <NumericUpDown Grid.Column="1" Value="{Binding Latitude}" Minimum="-90" Maximum="90" Increment="0.5"
+                               FormatString="0.##" />
+                <TextBlock Grid.Row="1" Text="North (° from Y)" VerticalAlignment="Center"
+                           ToolTip.Tip="The direction of north from the Y axis of the model, counterclockwise" />
+                <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding NorthAngle}" Minimum="-360" Maximum="360"
+                               Increment="5" FormatString="0.##" />
+              </Grid>
+            </StackPanel>
+            <StackPanel Spacing="8">
+              <TextBlock Classes="label" Text="WALKING" />
+              <CheckBox IsChecked="{Binding Collisions}">
+                <StackPanel>
+                  <TextBlock Text="Collisions" />
+                  <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                             Text="Walls and the other parts of the model stop the walk, which slides along them; thresholds are stepped over." />
+                </StackPanel>
+              </CheckBox>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
 
 </UserControl>

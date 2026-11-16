@@ -32,6 +32,9 @@ public sealed record AppSettings
 
     /// <summary>The direction of north from the Y axis of the model, in degrees counterclockwise.</summary>
     public double NorthAngle { get; init; }
+
+    /// <summary>Whether walking stops at walls and other parts of the model.</summary>
+    public bool Collisions { get; init; } = true;
 }
 
 /// <summary>Where the settings are kept.</summary>

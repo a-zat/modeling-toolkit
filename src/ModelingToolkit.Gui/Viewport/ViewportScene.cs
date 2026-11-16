@@ -100,6 +100,12 @@ internal sealed class ViewportScene
 
     public IReadOnlyList<ViewportInstance> Instances => _instances;
 
+    /// <summary>The meshes of the instances, each placed in the model space.</summary>
+    public IEnumerable<(MeshEntity Mesh, Transform Placement)> PlacedMeshes() =>
+        _instances.Select(instance => (Mesh: _meshes[instance.Mesh], instance.Placement))
+            .Where(placed => placed.Mesh is not null)
+            .Select(placed => (placed.Mesh!, placed.Placement));
+
     /// <summary>What the scene left out when it was made: the shapes that could not be turned into triangles, and why.</summary>
     public IReadOnlyList<string> Warnings => _warnings;
 

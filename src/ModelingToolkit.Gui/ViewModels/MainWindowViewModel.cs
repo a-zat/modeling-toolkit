@@ -39,7 +39,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         StatusMessage = string.Empty;
         IsInspectorOpen = true;
         IsOutlineExpanded = true;
-        ApplySettings(_settingsStore.Load());
+        // The application starts in a view to edit with, never rendered.
+        AppSettings saved = _settingsStore.Load();
+        ApplySettings(saved.DisplayMode == DisplayMode.Rendered ? saved with { DisplayMode = DisplayMode.Shaded } : saved);
         _settingsStore.Changed += (_, _) =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsStore.Load()));
 
@@ -261,7 +263,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The elements of <see cref="Elements"/>, which the 3D view highlights.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownElements))]
     public partial IReadOnlyList<ElementReference> SelectedElements { get; private set; } = [];
+
+    /// <summary>The elements that the 3D view highlights: those selected, but in the rendered display mode.</summary>
+    public IReadOnlyList<ElementReference> ShownElements => IsRendered ? [] : SelectedElements;
 
     /// <summary>Where the edits happen: the model, or the block of a reference entered; null without a document.</summary>
     public EditContext? Context { get; private set; }
@@ -273,8 +279,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// The entities that the 3D view shows in front of the rest, which it fades: the node selected, or else the reference
     /// whose block is being edited; null for none.
     /// </summary>
-    public IReadOnlyList<Entity>? EmphasizedPath =>
-        ModelTree.SelectedNode?.Path ?? (Context is { IsModel: false } context ? context.Path : null);
+    public IReadOnlyList<Entity>? EmphasizedPath => IsRendered
+        ? null
+        : ModelTree.SelectedNode?.Path ?? (Context is { IsModel: false } context ? context.Path : null);
 
     /// <summary>The references entered, by name, from the model: "Car › Front wheel".</summary>
     public string ContextName => Context is null
@@ -288,13 +295,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public Tool ActiveTool => Tools.Single(item => item.IsActive).Tool;
 
     /// <summary>What the active tool expects next.</summary>
-    public string ToolHint => ActiveTool.IsActive && !IsWalking ? ActiveTool.Hint : string.Empty;
+    public string ToolHint => ActiveTool.IsActive && IsEditable ? ActiveTool.Hint : string.Empty;
 
     [RelayCommand]
     private void ActivateTool(ToolItemViewModel item)
     {
         Tool previous = ActiveTool;
-        if (ReferenceEquals(item.Tool, previous))
+        if (ReferenceEquals(item.Tool, previous) || !IsEditable)
         {
             return;
         }
@@ -346,7 +353,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void TypeMeasurement(string? text)
     {
-        if (ActiveTool.IsActive && !IsBusy && !ActiveTool.TypeMeasurement(text ?? string.Empty))
+        if (ActiveTool.IsActive && !IsBusy && IsEditable && !ActiveTool.TypeMeasurement(text ?? string.Empty))
         {
             StatusMessage = $"\"{text}\" is not a measure that the {ActiveTool.Name.ToLowerInvariant()} tool takes now.";
             OnToolMeasurementChanged(this, EventArgs.Empty); // shows the measure again
@@ -361,7 +368,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void PressToolKey(ToolKey key)
     {
-        if (ActiveTool.IsActive && !IsBusy)
+        if (ActiveTool.IsActive && !IsBusy && IsEditable)
         {
             ActiveTool.Key(key, ToolModifiers.None);
         }
@@ -371,7 +378,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ViewInput(ViewportPick input)
     {
-        if (IsWalking)
+        if (IsWalking || IsRendered)
         {
             if (input.Kind == ViewportInputKind.Click && !IsBusy && !Animations.ToggleAt(input.Path))
             {
@@ -704,9 +711,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsOutlineExpanded { get; set; }
 
-    /// <summary>Whether the settings are open, below their button in the top bar.</summary>
+    /// <summary>Whether the settings are open, over the middle of the window.</summary>
     [ObservableProperty]
     public partial bool IsSettingsOpen { get; set; }
+
+    [RelayCommand]
+    private void CloseSettings() => IsSettingsOpen = false;
 
     [ObservableProperty]
     public partial bool IsDark { get; set; }
@@ -714,15 +724,42 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // How the 3D view shows the document.
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsShaded), nameof(IsShadedWithEdges), nameof(IsWireframe), nameof(IsRendered))]
+    [NotifyPropertyChangedFor(nameof(IsShaded), nameof(IsShadedWithEdges), nameof(IsWireframe), nameof(IsRendered),
+        nameof(IsEditable), nameof(ToolHint), nameof(EmphasizedPath), nameof(ShownElements))]
     public partial DisplayMode DisplayMode { get; set; }
 
-    /// <summary>Whether the view is rendered, under the sky at <see cref="TimeOfDay"/>.</summary>
+    /// <summary>
+    /// Whether the view is rendered, under the sky at <see cref="TimeOfDay"/>: only to look at, the tools taking no input,
+    /// nothing highlighted, a click opening or closing the part under the pointer that an animation moves.
+    /// </summary>
     public bool IsRendered => DisplayMode == DisplayMode.Rendered;
+
+    /// <summary>Whether the tools edit the model through the 3D view: not when it is rendered, nor while walking.</summary>
+    public bool IsEditable => !IsRendered && !IsWalking;
+
+    // The tool at work stops when the view is only to look at, and starts again after.
+    partial void OnDisplayModeChanged(DisplayMode oldValue, DisplayMode newValue)
+    {
+        // The settings set the mode before there are tools.
+        if ((oldValue == DisplayMode.Rendered) == (newValue == DisplayMode.Rendered) ||
+            Tools?.FirstOrDefault(item => item.IsActive)?.Tool is not { } tool)
+        {
+            return;
+        }
+        if (newValue == DisplayMode.Rendered)
+        {
+            tool.Deactivate();
+            Overlay = ViewOverlay.Empty;
+        }
+        else if (Session is not null && !tool.IsActive)
+        {
+            tool.Activate(_toolHost);
+        }
+    }
 
     /// <summary>The sky and the sun of the rendered display mode, today at <see cref="TimeOfDay"/> where the model is.</summary>
     public ViewEnvironment SkyEnvironment => new(
-        SunPosition.Direction(TimeOfDay, DateOnly.FromDateTime(DateTime.Today), Site.Latitude, Site.NorthAngle), 0.35f);
+        SunPosition.Direction(TimeOfDay, DateOnly.FromDateTime(DateTime.Today), Latitude, NorthAngle), 0.35f);
 
     /// <summary>The hour shown by the slider of the rendered display mode: "14:30".</summary>
     public string TimeOfDayText => $"{(int)TimeOfDay:00}:{(int)Math.Round(TimeOfDay % 1 * 60) % 60:00}";
@@ -769,7 +806,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// opens or closes the part under the pointer that an animation moves.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ToolHint))]
+    [NotifyPropertyChangedFor(nameof(ToolHint), nameof(IsEditable))]
     public partial bool IsWalking { get; set; }
 
     [RelayCommand]
@@ -924,7 +961,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsPerspective = settings.Perspective;
             IsGridVisible = settings.Grid;
             TimeOfDay = Math.Clamp(settings.TimeOfDay, 0, 24);
-            OnPropertyChanged(nameof(SkyEnvironment)); // the site may have changed
+            Latitude = Math.Clamp(settings.Latitude, -90, 90);
+            NorthAngle = settings.NorthAngle;
+            Collisions = settings.Collisions;
         }
         finally
         {
@@ -938,14 +977,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         base.OnPropertyChanged(e);
         if (_applyingSettings || _settingsStore is null || e.PropertyName is not (nameof(UseGlb) or nameof(IsDark)
                 or nameof(RenderStyle) or nameof(DisplayMode) or nameof(IsPerspective) or nameof(IsGridVisible)
-                or nameof(TimeOfDay)))
+                or nameof(TimeOfDay) or nameof(Latitude) or nameof(NorthAngle) or nameof(Collisions)))
         {
             return;
         }
         _settings = _settings with
         {
             UseGlb = UseGlb, DarkTheme = IsDark, RenderStyle = RenderStyle, DisplayMode = DisplayMode,
-            Perspective = IsPerspective, Grid = IsGridVisible, TimeOfDay = TimeOfDay,
+            Perspective = IsPerspective, Grid = IsGridVisible, TimeOfDay = TimeOfDay, Latitude = Latitude,
+            NorthAngle = NorthAngle, Collisions = Collisions,
         };
         _settingsStore.Save(_settings);
     }
@@ -955,8 +995,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(SkyEnvironment), nameof(TimeOfDayText))]
     public partial double TimeOfDay { get; set; }
 
-    /// <summary>Where the model is, for the course of the sun: latitude and north, from the settings file.</summary>
-    public (double Latitude, double NorthAngle) Site => (_settings.Latitude, _settings.NorthAngle);
+    /// <summary>Where the model is, in degrees north, for the course of the sun.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SkyEnvironment))]
+    public partial double Latitude { get; set; }
+
+    /// <summary>The direction of north from the Y axis of the model, in degrees counterclockwise.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SkyEnvironment))]
+    public partial double NorthAngle { get; set; }
+
+    /// <summary>Whether walking stops at walls and other parts of the model, sliding along them.</summary>
+    [ObservableProperty]
+    public partial bool Collisions { get; set; }
 
     // The initial value is applied by the application, once Avalonia is ready.
     partial void OnIsDarkChanged(bool value)

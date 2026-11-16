@@ -36,6 +36,12 @@ public sealed class WalkCamera
 
     public Point3d Eye { get; private set; }
 
+    /// <summary>
+    /// What of a move of the eyes on the floor goes through, given where they are, as a <see cref="WalkCollider"/>
+    /// says; null for all of it.
+    /// </summary>
+    public Func<Point3d, Vector3d, Vector3d>? Limit { get; set; }
+
     /// <summary>Where it looks around the vertical, in radians, counterclockwise from the X axis.</summary>
     public double Yaw { get; private set; }
 
@@ -76,11 +82,13 @@ public sealed class WalkCamera
         }
         double step = Speed * (run ? RunFactor : 1) * seconds / Math.Max(length, 1);
         Vector3d ahead = new(Math.Cos(Yaw), Math.Sin(Yaw), 0), side = new(Math.Sin(Yaw), -Math.Cos(Yaw), 0);
-        Eye += (ahead * forward + side * right) * step;
+        Move((ahead * forward + side * right) * step);
     }
 
     /// <summary>Steps forward, or back for a negative distance, in millimetres, as the wheel does.</summary>
-    public void Step(double distance) => Eye += new Vector3d(Math.Cos(Yaw), Math.Sin(Yaw), 0) * distance;
+    public void Step(double distance) => Move(new Vector3d(Math.Cos(Yaw), Math.Sin(Yaw), 0) * distance);
+
+    private void Move(Vector3d move) => Eye += Limit is { } limit ? limit(Eye, move) : move;
 
     /// <summary>The camera of the view: looking a metre ahead, the vertical up.</summary>
     public ViewCamera ToCamera()

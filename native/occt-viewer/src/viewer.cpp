@@ -680,9 +680,15 @@ void mtk::Viewer::set_environment(const mtk_viewer_environment& environment) {
 }
 
 // The rendered display mode shows the model under a sky, a cubemap made from the sun and the clouds, on a ground in
-// place of the grid, lit as in the other modes, without the ViewCube. The other modes go back to the background, the
-// grid and the ViewCube of the style.
+// place of the grid, lit as in the other modes, without the ViewCube nor highlights. The other modes go back to the
+// background, the grid and the ViewCube of the style.
 void mtk::Viewer::apply_environment() {
+    // Rendered, the view is only looked at: what is under the pointer is found, not highlighted.
+    const bool rendered = display_mode_ == MTK_VIEWER_DISPLAY_RENDERED;
+    if (context_->AutomaticHilight() == rendered) {
+        context_->ClearDetected(false);
+        context_->SetAutomaticHilight(!rendered);
+    }
     if (!ground_.IsNull()) {
         context_->Remove(ground_, false);
         ground_.Nullify();

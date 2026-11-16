@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Gui.Viewport.Interop;
 using ModelingToolkit.Core.Kernel;
@@ -69,6 +70,10 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<bool> IsWalkingProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsWalking));
 
+    /// <summary>Whether walking stops at the parts of the model in the way, sliding along them.</summary>
+    public static readonly StyledProperty<bool> CollidesProperty =
+        AvaloniaProperty.Register<ViewportView, bool>(nameof(Collides));
+
     /// <summary>The sky and the sun of the rendered display mode.</summary>
     public static readonly StyledProperty<ViewEnvironment> EnvironmentProperty =
         AvaloniaProperty.Register<ViewportView, ViewEnvironment>(nameof(Environment), ViewEnvironment.Noon);
@@ -99,6 +104,7 @@ public sealed class ViewportView : Border, IViewCamera
     private bool _frameRequested;
     private int _shownDocuments;
     private ViewportScene? _shownScene;
+    private (IReadOnlyList<ViewportInstance> Instances, WalkCollider Collider)? _collider; // for the instances shown
     private Document? _followedDocument;
     private KeyModifiers _clickModifiers; // held when a button was last released, which ends a click
     private int _clickCount = 1; // of the button last pressed, 2 for a double click
@@ -152,6 +158,12 @@ public sealed class ViewportView : Border, IViewCamera
     {
         get => GetValue(EnvironmentProperty);
         set => SetValue(EnvironmentProperty, value);
+    }
+
+    public bool Collides
+    {
+        get => GetValue(CollidesProperty);
+        set => SetValue(CollidesProperty, value);
     }
 
     public bool IsWalking
@@ -550,6 +562,7 @@ public sealed class ViewportView : Border, IViewCamera
                 _orbitCamera = viewer.GetCamera();
                 double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
                 _walk = WalkCamera.Enter(_orbitCamera, floor);
+                _walk.Limit = LimitWalk;
                 viewer.SetPerspective(true);
                 viewer.SetCamera(_walk.ToCamera());
                 Focus();
@@ -567,6 +580,21 @@ public sealed class ViewportView : Border, IViewCamera
             }
             return true;
         });
+    }
+
+    // Walls stop the walk, as the scene places them now: a door opened by an animation lets it through.
+    private Vector3d LimitWalk(Point3d eye, Vector3d move)
+    {
+        if (!Collides || _shownScene is not { } scene)
+        {
+            return move;
+        }
+        if (_collider is not { } collider || !ReferenceEquals(collider.Instances, scene.Instances))
+        {
+            collider = (scene.Instances, new WalkCollider(scene.PlacedMeshes()));
+            _collider = collider;
+        }
+        return collider.Collider.Limit(eye, move);
     }
 
     private void PlaceWalkCamera()

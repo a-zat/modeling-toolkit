@@ -403,6 +403,43 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task TheRenderedViewIsOnlyToLookAtAClickOpensOrClosesAndTheToolsWait()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        IReadOnlyList<Entity> mesh = Flatten(viewModel.ModelTree.Model!).Last().Path;
+        viewModel.ModelTree.SelectedNode = Flatten(viewModel.ModelTree.Model!).Last();
+        Assert.True(viewModel.ActiveTool.IsActive);
+
+        viewModel.SetDisplayModeCommand.Execute(DisplayMode.Rendered);
+
+        Assert.False(viewModel.IsEditable);
+        Assert.False(viewModel.ActiveTool.IsActive);
+        Assert.Empty(viewModel.ToolHint);
+        Assert.Null(viewModel.EmphasizedPath); // nothing highlighted
+        viewModel.ViewInputCommand.Execute(new ViewportPick(mesh, null, default, default, KeyModifiers.None, 1,
+            ViewportInputKind.Click));
+        Assert.Equal("Nothing there opens or closes.", viewModel.StatusMessage);
+
+        viewModel.SetDisplayModeCommand.Execute(DisplayMode.Shaded);
+        Assert.True(viewModel.IsEditable);
+        Assert.True(viewModel.ActiveTool.IsActive);
+        Assert.NotEmpty(viewModel.ToolHint);
+        Assert.NotNull(viewModel.EmphasizedPath);
+    }
+
+    [Fact]
+    public void TheApplicationNeverStartsRendered()
+    {
+        var store = new MemorySettingsStore(new AppSettings { DisplayMode = DisplayMode.Rendered, Collisions = false });
+
+        var viewModel = new MainWindowViewModel(new DocumentFormats([], []), new RecordingAppearance(), settings: store);
+
+        Assert.Equal(DisplayMode.Shaded, viewModel.DisplayMode);
+        Assert.False(viewModel.Collisions);
+    }
+
+    [Fact]
     public void TheSettingsAreReadAtStartAndWrittenWhenChanged()
     {
         var store = new MemorySettingsStore(new AppSettings { DarkTheme = true, UseGlb = false, TimeOfDay = 18 });
@@ -414,8 +451,13 @@ public sealed class MainWindowViewModelTests
 
         viewModel.IsGridVisible = false;
         viewModel.UseGlb = true;
+        viewModel.Latitude = 41.9;
+        viewModel.Collisions = false;
 
-        Assert.Equal(new AppSettings { DarkTheme = true, UseGlb = true, TimeOfDay = 18, Grid = false }, store.Load());
+        Assert.Equal(new AppSettings
+        {
+            DarkTheme = true, UseGlb = true, TimeOfDay = 18, Grid = false, Latitude = 41.9, Collisions = false,
+        }, store.Load());
     }
 
     [Fact]

@@ -110,15 +110,6 @@
         <ToggleButton x:Name="SettingsButton" Classes="tool" IsChecked="{Binding IsSettingsOpen}" ToolTip.Tip="Settings">
           <PathIcon Data="{StaticResource Icon.Settings}" />
         </ToggleButton>
-        <Popup IsOpen="{Binding IsSettingsOpen, Mode=TwoWay}" PlacementTarget="{Binding #SettingsButton}"
-               Placement="BottomEdgeAlignedRight" IsLightDismissEnabled="True">
-          <Border Classes="popover" Width="300">
-            <DockPanel>
-              <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="SETTINGS" />
-              <views:SettingsView />
-            </DockPanel>
-          </Border>
-        </Popup>
         <ToggleButton Classes="tool" IsChecked="{Binding IsInspectorOpen}" ToolTip.Tip="Show or hide the inspector">
           <PathIcon Data="{StaticResource Icon.PanelRight}" />
         </ToggleButton>
@@ -143,7 +134,7 @@
     <Grid x:Name="Panels" ColumnDefinitions="Auto,*,Auto,300">
       <!-- The tools of the 3D view, beside it: controls cannot float over its native view. -->
       <Border Grid.Column="0" Classes="toolColumn">
-        <ItemsControl ItemsSource="{Binding Tools}">
+        <ItemsControl ItemsSource="{Binding Tools}" IsEnabled="{Binding IsEditable}">
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="vm:ToolItemViewModel">
               <!-- A button rather than a toggle, which would turn itself off when clicked while its tool stays on. -->
@@ -162,27 +153,43 @@
                              InputCommand="{Binding ViewInputCommand}"
                              IsWindowSelectionEnabled="{Binding IsSelecting}" EditPath="{Binding EditPath}"
                              WindowSelectCommand="{Binding WindowSelectCommand}"
-                             HighlightedElements="{Binding SelectedElements}"
+                             HighlightedElements="{Binding ShownElements}"
                              WarningsCommand="{Binding ReportViewWarningsCommand}"
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
                              IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}"
                              Pose="{Binding Animations.Pose}"
                              IsWalking="{Binding IsWalking}"
-                             Environment="{Binding SkyEnvironment}"
+                             Environment="{Binding SkyEnvironment}" Collides="{Binding Collisions}"
                              Overlay="{Binding Overlay}" />
       <!-- The time of day, in the rendered display mode, in the corner of the ViewCube, which it hides: a popup, as
-           nothing else is drawn over the native view. -->
-      <Popup Grid.Column="1" IsOpen="{Binding IsRendered, Mode=OneWay}" PlacementTarget="{Binding #Viewport}"
+           nothing else is drawn over the native view, opened once the window is (see the code behind). -->
+      <Popup x:Name="TimeOfDayPopup" Grid.Column="1"
              Placement="AnchorAndGravity" PlacementAnchor="TopRight" PlacementGravity="BottomLeft"
-             HorizontalOffset="-12" VerticalOffset="12" IsLightDismissEnabled="False">
-        <Border Classes="popover" Padding="12,4">
+             HorizontalOffset="-12" VerticalOffset="12" IsLightDismissEnabled="False" TakesFocusFromNativeControl="False">
+        <Border Classes="popover glass" Padding="12,4">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource Icon.WeatherSunny}" Width="14" Height="14" />
             <Slider Width="140" Minimum="4" Maximum="22" Value="{Binding TimeOfDay}" SmallChange="0.25"
                     LargeChange="1" VerticalAlignment="Center" ToolTip.Tip="Time of day" />
             <TextBlock Text="{Binding TimeOfDayText}" FontSize="12" VerticalAlignment="Center" MinWidth="36" />
           </StackPanel>
+        </Border>
+      </Popup>
+
+      <!-- The settings, over the middle of the window: a popup, as nothing else is drawn over the native view. -->
+      <Popup Grid.Column="1" IsOpen="{Binding IsSettingsOpen, Mode=TwoWay}" PlacementTarget="{Binding #Panels}"
+             Placement="Center" IsLightDismissEnabled="True">
+        <Border Classes="popover" Width="680" Height="440" Padding="0">
+          <DockPanel>
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,10,8,0">
+              <TextBlock Text="Settings" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="tool" Command="{Binding CloseSettingsCommand}" ToolTip.Tip="Close (Esc)">
+                <PathIcon Data="{StaticResource Icon.Dismiss}" Width="12" Height="12" />
+              </Button>
+            </Grid>
+            <views:SettingsView />
+          </DockPanel>
         </Border>
       </Popup>
 

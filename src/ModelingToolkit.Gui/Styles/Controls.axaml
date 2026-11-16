@@ -39,6 +39,14 @@
   <Style Selector="ToggleButton.tool:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tool.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Mtk.SelectionHover}" />
   </Style>
+  <!-- Disabled, as the tools in the rendered display mode: faint, the active one no longer marked. -->
+  <Style Selector=":is(Button).tool:disabled">
+    <Setter Property="Opacity" Value="0.35" />
+  </Style>
+  <Style Selector="Button.tool.active:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundSecondary}" />
+  </Style>
 
   <!-- The activity bar has larger buttons, one per panel. -->
   <Style Selector=":is(Button).activity">
@@ -191,6 +199,10 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
     <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
     <Setter Property="BoxShadow" Value="0 8 24 0 #22000000" />
+  </Style>
+  <!-- Over the 3D view, which shows through, blurred where the system can. -->
+  <Style Selector="Border.popover.glass">
+    <Setter Property="Background" Value="{DynamicResource Mtk.Glass}" />
   </Style>
   <!-- Materials: a swatch of a colour, small in a field, larger in the picker, and the buttons that hold them. -->
   <Style Selector="Border.swatch">

@@ -15,6 +15,15 @@ public partial class CompactLayoutView : UserControl
     {
         InitializeComponent();
         _inspectorColumn = new CollapsibleColumn(Panels.ColumnDefinitions[3]);
+        // Set here rather than bound, which the popup might not have yet when it opens.
+        TimeOfDayPopup.PlacementTarget = Viewport;
+        Viewport.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty)
+            {
+                PlaceTimeOfDay();
+            }
+        };
         _outlineRow = new CollapsibleRow(Inspector.RowDefinitions[1]);
     }
 
@@ -28,7 +37,20 @@ public partial class CompactLayoutView : UserControl
             _viewModel.PropertyChanged += OnPanelsChanged;
             UpdatePanels(_viewModel);
         }
+        UpdateTimeOfDay();
     }
+
+    // A popup stays where it was opened when the 3D view changes size, as when the inspector closes: it is opened again.
+    private void PlaceTimeOfDay()
+    {
+        if (TimeOfDayPopup.IsOpen)
+        {
+            TimeOfDayPopup.Close();
+            TimeOfDayPopup.Open();
+        }
+    }
+
+    private void UpdateTimeOfDay() => TimeOfDayPopup.IsOpen = _viewModel is { IsRendered: true };
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -39,6 +61,7 @@ public partial class CompactLayoutView : UserControl
             _viewModel.PropertyChanged -= OnPanelsChanged;
             _viewModel = null;
         }
+        TimeOfDayPopup.IsOpen = false;
     }
 
     private void OnPanelsChanged(object? sender, PropertyChangedEventArgs e)
@@ -46,6 +69,10 @@ public partial class CompactLayoutView : UserControl
         if (e.PropertyName is nameof(MainWindowViewModel.IsInspectorOpen) or nameof(MainWindowViewModel.IsOutlineExpanded))
         {
             UpdatePanels(_viewModel!);
+        }
+        else if (e.PropertyName is nameof(MainWindowViewModel.IsRendered))
+        {
+            UpdateTimeOfDay();
         }
     }
 

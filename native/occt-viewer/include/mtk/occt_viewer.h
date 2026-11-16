@@ -91,8 +91,8 @@ typedef enum mtk_viewer_display_mode {
     MTK_VIEWER_DISPLAY_SHADED = 0,            /* without the edges of the triangles */
     MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES = 1, /* with the edges of the meshes */
     MTK_VIEWER_DISPLAY_WIREFRAME = 2,         /* only the edges of the meshes */
-    MTK_VIEWER_DISPLAY_RENDERED = 3           /* shaded, without edges, grid or ViewCube, under the sky of
-                                                 mtk_viewer_set_environment, on its ground */
+    MTK_VIEWER_DISPLAY_RENDERED = 3           /* shaded, without edges, grid, ViewCube or highlight under the
+                                                 pointer, under the sky of mtk_viewer_set_environment, on its ground */
 } mtk_viewer_display_mode;
 
 /*
