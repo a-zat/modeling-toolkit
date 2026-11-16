@@ -99,17 +99,9 @@
               <ToggleButton Classes="tool" IsChecked="{Binding IsRendered, Mode=OneWay}"
                             Command="{Binding SetDisplayModeCommand}"
                             CommandParameter="{x:Static viewport:DisplayMode.Rendered}"
-                            ToolTip.Tip="Rendered: sky, sun and shadows">
+                            ToolTip.Tip="Rendered: under the sky, on the ground">
                 <PathIcon Data="{StaticResource Icon.WeatherSunny}" />
               </ToggleButton>
-            </StackPanel>
-          </Border>
-          <!-- The hour of the sun, in the rendered display mode. -->
-          <Border Classes="group" IsVisible="{Binding IsRendered}" Padding="10,0">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Slider Width="140" Minimum="4" Maximum="22" Value="{Binding TimeOfDay}" SmallChange="0.25"
-                      LargeChange="1" VerticalAlignment="Center" ToolTip.Tip="Time of day" />
-              <TextBlock Text="{Binding TimeOfDayText}" FontSize="12" VerticalAlignment="Center" MinWidth="36" />
             </StackPanel>
           </Border>
         </StackPanel>
@@ -179,6 +171,20 @@
                              IsWalking="{Binding IsWalking}"
                              Environment="{Binding SkyEnvironment}"
                              Overlay="{Binding Overlay}" />
+      <!-- The time of day, in the rendered display mode, in the corner of the ViewCube, which it hides: a popup, as
+           nothing else is drawn over the native view. -->
+      <Popup Grid.Column="1" IsOpen="{Binding IsRendered, Mode=OneWay}" PlacementTarget="{Binding #Viewport}"
+             Placement="AnchorAndGravity" PlacementAnchor="TopRight" PlacementGravity="BottomLeft"
+             HorizontalOffset="-12" VerticalOffset="12" IsLightDismissEnabled="False">
+        <Border Classes="popover" Padding="12,4">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource Icon.WeatherSunny}" Width="14" Height="14" />
+            <Slider Width="140" Minimum="4" Maximum="22" Value="{Binding TimeOfDay}" SmallChange="0.25"
+                    LargeChange="1" VerticalAlignment="Center" ToolTip.Tip="Time of day" />
+            <TextBlock Text="{Binding TimeOfDayText}" FontSize="12" VerticalAlignment="Center" MinWidth="36" />
+          </StackPanel>
+        </Border>
+      </Popup>
 
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsInspectorOpen}" />
       <!-- The inspector: the outline, which can be closed, above the properties of the selection. -->

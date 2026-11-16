@@ -34,7 +34,7 @@ public enum DisplayMode
     ShadedWithEdges,
     Wireframe,
 
-    /// <summary>As things look: physically based, without edges or grid, under the sky, on the ground, with shadows.</summary>
+    /// <summary>As things look: without edges or grid, under the sky, on the ground.</summary>
     Rendered,
 }
 

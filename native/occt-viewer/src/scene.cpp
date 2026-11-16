@@ -260,25 +260,35 @@ occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width, bool caps
 }
 
 mtk::EdgeAspects mtk::make_edge_aspects() {
-    EdgeAspects aspects{new Graphic3d_AspectFillArea3d(), new Graphic3d_AspectFillArea3d()};
-    for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect : {aspects.shaded, aspects.faded}) {
+    EdgeAspects aspects{new Graphic3d_AspectFillArea3d(), new Graphic3d_AspectFillArea3d(),
+                        new Graphic3d_AspectFillArea3d(), new Graphic3d_AspectFillArea3d()};
+    for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect :
+         {aspects.shaded, aspects.faded, aspects.lines, aspects.faded_lines}) {
         aspect->SetShadingModel(Graphic3d_TypeOfShadingModel_Unlit);
         aspect->SetFaceCulling(Graphic3d_TypeOfBackfacingModel_DoubleSided);
         aspect->SetDrawEdges(false);
     }
     aspects.faded->SetAlphaMode(Graphic3d_AlphaMode_Blend);
+    aspects.faded_lines->SetAlphaMode(Graphic3d_AlphaMode_Blend);
     return aspects;
 }
 
 void mtk::apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges) {
     // An empty interior draws nothing: the same presentations serve all the display modes. The edges are as wide as
     // the outlines, or one pixel.
+    const occ::handle<Graphic3d_ShaderProgram> program = edge_program(edges.outlines ? edges.outline_width : 1.0f);
     for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect : {aspects.shaded, aspects.faded}) {
         aspect->SetInteriorStyle(edges.own_edges ? Aspect_IS_SOLID : Aspect_IS_EMPTY);
-        aspect->SetShaderProgram(edge_program(edges.outlines ? edges.outline_width : 1.0f));
+        aspect->SetShaderProgram(program);
+    }
+    for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect : {aspects.lines, aspects.faded_lines}) {
+        aspect->SetInteriorStyle(edges.lines ? Aspect_IS_SOLID : Aspect_IS_EMPTY);
+        aspect->SetShaderProgram(program);
     }
     aspects.shaded->SetInteriorColor(Quantity_ColorRGBA(edges.color, 1.0f));
     aspects.faded->SetInteriorColor(Quantity_ColorRGBA(edges.color, faded_opacity));
+    aspects.lines->SetInteriorColor(Quantity_ColorRGBA(edges.color, 1.0f));
+    aspects.faded_lines->SetInteriorColor(Quantity_ColorRGBA(edges.color, faded_opacity));
 }
 
 mtk::MeshObject::MeshObject(const Mesh& mesh, const MaterialAspects& aspects, const EdgeAspects& edge_aspects,
@@ -338,7 +348,11 @@ void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
 
     if (!mesh_.edge_quads.IsNull()) {
         const occ::handle<Graphic3d_Group> edges = presentation->NewGroup();
-        edges->SetGroupPrimitivesAspect(faded ? edge_aspects_.faded : edge_aspects_.shaded);
+        if (mesh_.triangles.IsNull()) {
+            edges->SetGroupPrimitivesAspect(faded ? edge_aspects_.faded_lines : edge_aspects_.lines);
+        } else {
+            edges->SetGroupPrimitivesAspect(faded ? edge_aspects_.faded : edge_aspects_.shaded);
+        }
         edges->AddPrimitiveArray(mesh_.edge_quads);
     }
 }

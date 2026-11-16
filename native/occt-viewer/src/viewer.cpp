@@ -9,7 +9,6 @@
 #include <Graphic3d_ArrayOfTriangles.hxx>
 #include <Graphic3d_AspectFillArea3d.hxx>
 #include <Graphic3d_Group.hxx>
-#include <Graphic3d_PBRMaterial.hxx>
 #include <Prs3d_Presentation.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_GridParams.hxx>
@@ -214,7 +213,6 @@ mtk::Viewer::Viewer(void* parent) {
     // Drawn only by redraw() and by the native view, never as a side effect of a change.
     view_->SetImmediateUpdate(false);
     view_->SetProj(V3d_TypeOfOrientation_Zup_AxoRight);
-    default_shading_ = view_->ShadingModel();
     view_->Camera()->SetProjectionType(Graphic3d_Camera::Projection_Perspective);
     view_->Camera()->SetFOVy(field_of_view);
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
@@ -563,22 +561,18 @@ mtk::EdgeStyle mtk::Viewer::edge_style() const {
         // The edges of their own outline the faces in every mode; without faces, they keep the colour that stands out
         // from the ground, and the meshes without edges show those of their triangles.
         return EdgeStyle{wireframe, true, !wireframe, static_cast<float>(outline_width * scale_),
-                         wireframe ? edge_color_ : outline_color_};
+                         wireframe ? edge_color_ : outline_color_, true};
     }
-    // The edges of their own, those of shapes, are drawn in every mode, as lines drawn without faces would otherwise
-    // not show, one unit wide, as the lines that the tools draw over the view; those of the triangles only in the modes
-    // with edges.
+    // The edges are drawn in the modes with edges, those of their own where meshes have them, else those of the
+    // triangles, one unit wide, as the lines that the tools draw over the view; the meshes made of lines only in every
+    // mode, as they would otherwise not show.
     const bool edges = display_mode_ != MTK_VIEWER_DISPLAY_SHADED;
-    return EdgeStyle{edges, true, true, static_cast<float>(edge_width * scale_), edge_color_};
+    return EdgeStyle{edges, edges, true, static_cast<float>(edge_width * scale_), edge_color_, true};
 }
 
 // The CAD render style lights the faces from the upper left of the camera, so that faces turned differently take
 // different shades, and much from all around, so that none is dark.
 void mtk::Viewer::apply_lights() {
-    if (display_mode_ == MTK_VIEWER_DISPLAY_RENDERED) {
-        apply_environment();
-        return;
-    }
     if (render_style_ != MTK_VIEWER_RENDER_CAD) {
         viewer_->SetDefaultLights();
         viewer_->SetLightOn();
@@ -610,7 +604,6 @@ void mtk::Viewer::set_display_mode(mtk_viewer_display_mode mode) {
     display_mode_ = mode;
     if (was_rendered || mode == MTK_VIEWER_DISPLAY_RENDERED) {
         apply_environment();
-        apply_lights();
     }
     const EdgeStyle edges = edge_style();
     for (MaterialAspects& aspects : materials_) {
@@ -661,11 +654,6 @@ public:
         Graphic3d_MaterialAspect material(Graphic3d_NameOfMaterial_UserDefined);
         material.SetColor(color);
         material.SetSpecularColor(Quantity_NOC_BLACK);
-        Graphic3d_PBRMaterial physical;
-        physical.SetColor(Quantity_ColorRGBA(color, 1.0f));
-        physical.SetMetallic(0.0f);
-        physical.SetRoughness(0.95f);
-        material.SetPBRMaterial(physical);
         occ::handle<Graphic3d_AspectFillArea3d> aspect = new Graphic3d_AspectFillArea3d();
         aspect->SetInteriorStyle(Aspect_IS_SOLID);
         aspect->SetFrontMaterial(material);
@@ -691,61 +679,37 @@ void mtk::Viewer::set_environment(const mtk_viewer_environment& environment) {
     }
 }
 
-// The rendered display mode shades physically, lit by the sky, a cubemap made from the sun and the clouds, and by the
-// sun, which casts shadows on the ground. The other modes go back to the background, the lights and the grid of the
-// style.
+// The rendered display mode shows the model under a sky, a cubemap made from the sun and the clouds, on a ground in
+// place of the grid, lit as in the other modes, without the ViewCube. The other modes go back to the background, the
+// grid and the ViewCube of the style.
 void mtk::Viewer::apply_environment() {
     if (!ground_.IsNull()) {
         context_->Remove(ground_, false);
         ground_.Nullify();
     }
     if (display_mode_ != MTK_VIEWER_DISPLAY_RENDERED) {
-        view_->SetShadingModel(default_shading_);
         view_->SetBackgroundCubeMap(occ::handle<Graphic3d_CubeMap>(), false);
         view_->SetBgGradientColors(background_top_, background_bottom_, Aspect_GradientFillMethod_Vertical);
         set_grid_visible(grid_visible_);
+        context_->Display(view_cube_, false);
         return;
     }
 
-    view_->SetShadingModel(Graphic3d_TypeOfShadingModel_Pbr);
-    const gp_Dir sun(environment_.sun_direction[0], environment_.sun_direction[1], environment_.sun_direction[2]);
     const bool same_sky = !sky_.IsNull() && sky_of_.cloudiness == environment_.cloudiness
         && std::equal(std::begin(sky_of_.sun_direction), std::end(sky_of_.sun_direction),
                       std::begin(environment_.sun_direction));
     if (!same_sky) {
+        const gp_Dir sun(environment_.sun_direction[0], environment_.sun_direction[1], environment_.sun_direction[2]);
         sky_ = make_sky(sun, environment_.cloudiness);
         sky_of_ = environment_;
     }
     // Put in the view once it has a window: OpenCASCADE sets it up with the OpenGL context of the window.
     if (!window_.IsNull()) {
-        view_->SetBackgroundCubeMap(sky_, true);
+        view_->SetBackgroundCubeMap(sky_, false);
     }
     view_->GridErase();
     context_->Erase(vertical_axis_, false);
-
-    while (!viewer_->DefinedLights().IsEmpty()) {
-        viewer_->DelLight(viewer_->DefinedLights().First());
-    }
-    const double elevation = std::asin(std::clamp(sun.Z(), -1.0, 1.0));
-    if (elevation > 0.0) {
-        // Weaker and warmer as the sun goes down.
-        const double height = std::sin(elevation);
-        occ::handle<V3d_DirectionalLight> light = new V3d_DirectionalLight(
-            gp_Dir(-sun.X(), -sun.Y(), -sun.Z()),
-            Quantity_Color(1.0, 0.82 + 0.16 * height, 0.62 + 0.33 * height, Quantity_TOC_RGB));
-        light->SetIntensity(static_cast<float>(1.5 + 2.5 * height));
-        light->SetCastShadows(true);
-        viewer_->AddLight(light);
-    }
-    // At night a dim blue light, as of the moon, so that the model can still be seen.
-    occ::handle<V3d_AmbientLight> ambient = new V3d_AmbientLight(
-        elevation > 0.0 ? Quantity_Color(Quantity_NOC_WHITE) : Quantity_Color(0.55, 0.65, 1.0, Quantity_TOC_RGB));
-    ambient->SetIntensity(elevation > 0.0 ? 0.15f : 0.8f);
-    viewer_->AddLight(ambient);
-    viewer_->SetLightOn();
-    Graphic3d_RenderingParams& params = view_->ChangeRenderingParams();
-    params.ShadowMapResolution = 2048;
-    params.ShadowMapBias = 0.005f;
+    context_->Erase(view_cube_, false); // its corner holds the time of day of the application
 
     ground_ = new Ground(environment_.ground_height, environment_.ground_size);
     context_->Display(ground_, 0, -1, false);

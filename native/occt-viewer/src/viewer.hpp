@@ -180,7 +180,6 @@ private:
     occ::handle<Graphic3d_CubeMap> sky_; // painted for the sun and the clouds of sky_of_
     mtk_viewer_environment sky_of_{};
     Quantity_Color background_top_, background_bottom_;
-    Graphic3d_TypeOfShadingModel default_shading_ = Graphic3d_TypeOfShadingModel_Phong;
     double grid_step_ = 1000.0; // millimetres
     mtk_viewer_display_mode display_mode_ = MTK_VIEWER_DISPLAY_SHADED;
     mtk_viewer_render_style render_style_ = MTK_VIEWER_RENDER_STANDARD;

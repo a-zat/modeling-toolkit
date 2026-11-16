@@ -97,10 +97,13 @@ struct MaterialAspects {
     mtk_viewer_material material;
 };
 
-// The aspects of the edges of their own of the meshes, shaded and faded: hidden in the display mode without edges.
+// The aspects of the edges of their own of the meshes, shaded and faded, and of the meshes made of edges only, which
+// stay when the edges of the faces are hidden.
 struct EdgeAspects {
     occ::handle<Graphic3d_AspectFillArea3d> shaded;
     occ::handle<Graphic3d_AspectFillArea3d> faded;
+    occ::handle<Graphic3d_AspectFillArea3d> lines;
+    occ::handle<Graphic3d_AspectFillArea3d> faded_lines;
 };
 
 // A mesh of the scene with a material, in two display modes: shaded, and faded around a selection. Each presentation
@@ -165,6 +168,7 @@ struct EdgeStyle {
     bool outlines = false;       // drawn thick, over the faces, as in the CAD render style
     float outline_width = 1.0f;  // in pixels
     Quantity_Color color;
+    bool lines = false;          // the meshes made of edges only
 };
 
 // Changes the aspects to a display mode, with the edges of the triangles as the style says. The presentations that use
