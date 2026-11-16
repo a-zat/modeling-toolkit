@@ -43,6 +43,43 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Whether the reference of a node can be dragged into the block of another: the project, a reference, or a
+    /// geometry, which is of a block; not into its own block, nor into one it places.
+    /// </summary>
+    public bool CanMoveInto(ModelNodeViewModel dragged, ModelNodeViewModel target)
+    {
+        ArgumentNullException.ThrowIfNull(dragged);
+        ArgumentNullException.ThrowIfNull(target);
+        return Edit is not null && dragged.Entity is BlockReference reference && target.Block is { } block &&
+            !ReferenceEquals(reference.Owner, block) && !MoveToBlockCommand.Places(reference.Block, block);
+    }
+
+    /// <summary>Moves the reference of a node into the block of another, where it stays in the project.</summary>
+    public bool MoveInto(ModelNodeViewModel dragged, ModelNodeViewModel target)
+    {
+        if (!CanMoveInto(dragged, target))
+        {
+            return false;
+        }
+        var reference = (BlockReference)dragged.Entity!;
+        // A geometry has the path of the node it is the geometry of.
+        IReadOnlyList<Entity> into = target.Path;
+        var command = new MoveToBlockCommand(
+            reference, Placement(dragged.Path.Take(dragged.Path.Count - 1)), target.Block!, Placement(into));
+        if (Edit?.Invoke(command) != true)
+        {
+            return false;
+        }
+        Select([.. into, reference]);
+        return true;
+    }
+
+    // From the coordinates of the block that a path of references leads to, to those of the project.
+    private static Core.Geometry.Transform Placement(IEnumerable<Entity> path) =>
+        path.OfType<BlockReference>().Aggregate(Core.Geometry.Transform.Identity,
+            (placement, reference) => placement * reference.Transform);
+
     /// <summary>Starts editing the name of a node in the outline.</summary>
     [RelayCommand]
     private void StartRename(ModelNodeViewModel? node)

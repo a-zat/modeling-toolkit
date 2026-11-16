@@ -1,5 +1,5 @@
 <!-- The outline of the project: its references and geometry, each shown or hidden by its eye, renamed by a double click
-     on its name or F2, entered from its menu. -->
+     on its name or F2, entered from its menu; a reference dragged onto a node goes into its block. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
@@ -16,6 +16,12 @@
         <Style Selector="TextBlock.context">
           <Setter Property="FontWeight" Value="SemiBold" />
           <Setter Property="Foreground" Value="{DynamicResource Mtk.AccentForeground}" />
+        </Style>
+        <!-- The node a reference dragged would go into. -->
+        <Style Selector="TreeViewItem.dropTarget /template/ Border#PART_LayoutRoot">
+          <Setter Property="Background" Value="{DynamicResource Mtk.Selection}" />
+          <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Accent}" />
+          <Setter Property="BorderThickness" Value="1" />
         </Style>
         <!-- The eye shows on the row under the pointer, and always on what is hidden. -->
         <Style Selector="Button.eye">

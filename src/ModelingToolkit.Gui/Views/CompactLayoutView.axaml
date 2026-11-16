@@ -31,6 +31,10 @@
                       ToolTip.Tip="{OnPlatform Default='Save (Ctrl+S)', macOS='Save (⌘S)'}">
                 <PathIcon Data="{StaticResource Icon.Save}" />
               </Button>
+              <Button Classes="tool" Command="{Binding ImportCommand}"
+                      ToolTip.Tip="{OnPlatform Default='Import a model into the project (Ctrl+Shift+I)', macOS='Import a model into the project (⇧⌘I)'}">
+                <PathIcon Data="{StaticResource Icon.Import}" />
+              </Button>
             </StackPanel>
           </Border>
           <Border Classes="group">

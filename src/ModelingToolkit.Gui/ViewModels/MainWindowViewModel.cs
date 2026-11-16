@@ -1193,10 +1193,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (Edit(command))
             {
                 ModelTree.SelectCommand.Execute((IReadOnlyList<Entity>)[.. Context.Path, command.Reference]);
+                // Placed at the origin, it is then moved where it goes.
+                bool placing = IsEditable && Tools.Any(item => item.Tool is MoveTool);
+                if (placing)
+                {
+                    ActivateTool(Tools.First(item => item.Tool is MoveTool));
+                }
+                string place = placing ? " Click a point of it, then where it goes; drag it in the outline into a block." : "";
                 StatusMessage = warnings.Count switch
                 {
-                    0 => $"Imported {name} ({reader.FormatName}).",
-                    _ => $"Imported {name} ({reader.FormatName}), with {warnings.Count} warning(s): {warnings[0]}",
+                    0 => $"Imported {name} ({reader.FormatName}).{place}",
+                    _ => $"Imported {name} ({reader.FormatName}), with {warnings.Count} warning(s): {warnings[0]}{place}",
                 };
                 StatusDetails = warnings.Count > 0 ? string.Join(Environment.NewLine, warnings) : null;
             }

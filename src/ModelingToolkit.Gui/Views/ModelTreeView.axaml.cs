@@ -17,7 +17,74 @@ public partial class ModelTreeView : UserControl
         Tree.AddHandler(DoubleTappedEvent, OnTreeDoubleTapped, RoutingStrategies.Bubble, handledEventsToo: true);
         Tree.AddHandler(KeyDownEvent, OnTreeKeyDown, RoutingStrategies.Tunnel);
         Tree.AddHandler(LostFocusEvent, OnTreeLostFocus, RoutingStrategies.Bubble);
+        // A reference dragged onto another node goes into its block.
+        Tree.AddHandler(PointerPressedEvent, OnTreePointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Tree.AddHandler(PointerMovedEvent, OnTreePointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Tree.AddHandler(PointerReleasedEvent, OnTreePointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
+
+    private const double DragDistance = 6; // before a press becomes a drag, in points
+
+    private ModelNodeViewModel? _pressed;
+    private Point _pressedAt;
+    private bool _dragging;
+    private TreeViewItem? _dropTarget;
+
+    private void OnTreePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        _pressed = e.GetCurrentPoint(Tree).Properties.IsLeftButtonPressed &&
+            NodeAt(e.Source) is { Node: { IsReference: true, IsRenaming: false } node } ? node : null;
+        _pressedAt = e.GetPosition(Tree);
+        _dragging = false;
+    }
+
+    private void OnTreePointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_pressed is not { } dragged || Model is not { } model)
+        {
+            return;
+        }
+        Point at = e.GetPosition(Tree);
+        if (!_dragging && Math.Abs(at.X - _pressedAt.X) + Math.Abs(at.Y - _pressedAt.Y) < DragDistance)
+        {
+            return;
+        }
+        _dragging = true;
+        TreeViewItem? target = NodeAt(Tree.InputHitTest(at)) is { } hit && model.CanMoveInto(dragged, hit.Node)
+            ? hit.Item
+            : null;
+        SetDropTarget(target);
+        e.Handled = true;
+    }
+
+    private void OnTreePointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_dragging && _pressed is { } dragged && _dropTarget?.DataContext is ModelNodeViewModel target)
+        {
+            Model?.MoveInto(dragged, target);
+            e.Handled = true;
+        }
+        _pressed = null;
+        _dragging = false;
+        SetDropTarget(null);
+    }
+
+    private void SetDropTarget(TreeViewItem? item)
+    {
+        if (ReferenceEquals(item, _dropTarget))
+        {
+            return;
+        }
+        _dropTarget?.Classes.Remove("dropTarget");
+        _dropTarget = item;
+        _dropTarget?.Classes.Add("dropTarget");
+    }
+
+    private static (TreeViewItem Item, ModelNodeViewModel Node)? NodeAt(object? source) =>
+        (source as Visual)?.FindAncestorOfType<TreeViewItem>(includeSelf: true) is
+            { DataContext: ModelNodeViewModel node } item
+            ? (item, node)
+            : null;
 
     private ModelTreeViewModel? Model => DataContext as ModelTreeViewModel;
 
