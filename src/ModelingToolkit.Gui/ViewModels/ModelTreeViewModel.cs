@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModelingToolkit.Core.Editing;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.ViewModels;
@@ -26,8 +27,57 @@ public sealed partial class ModelTreeViewModel : ObservableObject
 
     public bool IsEmpty => Model is null;
 
-    /// <summary>Executed with a node that is double-clicked: one of a reference enters its block.</summary>
+    /// <summary>Executed with a node to edit: one of a reference enters its block.</summary>
     public System.Windows.Input.ICommand? EnterCommand { get; set; }
+
+    /// <summary>Runs the commands that rename, show or hide the entities; null when nothing can be edited.</summary>
+    public Func<IEditCommand, bool>? Edit { get; set; }
+
+    /// <summary>Shows a hidden entity, or hides a shown one, by a command that can be undone.</summary>
+    [RelayCommand]
+    private void ToggleVisible(ModelNodeViewModel? node)
+    {
+        if (node?.Entity is { } entity)
+        {
+            Edit?.Invoke(new SetHiddenCommand([entity], !entity.IsHidden));
+        }
+    }
+
+    /// <summary>Starts editing the name of a node in the outline.</summary>
+    [RelayCommand]
+    private void StartRename(ModelNodeViewModel? node)
+    {
+        if (node is { HasEntity: true } && Edit is not null)
+        {
+            node.EditedName = node.Name;
+            node.IsRenaming = true;
+        }
+    }
+
+    /// <summary>Gives the entity the name typed; an empty one, or the same, changes nothing.</summary>
+    [RelayCommand]
+    private void CommitRename(ModelNodeViewModel? node)
+    {
+        if (node is not { IsRenaming: true, Entity: { } entity })
+        {
+            return;
+        }
+        node.IsRenaming = false;
+        string name = node.EditedName.Trim();
+        if (name.Length > 0 && name != node.Name)
+        {
+            Edit?.Invoke(new RenameCommand(entity, name));
+        }
+    }
+
+    [RelayCommand]
+    private void CancelRename(ModelNodeViewModel? node)
+    {
+        if (node is not null)
+        {
+            node.IsRenaming = false;
+        }
+    }
 
     private Document? _document;
 

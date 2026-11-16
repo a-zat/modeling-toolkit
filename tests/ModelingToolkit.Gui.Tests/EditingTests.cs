@@ -188,7 +188,7 @@ public sealed class EditingTests
 
         Assert.DoesNotContain(entity, block.Entities);
         Assert.Null(viewModel.ModelTree.SelectedNode);
-        Assert.Equal("Model", viewModel.Properties.Kind);
+        Assert.Equal("Project", viewModel.Properties.Kind);
         Assert.False(viewModel.DeleteCommand.CanExecute(null));
 
         viewModel.UndoCommand.Execute(null);

@@ -9,7 +9,7 @@
   <Border Classes="popover" Width="356">
     <ScrollViewer MaxHeight="640">
       <StackPanel Margin="14" Spacing="10">
-        <TextBlock Classes="label" Text="IN THIS MODEL" />
+        <TextBlock Classes="label" Text="IN THIS PROJECT" />
         <ItemsControl ItemsSource="{Binding ModelItems}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>

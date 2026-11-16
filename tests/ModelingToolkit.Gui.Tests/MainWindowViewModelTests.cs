@@ -203,7 +203,7 @@ public sealed class MainWindowViewModelTests
         viewModel.ModelTree.SelectCommand.Execute(null);
 
         Assert.Null(viewModel.ModelTree.SelectedNode);
-        Assert.Equal("Model", viewModel.Properties.Kind);
+        Assert.Equal("Project", viewModel.Properties.Kind);
     }
 
     [Fact]

@@ -10,6 +10,47 @@ namespace ModelingToolkit.Gui.Tests;
 public sealed class ModelTreeUpdateTests
 {
     [Fact]
+    public void TheOutlineShowsHidesAndRenamesTheEntitiesByCommands()
+    {
+        var wheel = new Block("Wheel") { Entities = { Square() } };
+        var reference = new BlockReference(wheel, Transform.Identity);
+        var document = new Document();
+        document.Blocks.Add(wheel);
+        document.Root.Entities.Add(reference);
+        var session = new ModelingToolkit.Core.Editing.EditSession(document);
+        var tree = new ModelTreeViewModel { Edit = command => { session.Execute(command); return true; } };
+        tree.Show(document);
+        ModelNodeViewModel node = tree.Model!.Children[0];
+
+        tree.ToggleVisibleCommand.Execute(node);
+        Assert.True(reference.IsHidden);
+        Assert.False(node.IsVisible);
+
+        tree.StartRenameCommand.Execute(node);
+        Assert.True(node.IsRenaming);
+        Assert.Equal("Wheel", node.EditedName);
+        node.EditedName = "  Front wheel ";
+        tree.CommitRenameCommand.Execute(node);
+        Assert.False(node.IsRenaming);
+        Assert.Equal("Front wheel", reference.Name);
+        Assert.Equal("Front wheel", node.Name);
+
+        // Nothing typed, or Escape, leaves the name as it is.
+        tree.StartRenameCommand.Execute(node);
+        node.EditedName = " ";
+        tree.CommitRenameCommand.Execute(node);
+        tree.StartRenameCommand.Execute(node);
+        node.EditedName = "Other";
+        tree.CancelRenameCommand.Execute(node);
+        Assert.Equal("Front wheel", reference.Name);
+
+        session.Undo();
+        session.Undo();
+        Assert.Equal("Wheel", node.Name);
+        Assert.True(node.IsVisible);
+    }
+
+    [Fact]
     public void AddedAndRemovedEntitiesChangeTheChildrenKeepingTheOtherNodes()
     {
         var wheel = new Block("Wheel") { Entities = { Square() } };
@@ -100,7 +141,7 @@ public sealed class ModelTreeUpdateTests
         var viewModel = new MainWindowViewModel(new DocumentFormats([new GltfReader()], []), new NoAppearance());
         await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
         Document document = viewModel.Document!;
-        Assert.Equal("Model", viewModel.Properties.Kind); // nothing selected
+        Assert.Equal("Project", viewModel.Properties.Kind); // nothing selected
         Assert.Contains(new PropertyRow("Meshes", "1 (1 placed)"), viewModel.Properties.Rows);
 
         document.Root.Entities.Add(Square());

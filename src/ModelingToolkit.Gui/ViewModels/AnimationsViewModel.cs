@@ -367,7 +367,7 @@ public sealed partial class AnimationsViewModel : ObservableObject
         _clock.Reset();
     }
 
-    private const string SeveralLayers = "Several layers";
+    private const string SeveralLayers = "Several groups";
 
     // For each block, the entity of the model space through which it is placed, when there is one.
     private static Dictionary<Block, Entity> LayersOf(Document? document)
@@ -401,7 +401,7 @@ public sealed partial class AnimationsViewModel : ObservableObject
         {
             Entity? layer = target.Owner == _document?.Root ? target
                 : target.Owner is { } owner ? layers.GetValueOrDefault(owner) : null;
-            names.Add(layer is BlockReference reference ? reference.Name ?? reference.Block.Name : layer?.Name ?? "Model");
+            names.Add(layer is BlockReference reference ? reference.Name ?? reference.Block.Name : layer?.Name ?? "Project");
         }
         return names.Count == 1 ? names.First() : SeveralLayers;
     }

@@ -1,3 +1,5 @@
+<!-- The outline of the project: its references and geometry, each shown or hidden by its eye, renamed by a double click
+     on its name or F2, entered from its menu. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
@@ -15,25 +17,60 @@
           <Setter Property="FontWeight" Value="SemiBold" />
           <Setter Property="Foreground" Value="{DynamicResource Mtk.AccentForeground}" />
         </Style>
+        <!-- The eye shows on the row under the pointer, and always on what is hidden. -->
+        <Style Selector="Button.eye">
+          <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="TreeViewItem:pointerover > :is(Control) Button.eye, Button.eye.hidden">
+          <Setter Property="Opacity" Value="1" />
+        </Style>
       </TreeView.Styles>
       <TreeView.ItemTemplate>
         <TreeDataTemplate DataType="vm:ModelNodeViewModel" ItemsSource="{Binding Children}">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Panel Width="16" Height="16" VerticalAlignment="Center">
+          <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Background="Transparent">
+            <Grid.ContextMenu>
+              <ContextMenu IsVisible="{Binding HasEntity}">
+                <MenuItem Header="Rename" InputGesture="F2"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).StartRenameCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem Header="Edit block" IsVisible="{Binding IsReference}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).EnterCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem Header="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Instance}}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).ToggleVisibleCommand}"
+                          CommandParameter="{Binding}" />
+              </ContextMenu>
+            </Grid.ContextMenu>
+            <Panel Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}">
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Document}" IsVisible="{Binding IsModel}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.CubeLink}" IsVisible="{Binding IsReference}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsMesh}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsBrep}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsGeometry}" />
             </Panel>
-            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Classes.context="{Binding IsContext}" />
-            <TextBlock Text="{Binding Detail}" Classes="secondary" VerticalAlignment="Center" />
-          </StackPanel>
+            <TextBlock Grid.Column="1" x:Name="NodeName" Text="{Binding Name}" VerticalAlignment="Center"
+                       Classes.context="{Binding IsContext}" IsVisible="{Binding !IsRenaming}"
+                       Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}" />
+            <TextBox Grid.Column="1" Classes="rename" Text="{Binding EditedName}" IsVisible="{Binding IsRenaming}"
+                     MinWidth="140" Padding="4,1" MinHeight="0" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="{Binding Detail}" Classes="secondary" VerticalAlignment="Center"
+                       Margin="6,0,0,0" IsVisible="{Binding !IsRenaming}" />
+            <Button Grid.Column="4" Classes="tool eye" Classes.hidden="{Binding !IsVisible}" Width="22" Height="22"
+                    Margin="6,0,4,0" IsVisible="{Binding HasEntity}"
+                    Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).ToggleVisibleCommand}"
+                    CommandParameter="{Binding}" ToolTip.Tip="Show or hide">
+              <Panel>
+                <PathIcon Data="{StaticResource Icon.Eye}" Width="14" Height="14" IsVisible="{Binding IsVisible}" />
+                <PathIcon Data="{StaticResource Icon.EyeOff}" Width="14" Height="14" IsVisible="{Binding !IsVisible}" />
+              </Panel>
+            </Button>
+          </Grid>
         </TreeDataTemplate>
       </TreeView.ItemTemplate>
     </TreeView>
 
-    <TextBlock Classes="placeholder" Text="Nothing in the model yet: draw, or open a model." IsVisible="{Binding IsEmpty}" />
+    <TextBlock Classes="placeholder" Text="Nothing in the project yet: draw, open or import a model."
+               IsVisible="{Binding IsEmpty}" />
   </Panel>
 
 </UserControl>

@@ -86,7 +86,7 @@
 
       <!-- Clipped where the parts on the right begin. -->
       <StackPanel Orientation="Horizontal" Spacing="10" ClipToBounds="True">
-        <TextBlock Classes="label" Text="MODEL" IsVisible="{Binding !IsEditingBlock}" />
+        <TextBlock Classes="label" Text="PROJECT" IsVisible="{Binding !IsEditingBlock}" />
         <TextBlock Text="{Binding Summary}" IsVisible="{Binding !IsEditingBlock}" />
         <!-- The block being edited, in place of the summary of the model. -->
         <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsEditingBlock}">

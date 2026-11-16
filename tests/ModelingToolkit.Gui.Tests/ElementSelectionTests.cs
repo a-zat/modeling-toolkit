@@ -74,7 +74,7 @@ public sealed class ElementSelectionTests : IDisposable
         viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None));
 
         Assert.Empty(viewModel.SelectedElements);
-        Assert.Equal("Model", viewModel.Properties.Kind);
+        Assert.Equal("Project", viewModel.Properties.Kind);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class ElementSelectionTests : IDisposable
         viewModel.Edit(new Core.Editing.ReplaceShapeCommand("Shrink", box, _kernel.MakeBox(10, 10, 10)));
 
         Assert.Empty(viewModel.SelectedElements);
-        Assert.Equal("Model", viewModel.Properties.Kind);
+        Assert.Equal("Project", viewModel.Properties.Kind);
         viewModel.UndoCommand.Execute(null);
         Assert.Empty(viewModel.SelectedElements);
     }

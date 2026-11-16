@@ -46,7 +46,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsStore.Load()));
 
         Properties.Edit = Edit;
-        Layers.Edit = Edit;
+        ModelTree.Edit = Edit;
         Properties.Picker.ChooseImage = () => FileDialogs?.OpenAsync(
             "Choose an image for the material", [new FileType("Images", [".png", ".jpg", ".jpeg", ".webp"])])
             ?? Task.FromResult<string?>(null);
@@ -139,25 +139,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>The animations of the document, which the inspector plays and the 3D view shows.</summary>
     public AnimationsViewModel Animations { get; } = new();
 
-    /// <summary>The layers of the document, shown or hidden in the 3D view.</summary>
-    public LayersViewModel Layers { get; } = new();
-
-    /// <summary>What the lower part of the inspector shows: "Properties", "Layers" or "Animations".</summary>
+    /// <summary>What the lower part of the inspector shows: "Properties" or "Animations".</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPropertiesTab), nameof(IsLayersTab), nameof(IsAnimationsTab))]
+    [NotifyPropertyChangedFor(nameof(IsPropertiesTab), nameof(IsAnimationsTab))]
     public partial string InspectorTab { get; set; } = "Properties";
 
     public bool IsPropertiesTab => InspectorTab == "Properties";
-
-    public bool IsLayersTab => InspectorTab == "Layers";
 
     public bool IsAnimationsTab => InspectorTab == "Animations";
 
     [RelayCommand]
     private void ShowInspectorTab(string tab) => InspectorTab = tab;
-
-    [RelayCommand]
-    private void ShowAllLayers() => Layers.SetAllVisible(true);
 
     public CommandPaletteViewModel Palette { get; } = new();
 
@@ -1304,7 +1296,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         ShowProperties(refresh: true);
         Animations.Refresh();
-        Layers.Refresh();
         if (Document is { } document)
         {
             ShowSummary(DocumentStatistics.Of(document));
@@ -1383,7 +1374,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsWalking = false; // the view turns to the new document
         Properties.Know(document, statistics);
         Animations.Show(document);
-        Layers.Show(document);
         ModelTree.Show(document);
         ShowProperties(); // of the model, nothing being selected
         Document = document;

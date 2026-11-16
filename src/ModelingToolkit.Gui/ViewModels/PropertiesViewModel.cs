@@ -174,7 +174,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
         Kind = node switch
         {
             null => string.Empty,
-            { IsModel: true } => "Model",
+            { IsModel: true } => "Project",
             { IsGeometry: true, Block: { } geometryBlock } => $"of {geometryBlock.Name}",
             { IsReference: true } => "Block reference",
             { IsMesh: true } => "Mesh",

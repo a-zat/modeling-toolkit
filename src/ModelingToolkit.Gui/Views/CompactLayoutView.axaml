@@ -216,10 +216,6 @@
                     CommandParameter="Properties">
               <TextBlock Classes="label" Text="PROPERTIES" />
             </Button>
-            <Button Classes="tab" Classes.active="{Binding IsLayersTab}" Command="{Binding ShowInspectorTabCommand}"
-                    CommandParameter="Layers">
-              <TextBlock Classes="label" Text="LAYERS" />
-            </Button>
             <Button Classes="tab" Classes.active="{Binding IsAnimationsTab}" Command="{Binding ShowInspectorTabCommand}"
                     CommandParameter="Animations">
               <TextBlock Classes="label" Text="ANIMATIONS" />
@@ -228,9 +224,6 @@
           <Panel>
             <Panel IsVisible="{Binding IsPropertiesTab}">
               <views:PropertiesView DataContext="{Binding Properties}" />
-            </Panel>
-            <Panel IsVisible="{Binding IsLayersTab}">
-              <views:LayersView DataContext="{Binding Layers}" />
             </Panel>
             <Panel IsVisible="{Binding IsAnimationsTab}">
               <views:AnimationsView DataContext="{Binding Animations}" />

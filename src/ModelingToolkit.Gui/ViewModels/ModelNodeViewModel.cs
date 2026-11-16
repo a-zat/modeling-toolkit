@@ -90,6 +90,19 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsExpanded { get; set; }
 
+    /// <summary>Whether the 3D view shows the entity; the project and the geometries are always shown.</summary>
+    public bool IsVisible => Entity is not { IsHidden: true };
+
+    /// <summary>Whether the node can be renamed, and shown or hidden: one of an entity.</summary>
+    public bool HasEntity => Entity is not null;
+
+    /// <summary>Whether the name is being edited in the outline, as <see cref="EditedName"/>.</summary>
+    [ObservableProperty]
+    public partial bool IsRenaming { get; set; }
+
+    [ObservableProperty]
+    public partial string EditedName { get; set; } = string.Empty;
+
     public IReadOnlyList<ModelNodeViewModel> Children => _children ??= BuildChildren([]);
 
     public static ModelNodeViewModel ForDocument(Document document) =>
@@ -118,6 +131,7 @@ public sealed partial class ModelNodeViewModel : ObservableObject
                  (ReferenceEquals(renamed.Target, Entity) || ReferenceEquals(renamed.Target, _block)))
         {
             (Name, Detail) = Label(Entity);
+            OnPropertyChanged(nameof(IsVisible));
         }
         if (IsGeometry && ReferenceEquals(changed, _block))
         {
