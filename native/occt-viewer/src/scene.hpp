@@ -38,6 +38,11 @@ struct Mesh {
     std::shared_ptr<const Elements> elements;      // null for a mesh picked as a whole
     // With elements, the material of each face, -1 for the one of the instance; empty for that one everywhere.
     std::vector<int32_t> face_materials;
+    // The edges as they are drawn: each segment of the polylines a quad, two triangles, that the vertex shader of
+    // edge_program() widens on screen, all in one array. OpenCASCADE draws each polyline of an array with a call of its
+    // own, and lines widened by a geometry shader, which Metal lacks, cost a render pass each on macOS: thousands of
+    // short edges made a frame last a second.
+    occ::handle<Graphic3d_ArrayOfTriangles> edge_quads;
 };
 
 // The owner of a face, an edge or a vertex of the shape that an object shows, picked with priority to vertices, then
@@ -94,8 +99,8 @@ struct MaterialAspects {
 
 // The aspects of the edges of their own of the meshes, shaded and faded: hidden in the display mode without edges.
 struct EdgeAspects {
-    occ::handle<Graphic3d_AspectLine3d> shaded;
-    occ::handle<Graphic3d_AspectLine3d> faded;
+    occ::handle<Graphic3d_AspectFillArea3d> shaded;
+    occ::handle<Graphic3d_AspectFillArea3d> faded;
 };
 
 // A mesh of the scene with a material, in two display modes: shaded, and faded around a selection. Each presentation

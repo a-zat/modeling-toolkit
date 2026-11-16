@@ -26,6 +26,7 @@
 #include <gp_Mat.hxx>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 #include <map>
@@ -204,6 +205,51 @@ void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode m
     apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
 }
 
+// The edges of meshes, as quads made by edge_quads_of(): each vertex is an end of a segment, its normal the other end
+// and the first coordinate of its texel the side of the segment it goes to. The vertex shader widens the quad on
+// screen, as the outline program does with a geometry shader, without one: Metal has none, and the OpenGL of macOS
+// draws each array with one in a render pass of its own.
+occ::handle<Graphic3d_ShaderProgram> make_edge_program(float width) {
+    occ::handle<Graphic3d_ShaderProgram> program = new Graphic3d_ShaderProgram();
+    program->SetId(TCollection_AsciiString("mtk_edges_") + TCollection_AsciiString(static_cast<int>(width * 100)));
+    program->SetHeader("#version 150");
+    program->SetNbLightsMax(0);
+    program->SetNbClipPlanesMax(0);
+    program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(
+        Graphic3d_TOS_VERTEX, TCollection_AsciiString("const float width = ") + TCollection_AsciiString(width) + ";" +
+                                  R"(
+uniform vec4 occViewport;
+vec4 project(vec4 point) {
+    vec4 position = occWorldViewMatrix * occModelWorldMatrix * point;
+    position.z += 0.002 * abs(position.z);
+    return occProjectionMatrix * position;
+}
+void main() {
+    vec4 here = project(occVertex);
+    vec4 there = project(vec4(occNormal, 1.0));
+    vec2 half_size = 0.5 * occViewport.zw;
+    vec2 along = (there.xy / there.w - here.xy / here.w) * half_size;
+    vec2 direction = along / max(length(along), 1.0e-6);
+    // Half the width across, and as much beyond this end, away from the other, to fill the corners.
+    vec2 offset = (vec2(-direction.y, direction.x) * occTexCoord.x - direction) * 0.5 * width / half_size;
+    gl_Position = vec4(here.xy + offset * here.w, here.zw);
+})"));
+    program->AttachShader(Graphic3d_ShaderObject::CreateFromSource(Graphic3d_TOS_FRAGMENT, R"(
+void main() {
+    occSetFragColor(occColor);
+})"));
+    return program;
+}
+
+occ::handle<Graphic3d_ShaderProgram> edge_program(float width) {
+    static std::map<float, occ::handle<Graphic3d_ShaderProgram>> programs;
+    occ::handle<Graphic3d_ShaderProgram>& program = programs[width];
+    if (program.IsNull()) {
+        program = make_edge_program(width);
+    }
+    return program;
+}
+
 occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width, bool caps, float dash) {
     static std::map<std::tuple<float, bool, float>, occ::handle<Graphic3d_ShaderProgram>> programs;
     occ::handle<Graphic3d_ShaderProgram>& program = programs[{width, caps, dash}];
@@ -214,19 +260,22 @@ occ::handle<Graphic3d_ShaderProgram> mtk::outline_program(float width, bool caps
 }
 
 mtk::EdgeAspects mtk::make_edge_aspects() {
-    EdgeAspects aspects{new Graphic3d_AspectLine3d(), new Graphic3d_AspectLine3d()};
+    EdgeAspects aspects{new Graphic3d_AspectFillArea3d(), new Graphic3d_AspectFillArea3d()};
+    for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect : {aspects.shaded, aspects.faded}) {
+        aspect->SetShadingModel(Graphic3d_TypeOfShadingModel_Unlit);
+        aspect->SetFaceCulling(Graphic3d_TypeOfBackfacingModel_DoubleSided);
+        aspect->SetDrawEdges(false);
+    }
     aspects.faded->SetAlphaMode(Graphic3d_AlphaMode_Blend);
     return aspects;
 }
 
 void mtk::apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges) {
-    // An empty line type draws nothing: the same presentations serve all the display modes.
-    const Aspect_TypeOfLine type = edges.own_edges ? Aspect_TOL_SOLID : Aspect_TOL_EMPTY;
-    for (const occ::handle<Graphic3d_AspectLine3d>& aspect : {aspects.shaded, aspects.faded}) {
-        aspect->SetLineType(type);
-        aspect->SetLineWidth(1.0f);
-        aspect->SetShaderProgram(edges.outlines ? outline_program(edges.outline_width)
-                                                : occ::handle<Graphic3d_ShaderProgram>());
+    // An empty interior draws nothing: the same presentations serve all the display modes. The edges are as wide as
+    // the outlines, or one pixel.
+    for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect : {aspects.shaded, aspects.faded}) {
+        aspect->SetInteriorStyle(edges.own_edges ? Aspect_IS_SOLID : Aspect_IS_EMPTY);
+        aspect->SetShaderProgram(edge_program(edges.outlines ? edges.outline_width : 1.0f));
     }
     aspects.shaded->SetInteriorColor(Quantity_ColorRGBA(edges.color, 1.0f));
     aspects.faded->SetInteriorColor(Quantity_ColorRGBA(edges.color, faded_opacity));
@@ -287,10 +336,10 @@ void mtk::MeshObject::Compute(const occ::handle<PrsMgr_PresentationManager>&,
         }
     }
 
-    if (!mesh_.edges.IsNull()) {
+    if (!mesh_.edge_quads.IsNull()) {
         const occ::handle<Graphic3d_Group> edges = presentation->NewGroup();
         edges->SetGroupPrimitivesAspect(faded ? edge_aspects_.faded : edge_aspects_.shaded);
-        edges->AddPrimitiveArray(mesh_.edges);
+        edges->AddPrimitiveArray(mesh_.edge_quads);
     }
 }
 
@@ -565,6 +614,41 @@ occ::handle<Graphic3d_ArrayOfPolylines> make_edges(const mtk_viewer_mesh& mesh) 
     return edges;
 }
 
+// The quads that draw the segments of polylines in one call, as edge_program() expects them; null for none.
+occ::handle<Graphic3d_ArrayOfTriangles> edge_quads_of(const occ::handle<Graphic3d_ArrayOfPolylines>& polylines) {
+    if (polylines.IsNull() || polylines->VertexNumber() < 2) {
+        return nullptr;
+    }
+    const int bounds = std::max(polylines->BoundNumber(), 1);
+    const int segment_count = polylines->VertexNumber() - bounds;
+    if (segment_count <= 0) {
+        return nullptr;
+    }
+    occ::handle<Graphic3d_ArrayOfTriangles> quads = new Graphic3d_ArrayOfTriangles(
+        4 * segment_count, 6 * segment_count, Graphic3d_ArrayFlags_VertexNormal | Graphic3d_ArrayFlags_VertexTexel);
+    const auto add = [&](const gp_Pnt& here, const gp_Pnt& there, double side) {
+        const int vertex = quads->AddVertex(here);
+        // Not normalized: the normal holds the other end of the segment.
+        quads->SetVertexNormal(vertex, there.X(), there.Y(), there.Z());
+        quads->SetVertexTexel(vertex, gp_Pnt2d(side, 0.0));
+        return vertex;
+    };
+    int first = 1;
+    for (int bound = 1; bound <= bounds; ++bound) {
+        const int count = polylines->BoundNumber() > 0 ? polylines->Bound(bound) : polylines->VertexNumber();
+        for (int vertex = first; vertex + 1 < first + count; ++vertex) {
+            const gp_Pnt start = polylines->Vertice(vertex), end = polylines->Vertice(vertex + 1);
+            // Across the segment, the side of each end is seen from the other: the end flips it.
+            const int a = add(start, end, 1.0), b = add(start, end, -1.0);
+            const int c = add(end, start, -1.0), d = add(end, start, 1.0);
+            quads->AddEdges(a, b, c);
+            quads->AddEdges(b, d, c);
+        }
+        first += count;
+    }
+    return quads;
+}
+
 occ::handle<Graphic3d_ArrayOfPolylines> transform_edges(const occ::handle<Graphic3d_ArrayOfPolylines>& edges,
                                                         const double* matrix) {
     if (edges.IsNull()) {
@@ -654,8 +738,10 @@ mtk::Mesh mtk::make_mesh(const mtk_viewer_mesh& mesh) {
     if (elements && mesh.face_materials != nullptr) {
         face_materials.assign(mesh.face_materials, mesh.face_materials + mesh.face_count);
     }
-    return Mesh{true, make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh), std::move(elements),
-                std::move(face_materials)};
+    Mesh result{true, make_triangles(mesh), mesh.edge_first_points != nullptr, make_edges(mesh), std::move(elements),
+                std::move(face_materials), nullptr};
+    result.edge_quads = edge_quads_of(result.edges);
+    return result;
 }
 
 mtk::Mesh mtk::transform_mesh(const Mesh& mesh, const double* matrix) {
@@ -668,8 +754,10 @@ mtk::Mesh mtk::transform_mesh(const Mesh& mesh, const double* matrix) {
             vertex = gp_Pnt(vertex.XYZ().Multiplied(linear) + translation);
         }
     }
-    return Mesh{true, mesh.triangles.IsNull() ? nullptr : transform_triangles(mesh.triangles, matrix),
-                mesh.has_own_edges, transform_edges(mesh.edges, matrix), std::move(elements), mesh.face_materials};
+    Mesh result{true, mesh.triangles.IsNull() ? nullptr : transform_triangles(mesh.triangles, matrix),
+                mesh.has_own_edges, transform_edges(mesh.edges, matrix), std::move(elements), mesh.face_materials, nullptr};
+    result.edge_quads = edge_quads_of(result.edges);
+    return result;
 }
 
 occ::handle<Graphic3d_Texture2D> mtk::make_texture(const uint8_t* pixels, int width, int height) {
