@@ -146,3 +146,13 @@ internal unsafe struct NativeCamera
     public fixed double Up[3];
     public double FieldOfView;
 }
+
+/// <summary>The world around the model in the rendered display mode, in millimetres, Z up.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeEnvironment
+{
+    public fixed double SunDirection[3];
+    public float Cloudiness;
+    public double GroundHeight;
+    public double GroundSize;
+}

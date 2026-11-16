@@ -113,6 +113,9 @@
           <NativeMenuItem Header="Wireframe" ToggleType="Radio" IsChecked="{Binding IsWireframe, Mode=OneWay}"
                           Command="{Binding SetDisplayModeCommand}"
                           CommandParameter="{x:Static viewport:DisplayMode.Wireframe}" />
+          <NativeMenuItem Header="Rendered" ToggleType="Radio" IsChecked="{Binding IsRendered, Mode=OneWay}"
+                          Command="{Binding SetDisplayModeCommand}"
+                          CommandParameter="{x:Static viewport:DisplayMode.Rendered}" />
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Perspective" ToggleType="CheckBox" IsChecked="{Binding IsPerspective, Mode=OneWay}"
                           Command="{Binding TogglePerspectiveCommand}" />

@@ -33,4 +33,15 @@ public enum DisplayMode
     Shaded,
     ShadedWithEdges,
     Wireframe,
+
+    /// <summary>As things look: physically based, without edges or grid, under the sky, on the ground, with shadows.</summary>
+    Rendered,
+}
+
+/// <summary>The world around the model in the rendered display mode.</summary>
+/// <param name="Sun">Towards the sun, Z up; below the horizon at night.</param>
+/// <param name="Cloudiness">From 0, a clear sky, to 1.</param>
+public sealed record ViewEnvironment(ModelingToolkit.Core.Geometry.Vector3d Sun, float Cloudiness)
+{
+    public static ViewEnvironment Noon { get; } = new(new ModelingToolkit.Core.Geometry.Vector3d(0, -0.5, 0.85), 0.3f);
 }

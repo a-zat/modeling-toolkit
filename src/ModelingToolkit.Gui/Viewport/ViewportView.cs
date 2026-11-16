@@ -12,6 +12,7 @@ using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Gui.Viewport.Interop;
 using ModelingToolkit.Core.Kernel;
 using BlockReference = ModelingToolkit.Core.Model.BlockReference;
+using BoundingBox = ModelingToolkit.Core.Geometry.BoundingBox;
 using BrepEntity = ModelingToolkit.Core.Model.BrepEntity;
 using Transform = ModelingToolkit.Core.Geometry.Transform;
 using Document = ModelingToolkit.Core.Model.Document;
@@ -67,6 +68,10 @@ public sealed class ViewportView : Border, IViewCamera
     /// </summary>
     public static readonly StyledProperty<bool> IsWalkingProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsWalking));
+
+    /// <summary>The sky and the sun of the rendered display mode.</summary>
+    public static readonly StyledProperty<ViewEnvironment> EnvironmentProperty =
+        AvaloniaProperty.Register<ViewportView, ViewEnvironment>(nameof(Environment), ViewEnvironment.Noon);
 
     public static readonly StyledProperty<ViewOverlay> OverlayProperty =
         AvaloniaProperty.Register<ViewportView, ViewOverlay>(nameof(Overlay), ViewOverlay.Empty);
@@ -141,6 +146,12 @@ public sealed class ViewportView : Border, IViewCamera
         };
         ActualThemeVariantChanged += (_, _) => ApplyColors();
         LostFocus += (_, _) => _walkKeys.Clear(); // the release of the keys held would not come
+    }
+
+    public ViewEnvironment Environment
+    {
+        get => GetValue(EnvironmentProperty);
+        set => SetValue(EnvironmentProperty, value);
     }
 
     public bool IsWalking
@@ -315,6 +326,10 @@ public sealed class ViewportView : Border, IViewCamera
                 scene.ShowSelectionIn(viewer, Selection);
                 return true;
             });
+        }
+        else if (change.Property == EnvironmentProperty)
+        {
+            Send(ApplyEnvironment);
         }
         else if (change.Property == IsWalkingProperty)
         {
@@ -732,6 +747,7 @@ public sealed class ViewportView : Border, IViewCamera
 
             return true;
         });
+        Send(ApplyEnvironment); // the ground under the new model
         // With the changes made while the scene was prepared, and the selection.
         UpdateScene();
     }
@@ -802,8 +818,19 @@ public sealed class ViewportView : Border, IViewCamera
         UpdateScene();
     }
 
+    // The ground lies under the model, wide enough to reach the horizon from it.
+    private bool ApplyEnvironment(OcctViewer viewer)
+    {
+        BoundingBox box = Document?.GetBoundingBox() ?? BoundingBox.Empty;
+        double height = box.IsEmpty ? 0 : box.Min.Z;
+        double size = box.IsEmpty ? 100_000 : Math.Max(100_000, 40 * (box.Max - box.Min).Length);
+        viewer.SetEnvironment(Environment, height, size);
+        return true;
+    }
+
     private bool ApplySettings(OcctViewer viewer)
     {
+        ApplyEnvironment(viewer);
         viewer.SetDisplayMode(DisplayMode);
         viewer.SetRenderStyle(RenderStyle);
         viewer.SetPerspective(IsPerspective || _walk is not null);

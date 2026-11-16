@@ -209,7 +209,7 @@ TEST(Viewer, ChangesHowItShowsTheScene) {
 
     EXPECT_EQ(mtk_viewer_show_view(viewer.get(), 7), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_show_view(viewer.get(), -1), MTK_STATUS_INVALID_ARGUMENT);
-    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), 3), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), 4), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_render_style(viewer.get(), 2), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_render_style(viewer.get(), -1), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_STRNE(mtk_viewer_last_error_message(), "");
@@ -247,6 +247,31 @@ TEST(Viewer, PlacesTheCameraWhereItIsAsked) {
     EXPECT_EQ(mtk_viewer_set_camera(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_set_camera(viewer.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(mtk_viewer_get_camera(nullptr, &read), MTK_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(Viewer, RendersUnderTheSkyOfItsEnvironment) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const mtk_viewer_environment noon{{0.0, -0.5, 0.85}, 0.3f, -240.0, 100000.0};
+
+    ASSERT_EQ(mtk_viewer_set_environment(viewer.get(), &noon), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_RENDERED), MTK_STATUS_OK);
+    const mtk_viewer_environment night{{0.0, 0.3, -0.9}, 0.0f, 0.0, 1000.0};
+    EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &night), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 1), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_SHADED), MTK_STATUS_OK);
+
+    mtk_viewer_environment wrong = noon;
+    wrong.sun_direction[0] = wrong.sun_direction[1] = wrong.sun_direction[2] = 0.0;
+    EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
+    wrong = noon;
+    wrong.cloudiness = 2.0f;
+    EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
+    wrong = noon;
+    wrong.ground_size = 0.0;
+    EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_environment(nullptr, &noon), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), 4), MTK_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(Viewer, NumbersWhatItAddsToTheSceneFromZero) {

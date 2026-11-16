@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 18
+#define MTK_OCCT_VIEWER_ABI_VERSION 19
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -90,7 +90,9 @@ typedef enum mtk_viewer_view {
 typedef enum mtk_viewer_display_mode {
     MTK_VIEWER_DISPLAY_SHADED = 0,            /* without the edges of the triangles */
     MTK_VIEWER_DISPLAY_SHADED_WITH_EDGES = 1, /* with the edges of the meshes */
-    MTK_VIEWER_DISPLAY_WIREFRAME = 2          /* only the edges of the meshes */
+    MTK_VIEWER_DISPLAY_WIREFRAME = 2,         /* only the edges of the meshes */
+    MTK_VIEWER_DISPLAY_RENDERED = 3           /* physically based, without edges or grid, under the sky of
+                                                 mtk_viewer_set_environment, on its ground, with the shadows of the sun */
 } mtk_viewer_display_mode;
 
 /*
@@ -228,6 +230,17 @@ MTK_VIEWER_API mtk_status mtk_viewer_get_camera(const mtk_viewer* viewer, mtk_vi
 
 /* Places the camera, without animation; field_of_view must be between 1 and 170 degrees. */
 MTK_VIEWER_API mtk_status mtk_viewer_set_camera(mtk_viewer* viewer, const mtk_viewer_camera* camera);
+
+/* The world around the model in the rendered display mode, in millimetres, Z up. */
+typedef struct mtk_viewer_environment {
+    double sun_direction[3]; /* towards the sun, not zero; below the horizon at night */
+    float cloudiness;        /* from 0, a clear sky, to 1 */
+    double ground_height;    /* of the ground under the model */
+    double ground_size;      /* the side of the square ground, around the origin */
+} mtk_viewer_environment;
+
+/* Sets the environment, which the rendered display mode shows. */
+MTK_VIEWER_API mtk_status mtk_viewer_set_environment(mtk_viewer* viewer, const mtk_viewer_environment* environment);
 
 /* Shows (1), as initially, or hides (0) the grid on the ground and the axes through the origin. */
 MTK_VIEWER_API mtk_status mtk_viewer_set_grid_visible(mtk_viewer* viewer, int32_t visible);

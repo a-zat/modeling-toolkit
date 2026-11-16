@@ -118,6 +118,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Shaded", SetDisplayModeCommand, DisplayMode.Shaded),
             new("Shaded with Edges", SetDisplayModeCommand, DisplayMode.ShadedWithEdges),
             new("Wireframe", SetDisplayModeCommand, DisplayMode.Wireframe),
+            new("Rendered", SetDisplayModeCommand, DisplayMode.Rendered),
             new("Standard Rendering", SetRenderStyleCommand, RenderStyle.Standard),
             new("CAD Rendering", SetRenderStyleCommand, RenderStyle.Cad),
             new("Toggle Perspective", TogglePerspectiveCommand),
@@ -713,8 +714,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // How the 3D view shows the document.
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsShaded), nameof(IsShadedWithEdges), nameof(IsWireframe))]
+    [NotifyPropertyChangedFor(nameof(IsShaded), nameof(IsShadedWithEdges), nameof(IsWireframe), nameof(IsRendered))]
     public partial DisplayMode DisplayMode { get; set; }
+
+    /// <summary>Whether the view is rendered, under the sky at <see cref="TimeOfDay"/>.</summary>
+    public bool IsRendered => DisplayMode == DisplayMode.Rendered;
+
+    /// <summary>The sky and the sun of the rendered display mode, today at <see cref="TimeOfDay"/> where the model is.</summary>
+    public ViewEnvironment SkyEnvironment => new(
+        SunPosition.Direction(TimeOfDay, DateOnly.FromDateTime(DateTime.Today), Site.Latitude, Site.NorthAngle), 0.35f);
+
+    /// <summary>The hour shown by the slider of the rendered display mode: "14:30".</summary>
+    public string TimeOfDayText => $"{(int)TimeOfDay:00}:{(int)Math.Round(TimeOfDay % 1 * 60) % 60:00}";
 
     public bool IsShaded => DisplayMode == DisplayMode.Shaded;
 
@@ -913,6 +924,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsPerspective = settings.Perspective;
             IsGridVisible = settings.Grid;
             TimeOfDay = Math.Clamp(settings.TimeOfDay, 0, 24);
+            OnPropertyChanged(nameof(SkyEnvironment)); // the site may have changed
         }
         finally
         {
@@ -940,6 +952,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The hour of the day that the rendered display mode shows, from 0 to 24.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SkyEnvironment), nameof(TimeOfDayText))]
     public partial double TimeOfDay { get; set; }
 
     /// <summary>Where the model is, for the course of the sun: latitude and north, from the settings file.</summary>

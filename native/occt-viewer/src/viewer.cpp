@@ -1,10 +1,16 @@
 #include "viewer.hpp"
 
 #include "mtk/errors.hpp"
+#include "sky.hpp"
 
 #include <AIS_AnimationCamera.hxx>
 #include <AIS_ConnectedInteractive.hxx>
 #include <AIS_Line.hxx>
+#include <Graphic3d_ArrayOfTriangles.hxx>
+#include <Graphic3d_AspectFillArea3d.hxx>
+#include <Graphic3d_Group.hxx>
+#include <Graphic3d_PBRMaterial.hxx>
+#include <Prs3d_Presentation.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_GridParams.hxx>
 #include <Aspect_ScrollDelta.hxx>
@@ -208,6 +214,7 @@ mtk::Viewer::Viewer(void* parent) {
     // Drawn only by redraw() and by the native view, never as a side effect of a change.
     view_->SetImmediateUpdate(false);
     view_->SetProj(V3d_TypeOfOrientation_Zup_AxoRight);
+    default_shading_ = view_->ShadingModel();
     view_->Camera()->SetProjectionType(Graphic3d_Camera::Projection_Perspective);
     view_->Camera()->SetFOVy(field_of_view);
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
@@ -275,11 +282,14 @@ void mtk::Viewer::view_exposed() noexcept {
 }
 
 void mtk::Viewer::set_colors(const mtk_viewer_colors& colors) {
-    view_->SetBgGradientColors(to_color(colors.background_top), to_color(colors.background_bottom),
-                               Aspect_GradientFillMethod_Vertical);
+    background_top_ = to_color(colors.background_top);
+    background_bottom_ = to_color(colors.background_bottom);
     grid_ = ground_grid(to_color(colors.grid), grid_step_);
-    if (grid_visible_) {
-        view_->GridDisplay(grid_);
+    if (display_mode_ != MTK_VIEWER_DISPLAY_RENDERED) {
+        view_->SetBgGradientColors(background_top_, background_bottom_, Aspect_GradientFillMethod_Vertical);
+        if (grid_visible_) {
+            view_->GridDisplay(grid_);
+        }
     }
 
     const occ::handle<V3d_Trihedron>& axes = view_->Trihedron();
@@ -545,6 +555,9 @@ void mtk::Viewer::show_view(mtk_viewer_view view) {
 }
 
 mtk::EdgeStyle mtk::Viewer::edge_style() const {
+    if (display_mode_ == MTK_VIEWER_DISPLAY_RENDERED) {
+        return EdgeStyle{false, false, false, 1.0f, edge_color_}; // as things look, without lines
+    }
     const bool wireframe = display_mode_ == MTK_VIEWER_DISPLAY_WIREFRAME;
     if (render_style_ == MTK_VIEWER_RENDER_CAD) {
         // The edges of their own outline the faces in every mode; without faces, they keep the colour that stands out
@@ -562,6 +575,10 @@ mtk::EdgeStyle mtk::Viewer::edge_style() const {
 // The CAD render style lights the faces from the upper left of the camera, so that faces turned differently take
 // different shades, and much from all around, so that none is dark.
 void mtk::Viewer::apply_lights() {
+    if (display_mode_ == MTK_VIEWER_DISPLAY_RENDERED) {
+        apply_environment();
+        return;
+    }
     if (render_style_ != MTK_VIEWER_RENDER_CAD) {
         viewer_->SetDefaultLights();
         viewer_->SetLightOn();
@@ -589,7 +606,12 @@ void mtk::Viewer::set_render_style(mtk_viewer_render_style style) {
 }
 
 void mtk::Viewer::set_display_mode(mtk_viewer_display_mode mode) {
+    const bool was_rendered = display_mode_ == MTK_VIEWER_DISPLAY_RENDERED;
     display_mode_ = mode;
+    if (was_rendered || mode == MTK_VIEWER_DISPLAY_RENDERED) {
+        apply_environment();
+        apply_lights();
+    }
     const EdgeStyle edges = edge_style();
     for (MaterialAspects& aspects : materials_) {
         apply_display_mode(aspects, mode, edges);
@@ -610,6 +632,123 @@ void mtk::Viewer::set_display_mode(mtk_viewer_display_mode mode) {
 void mtk::Viewer::set_perspective(bool perspective) {
     view_->Camera()->SetProjectionType(perspective ? Graphic3d_Camera::Projection_Perspective
                                                    : Graphic3d_Camera::Projection_Orthographic);
+    view_->Invalidate();
+}
+
+namespace {
+
+// The ground of the rendered display mode: a square, lit, which receives the shadows; never selected.
+class Ground : public AIS_InteractiveObject {
+public:
+    Ground(double height, double size) : height_(height), size_(size) {}
+
+    bool AcceptDisplayMode(const int mode) const override { return mode == 0; }
+
+    void Compute(const occ::handle<PrsMgr_PresentationManager>&, const occ::handle<Prs3d_Presentation>& presentation,
+                 const int) override {
+        occ::handle<Graphic3d_ArrayOfTriangles> square =
+            new Graphic3d_ArrayOfTriangles(4, 6, Graphic3d_ArrayFlags_VertexNormal);
+        const double half = size_ / 2.0;
+        const gp_Dir up(0.0, 0.0, 1.0);
+        square->AddVertex(gp_Pnt(-half, -half, height_), up);
+        square->AddVertex(gp_Pnt(half, -half, height_), up);
+        square->AddVertex(gp_Pnt(half, half, height_), up);
+        square->AddVertex(gp_Pnt(-half, half, height_), up);
+        square->AddEdges(1, 2, 3);
+        square->AddEdges(1, 3, 4);
+
+        const Quantity_Color color(0.36, 0.42, 0.30, Quantity_TOC_sRGB); // a dry lawn
+        Graphic3d_MaterialAspect material(Graphic3d_NameOfMaterial_UserDefined);
+        material.SetColor(color);
+        material.SetSpecularColor(Quantity_NOC_BLACK);
+        Graphic3d_PBRMaterial physical;
+        physical.SetColor(Quantity_ColorRGBA(color, 1.0f));
+        physical.SetMetallic(0.0f);
+        physical.SetRoughness(0.95f);
+        material.SetPBRMaterial(physical);
+        occ::handle<Graphic3d_AspectFillArea3d> aspect = new Graphic3d_AspectFillArea3d();
+        aspect->SetInteriorStyle(Aspect_IS_SOLID);
+        aspect->SetFrontMaterial(material);
+        aspect->SetBackMaterial(material);
+        const occ::handle<Graphic3d_Group> group = presentation->NewGroup();
+        group->SetGroupPrimitivesAspect(aspect);
+        group->AddPrimitiveArray(square);
+    }
+
+    void ComputeSelection(const occ::handle<SelectMgr_Selection>&, const int) override {}
+
+private:
+    double height_;
+    double size_;
+};
+
+} // namespace
+
+void mtk::Viewer::set_environment(const mtk_viewer_environment& environment) {
+    environment_ = environment;
+    if (display_mode_ == MTK_VIEWER_DISPLAY_RENDERED) {
+        apply_environment();
+    }
+}
+
+// The rendered display mode shades physically, lit by the sky, a cubemap made from the sun and the clouds, and by the
+// sun, which casts shadows on the ground. The other modes go back to the background, the lights and the grid of the
+// style.
+void mtk::Viewer::apply_environment() {
+    if (!ground_.IsNull()) {
+        context_->Remove(ground_, false);
+        ground_.Nullify();
+    }
+    if (display_mode_ != MTK_VIEWER_DISPLAY_RENDERED) {
+        view_->SetShadingModel(default_shading_);
+        view_->SetBackgroundCubeMap(occ::handle<Graphic3d_CubeMap>(), false);
+        view_->SetBgGradientColors(background_top_, background_bottom_, Aspect_GradientFillMethod_Vertical);
+        set_grid_visible(grid_visible_);
+        return;
+    }
+
+    view_->SetShadingModel(Graphic3d_TypeOfShadingModel_Pbr);
+    const gp_Dir sun(environment_.sun_direction[0], environment_.sun_direction[1], environment_.sun_direction[2]);
+    const bool same_sky = !sky_.IsNull() && sky_of_.cloudiness == environment_.cloudiness
+        && std::equal(std::begin(sky_of_.sun_direction), std::end(sky_of_.sun_direction),
+                      std::begin(environment_.sun_direction));
+    if (!same_sky) {
+        sky_ = make_sky(sun, environment_.cloudiness);
+        sky_of_ = environment_;
+    }
+    // Put in the view once it has a window: OpenCASCADE sets it up with the OpenGL context of the window.
+    if (!window_.IsNull()) {
+        view_->SetBackgroundCubeMap(sky_, true);
+    }
+    view_->GridErase();
+    context_->Erase(vertical_axis_, false);
+
+    while (!viewer_->DefinedLights().IsEmpty()) {
+        viewer_->DelLight(viewer_->DefinedLights().First());
+    }
+    const double elevation = std::asin(std::clamp(sun.Z(), -1.0, 1.0));
+    if (elevation > 0.0) {
+        // Weaker and warmer as the sun goes down.
+        const double height = std::sin(elevation);
+        occ::handle<V3d_DirectionalLight> light = new V3d_DirectionalLight(
+            gp_Dir(-sun.X(), -sun.Y(), -sun.Z()),
+            Quantity_Color(1.0, 0.82 + 0.16 * height, 0.62 + 0.33 * height, Quantity_TOC_RGB));
+        light->SetIntensity(static_cast<float>(1.5 + 2.5 * height));
+        light->SetCastShadows(true);
+        viewer_->AddLight(light);
+    }
+    // At night a dim blue light, as of the moon, so that the model can still be seen.
+    occ::handle<V3d_AmbientLight> ambient = new V3d_AmbientLight(
+        elevation > 0.0 ? Quantity_Color(Quantity_NOC_WHITE) : Quantity_Color(0.55, 0.65, 1.0, Quantity_TOC_RGB));
+    ambient->SetIntensity(elevation > 0.0 ? 0.15f : 0.8f);
+    viewer_->AddLight(ambient);
+    viewer_->SetLightOn();
+    Graphic3d_RenderingParams& params = view_->ChangeRenderingParams();
+    params.ShadowMapResolution = 2048;
+    params.ShadowMapBias = 0.005f;
+
+    ground_ = new Ground(environment_.ground_height, environment_.ground_size);
+    context_->Display(ground_, 0, -1, false);
     view_->Invalidate();
 }
 
@@ -643,6 +782,9 @@ void mtk::Viewer::set_camera(const mtk_viewer_camera& camera) {
 
 void mtk::Viewer::set_grid_visible(bool visible) {
     grid_visible_ = visible;
+    if (display_mode_ == MTK_VIEWER_DISPLAY_RENDERED) {
+        return; // the ground takes its place
+    }
     if (visible) {
         view_->GridDisplay(grid_);
         context_->Display(vertical_axis_, 0, -1, false);
@@ -883,6 +1025,9 @@ void mtk::Viewer::attach() {
     fit_all();
 
     apply_scale(native_view_->scale());
+    if (display_mode_ == MTK_VIEWER_DISPLAY_RENDERED) {
+        apply_environment();
+    }
     view_->Redraw();
 }
 
@@ -1306,7 +1451,7 @@ mtk_status mtk_viewer_set_display_mode(mtk_viewer* viewer, int32_t mode) {
         if (viewer == nullptr) {
             return mtk::invalid_argument("viewer must not be null.");
         }
-        if (mode < MTK_VIEWER_DISPLAY_SHADED || mode > MTK_VIEWER_DISPLAY_WIREFRAME) {
+        if (mode < MTK_VIEWER_DISPLAY_SHADED || mode > MTK_VIEWER_DISPLAY_RENDERED) {
             return mtk::invalid_argument("mode is not a display mode.");
         }
         viewer->set_display_mode(static_cast<mtk_viewer_display_mode>(mode));
@@ -1371,6 +1516,28 @@ mtk_status mtk_viewer_set_camera(mtk_viewer* viewer, const mtk_viewer_camera* ca
             return mtk::invalid_argument("the field of view must be between 1 and 170 degrees.");
         }
         viewer->set_camera(*camera);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_environment(mtk_viewer* viewer, const mtk_viewer_environment* environment) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || environment == nullptr) {
+            return mtk::invalid_argument("viewer and environment must not be null.");
+        }
+        const double* sun = environment->sun_direction;
+        if (!std::isfinite(sun[0]) || !std::isfinite(sun[1]) || !std::isfinite(sun[2]) ||
+            std::sqrt(sun[0] * sun[0] + sun[1] * sun[1] + sun[2] * sun[2]) < 1e-9) {
+            return mtk::invalid_argument("the direction of the sun must be finite and not zero.");
+        }
+        if (!(environment->cloudiness >= 0.0f && environment->cloudiness <= 1.0f)) {
+            return mtk::invalid_argument("the cloudiness must be between 0 and 1.");
+        }
+        if (!std::isfinite(environment->ground_height) || !(environment->ground_size > 0.0) ||
+            !std::isfinite(environment->ground_size)) {
+            return mtk::invalid_argument("the ground must have a finite height and a positive size.");
+        }
+        viewer->set_environment(*environment);
         return MTK_STATUS_OK;
     });
 }

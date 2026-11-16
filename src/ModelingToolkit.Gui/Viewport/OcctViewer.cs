@@ -292,6 +292,19 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         NativeMethods.SetCamera(_handle, native).ThrowIfFailed();
     }
 
+    /// <summary>Sets the sky, the sun and the ground that the rendered display mode shows.</summary>
+    public unsafe void SetEnvironment(ViewEnvironment environment, double groundHeight, double groundSize)
+    {
+        var native = new NativeEnvironment
+        {
+            Cloudiness = Math.Clamp(environment.Cloudiness, 0f, 1f), GroundHeight = groundHeight, GroundSize = groundSize,
+        };
+        native.SunDirection[0] = environment.Sun.X;
+        native.SunDirection[1] = environment.Sun.Y;
+        native.SunDirection[2] = environment.Sun.Z;
+        NativeMethods.SetEnvironment(_handle, native).ThrowIfFailed();
+    }
+
     public void SetGridVisible(bool visible) => NativeMethods.SetGridVisible(_handle, visible ? 1 : 0).ThrowIfFailed();
 
     // Each input method returns whether the view changed: Redraw should then be called on the next frame.

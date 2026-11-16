@@ -4,6 +4,7 @@
 #include "overlay.hpp"
 #include "scene.hpp"
 
+#include <Graphic3d_CubeMap.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_Line.hxx>
 #include <AIS_RubberBand.hxx>
@@ -91,6 +92,7 @@ public:
     void set_display_mode(mtk_viewer_display_mode mode);
     void set_render_style(mtk_viewer_render_style style);
     void set_perspective(bool perspective);
+    void set_environment(const mtk_viewer_environment& environment);
     mtk_viewer_camera camera() const;
     void set_camera(const mtk_viewer_camera& camera);
     void set_grid_visible(bool visible);
@@ -150,6 +152,7 @@ private:
     // The edges that the display mode and the render style draw.
     EdgeStyle edge_style() const;
     void apply_lights();
+    void apply_environment(); // of the rendered display mode, or what the other modes show instead
     bool is_attached() const { return !window_.IsNull(); }
     void attach();
     void update_size();
@@ -170,6 +173,14 @@ private:
     occ::handle<AIS_Line> vertical_axis_;
     Aspect_GridParams grid_;
     bool grid_visible_ = true;
+    // The rendered display mode: its environment, the ground shown under the model, the colours of the background of
+    // the other modes, and the shading of the view in those modes.
+    mtk_viewer_environment environment_{{0.3, -0.5, 0.8}, 0.3f, 0.0, 100000.0};
+    occ::handle<AIS_InteractiveObject> ground_;
+    occ::handle<Graphic3d_CubeMap> sky_; // painted for the sun and the clouds of sky_of_
+    mtk_viewer_environment sky_of_{};
+    Quantity_Color background_top_, background_bottom_;
+    Graphic3d_TypeOfShadingModel default_shading_ = Graphic3d_TypeOfShadingModel_Phong;
     double grid_step_ = 1000.0; // millimetres
     mtk_viewer_display_mode display_mode_ = MTK_VIEWER_DISPLAY_SHADED;
     mtk_viewer_render_style render_style_ = MTK_VIEWER_RENDER_STANDARD;
