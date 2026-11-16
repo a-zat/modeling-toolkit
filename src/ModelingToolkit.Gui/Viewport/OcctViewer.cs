@@ -266,6 +266,32 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         NativeMethods.SetPerspective(_handle, perspective ? 1 : 0).ThrowIfFailed();
 
     /// <summary>Shows or hides the grid on the ground and the axes through the origin.</summary>
+    public unsafe ViewCamera GetCamera()
+    {
+        NativeMethods.GetCamera(_handle, out NativeCamera camera).ThrowIfFailed();
+        return new ViewCamera(
+            new Point3d(camera.Eye[0], camera.Eye[1], camera.Eye[2]),
+            new Point3d(camera.Target[0], camera.Target[1], camera.Target[2]),
+            new Vector3d(camera.Up[0], camera.Up[1], camera.Up[2]),
+            camera.FieldOfView);
+    }
+
+    /// <summary>Places the camera at once, without animation; the view is drawn again on the next frame.</summary>
+    public unsafe void SetCamera(ViewCamera camera)
+    {
+        var native = new NativeCamera { FieldOfView = camera.FieldOfView };
+        native.Eye[0] = camera.Eye.X;
+        native.Eye[1] = camera.Eye.Y;
+        native.Eye[2] = camera.Eye.Z;
+        native.Target[0] = camera.Target.X;
+        native.Target[1] = camera.Target.Y;
+        native.Target[2] = camera.Target.Z;
+        native.Up[0] = camera.Up.X;
+        native.Up[1] = camera.Up.Y;
+        native.Up[2] = camera.Up.Z;
+        NativeMethods.SetCamera(_handle, native).ThrowIfFailed();
+    }
+
     public void SetGridVisible(bool visible) => NativeMethods.SetGridVisible(_handle, visible ? 1 : 0).ThrowIfFailed();
 
     // Each input method returns whether the view changed: Redraw should then be called on the next frame.

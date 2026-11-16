@@ -91,6 +91,8 @@ public:
     void set_display_mode(mtk_viewer_display_mode mode);
     void set_render_style(mtk_viewer_render_style style);
     void set_perspective(bool perspective);
+    mtk_viewer_camera camera() const;
+    void set_camera(const mtk_viewer_camera& camera);
     void set_grid_visible(bool visible);
     int mesh_count() const { return static_cast<int>(meshes_.size()); }
     int texture_count() const { return static_cast<int>(textures_.size()); }

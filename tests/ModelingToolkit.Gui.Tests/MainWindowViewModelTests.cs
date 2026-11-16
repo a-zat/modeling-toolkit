@@ -1,3 +1,4 @@
+using Avalonia.Input;
 using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Gui.Viewport;
 using ModelingToolkit.Core.IO;
@@ -377,6 +378,29 @@ public sealed class MainWindowViewModelTests
 
     private static IEnumerable<ModelNodeViewModel> Flatten(ModelNodeViewModel node) =>
         [node, .. node.Children.SelectMany(Flatten)];
+
+    [Fact]
+    public async Task WalkingKeepsTheToolsOutOfTheViewAndEscapeStopsIt()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        Assert.NotEmpty(viewModel.ToolHint);
+
+        viewModel.ToggleWalkCommand.Execute(null);
+        Assert.True(viewModel.IsWalking);
+        Assert.Empty(viewModel.ToolHint);
+
+        // A click on a part that nothing moves selects nothing, as the select tool would.
+        IReadOnlyList<Entity> mesh = Flatten(viewModel.ModelTree.Model!).Last().Path;
+        viewModel.ViewInputCommand.Execute(new ViewportPick(mesh, null, default, default, KeyModifiers.None, 1,
+            ViewportInputKind.Click));
+        Assert.Null(viewModel.ModelTree.SelectedNode);
+        Assert.Equal("Nothing there opens or closes.", viewModel.StatusMessage);
+
+        viewModel.EscapeCommand.Execute(null);
+        Assert.False(viewModel.IsWalking);
+        Assert.NotEmpty(viewModel.ToolHint);
+    }
 
     [Fact]
     public void TheViewCommandsMoveTheCameraAndChangeHowTheViewShowsTheModel()

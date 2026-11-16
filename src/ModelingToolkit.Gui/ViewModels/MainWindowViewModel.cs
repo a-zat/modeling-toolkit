@@ -102,6 +102,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new("Paste", PasteCommand, Gesture: Shortcut("V")),
             new("Delete", DeleteCommand),
             new("Delete Guides", DeleteGuidesCommand),
+            new("Walk", ToggleWalkCommand),
             new("Fit All", FitAllCommand),
             new("Top View", ShowViewCommand, StandardView.Top),
             new("Bottom View", ShowViewCommand, StandardView.Bottom),
@@ -272,7 +273,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public Tool ActiveTool => Tools.Single(item => item.IsActive).Tool;
 
     /// <summary>What the active tool expects next.</summary>
-    public string ToolHint => ActiveTool.IsActive ? ActiveTool.Hint : string.Empty;
+    public string ToolHint => ActiveTool.IsActive && !IsWalking ? ActiveTool.Hint : string.Empty;
 
     [RelayCommand]
     private void ActivateTool(ToolItemViewModel item)
@@ -355,6 +356,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ViewInput(ViewportPick input)
     {
+        if (IsWalking)
+        {
+            if (input.Kind == ViewportInputKind.Click && !IsBusy && !Animations.ToggleAt(input.Path))
+            {
+                StatusMessage = input.Path is null ? string.Empty : "Nothing there opens or closes.";
+            }
+            return;
+        }
         Tool tool = ActiveTool;
         if (!tool.IsActive || IsBusy)
         {
@@ -396,6 +405,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (IsSettingsOpen)
         {
             IsSettingsOpen = false;
+            return;
+        }
+        if (IsWalking)
+        {
+            IsWalking = false;
             return;
         }
         if (ActiveTool is { IsActive: true } tool && tool.Key(ToolKey.Escape, ToolModifiers.None))
@@ -724,6 +738,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Perspective, or orthographic (parallel) projection.</summary>
     [ObservableProperty]
     public partial bool IsPerspective { get; set; }
+
+    /// <summary>
+    /// Whether the 3D view walks through the model at the height of the eyes: the tools take no input then, and a click
+    /// opens or closes the part under the pointer that an animation moves.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ToolHint))]
+    public partial bool IsWalking { get; set; }
+
+    [RelayCommand]
+    private void ToggleWalk() => IsWalking = !IsWalking;
 
     /// <summary>Whether the grid on the ground and the axes through the origin are shown.</summary>
     [ObservableProperty]
@@ -1106,6 +1131,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ToolHint));
         OnToolMeasurementChanged(this, EventArgs.Empty);
 
+        IsWalking = false; // the view turns to the new document
         Properties.Know(document, statistics);
         Animations.Show(document);
         ModelTree.Show(document);

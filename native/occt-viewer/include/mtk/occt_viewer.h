@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 17
+#define MTK_OCCT_VIEWER_ABI_VERSION 18
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -215,6 +215,19 @@ MTK_VIEWER_API mtk_status mtk_viewer_set_render_style(mtk_viewer* viewer, int32_
 
 /* Perspective (1), the initial projection, or orthographic (0). */
 MTK_VIEWER_API mtk_status mtk_viewer_set_perspective(mtk_viewer* viewer, int32_t perspective);
+
+/* Where the camera is and where it looks, in millimetres, as for walking through the model. */
+typedef struct mtk_viewer_camera {
+    double eye[3];
+    double target[3];        /* a point the camera looks at, away from the eye */
+    double up[3];            /* not along the direction of view */
+    double field_of_view;    /* vertical, in degrees, in perspective */
+} mtk_viewer_camera;
+
+MTK_VIEWER_API mtk_status mtk_viewer_get_camera(const mtk_viewer* viewer, mtk_viewer_camera* out_camera);
+
+/* Places the camera, without animation; field_of_view must be between 1 and 170 degrees. */
+MTK_VIEWER_API mtk_status mtk_viewer_set_camera(mtk_viewer* viewer, const mtk_viewer_camera* camera);
 
 /* Shows (1), as initially, or hides (0) the grid on the ground and the axes through the origin. */
 MTK_VIEWER_API mtk_status mtk_viewer_set_grid_visible(mtk_viewer* viewer, int32_t visible);

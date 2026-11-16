@@ -60,6 +60,14 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<IReadOnlyDictionary<BlockReference, Transform>?> PoseProperty =
         AvaloniaProperty.Register<ViewportView, IReadOnlyDictionary<BlockReference, Transform>?>(nameof(Pose));
 
+    /// <summary>
+    /// Whether the camera walks through the model at the height of the eyes (<see cref="WalkCamera"/>): the keys W, A,
+    /// S, D and the arrows walk, Shift runs, a drag looks around, the wheel steps, and a click raises a
+    /// <see cref="ViewportInputKind.Click"/> on what is under the pointer, without orbiting the view.
+    /// </summary>
+    public static readonly StyledProperty<bool> IsWalkingProperty =
+        AvaloniaProperty.Register<ViewportView, bool>(nameof(IsWalking));
+
     public static readonly StyledProperty<ViewOverlay> OverlayProperty =
         AvaloniaProperty.Register<ViewportView, ViewOverlay>(nameof(Overlay), ViewOverlay.Empty);
 
@@ -95,6 +103,16 @@ public sealed class ViewportView : Border, IViewCamera
     private bool _updatePosted;
     private Point? _windowStart; // where a window selection began, while it is dragged
 
+    // The walk: the camera, the keys held, the last position of a drag that looks around, and whether it moved.
+    private WalkCamera? _walk;
+    private ViewCamera? _orbitCamera; // as it was before walking
+    private readonly HashSet<Key> _walkKeys = [];
+    private bool _running;
+    private Point? _lookFrom;
+    private double _lookDistance;
+    private bool _walkFrameRequested;
+    private readonly System.Diagnostics.Stopwatch _walkClock = new();
+
     public ViewportView()
     {
         // Shown until the native view is drawn, and in the tests, which have no native views. A background also makes
@@ -122,6 +140,13 @@ public sealed class ViewportView : Border, IViewCamera
             e.Handled = true;
         };
         ActualThemeVariantChanged += (_, _) => ApplyColors();
+        LostFocus += (_, _) => _walkKeys.Clear(); // the release of the keys held would not come
+    }
+
+    public bool IsWalking
+    {
+        get => GetValue(IsWalkingProperty);
+        set => SetValue(IsWalkingProperty, value);
     }
 
     public IReadOnlyDictionary<BlockReference, Transform>? Pose
@@ -291,6 +316,10 @@ public sealed class ViewportView : Border, IViewCamera
                 return true;
             });
         }
+        else if (change.Property == IsWalkingProperty)
+        {
+            SetWalking(IsWalking);
+        }
         else if (change.Property == PoseProperty && _shownScene is not null)
         {
             UpdateScene();
@@ -319,6 +348,15 @@ public sealed class ViewportView : Border, IViewCamera
     {
         base.OnPointerPressed(e);
         Focus(); // out of the fields, so that typed values and arrows go to the tools
+        if (_walk is not null)
+        {
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                _lookFrom = e.GetPosition(_host);
+                _lookDistance = 0;
+            }
+            return;
+        }
         if (IsWindowSelectionEnabled && e.KeyModifiers.HasFlag(WindowModifier) &&
             e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -336,6 +374,16 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_walk is not null)
+        {
+            // A press and a release without a look around is a click on what is under the pointer.
+            if (_lookFrom is not null && _lookDistance < 4 && e.InitialPressMouseButton == MouseButton.Left)
+            {
+                Raise(_hovered with { Modifiers = e.KeyModifiers, ClickCount = 1, Kind = ViewportInputKind.Click });
+            }
+            _lookFrom = null;
+            return;
+        }
         if (_windowStart is { } start)
         {
             _windowStart = null;
@@ -353,6 +401,27 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        if (_walk is { } walk && _lookFrom is { } from)
+        {
+            Point to = e.GetPosition(_host);
+            _lookDistance += Math.Abs(to.X - from.X) + Math.Abs(to.Y - from.Y);
+            if (_lookDistance >= 4)
+            {
+                walk.Look(to.X - from.X, from.Y - to.Y);
+                _lookFrom = to;
+                PlaceWalkCamera();
+            }
+            return;
+        }
+        if (_walk is not null)
+        {
+            // Without buttons, the viewer only finds what is under the pointer.
+            Send(viewer => viewer.MouseMove(Position(e), NativeMouseButtons.None, OcctViewer.ToNative(e.KeyModifiers)));
+            _hoverMoved = true;
+            _hoverModifiers = e.KeyModifiers;
+            RequestFrame();
+            return;
+        }
         if (_windowStart is { } start)
         {
             Point at = e.GetPosition(_host);
@@ -419,8 +488,116 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        if (_walk is { } walk)
+        {
+            walk.Step(e.Delta.Y * 250);
+            PlaceWalkCamera();
+            e.Handled = true;
+            return;
+        }
         Send(viewer => viewer.Scroll(Position(e), e.Delta.Y));
         e.Handled = true;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        _running = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        if (_walk is not null && IsWalkKey(e.Key))
+        {
+            _walkKeys.Add(e.Key);
+            e.Handled = true; // not to the tools, which take the arrows
+            RequestWalkFrame();
+        }
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+        _running = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        if (_walkKeys.Remove(e.Key))
+        {
+            e.Handled = true;
+        }
+    }
+
+    private static bool IsWalkKey(Key key) =>
+        key is Key.W or Key.A or Key.S or Key.D or Key.Up or Key.Down or Key.Left or Key.Right;
+
+    // Entering the walk stands at the middle of what the camera looked at, on the floor of the model; leaving it goes
+    // back to the camera as it was.
+    private void SetWalking(bool walking)
+    {
+        Send(viewer =>
+        {
+            if (walking && _walk is null)
+            {
+                _orbitCamera = viewer.GetCamera();
+                double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
+                _walk = WalkCamera.Enter(_orbitCamera, floor);
+                viewer.SetPerspective(true);
+                viewer.SetCamera(_walk.ToCamera());
+                Focus();
+            }
+            else if (!walking && _walk is not null)
+            {
+                _walk = null;
+                _walkKeys.Clear();
+                _lookFrom = null;
+                viewer.SetPerspective(IsPerspective);
+                if (_orbitCamera is { } orbit)
+                {
+                    viewer.SetCamera(orbit);
+                }
+            }
+            return true;
+        });
+    }
+
+    private void PlaceWalkCamera()
+    {
+        if (_walk is { } walk)
+        {
+            Send(viewer =>
+            {
+                viewer.SetCamera(walk.ToCamera());
+                return true;
+            });
+        }
+    }
+
+    // While walking keys are held, the camera moves on every frame of the window, by the time since the last one.
+    private void RequestWalkFrame()
+    {
+        if (_walkFrameRequested || TopLevel.GetTopLevel(this) is not { } topLevel)
+        {
+            return;
+        }
+        if (!_walkClock.IsRunning)
+        {
+            _walkClock.Restart();
+        }
+        _walkFrameRequested = true;
+        topLevel.RequestAnimationFrame(_ =>
+        {
+            _walkFrameRequested = false;
+            double seconds = Math.Min(_walkClock.Elapsed.TotalSeconds, 0.1); // a stall does not leap
+            _walkClock.Restart();
+            if (_walk is not { } walk || _walkKeys.Count == 0)
+            {
+                _walkClock.Reset();
+                return;
+            }
+
+            double forward = (Held(Key.W) || Held(Key.Up) ? 1 : 0) - (Held(Key.S) || Held(Key.Down) ? 1 : 0);
+            double right = (Held(Key.D) || Held(Key.Right) ? 1 : 0) - (Held(Key.A) || Held(Key.Left) ? 1 : 0);
+            walk.Walk(forward, right, seconds, _running);
+            PlaceWalkCamera();
+            _hoverMoved = true; // what is under the pointer has changed
+            RequestWalkFrame();
+        });
+
+        bool Held(Key key) => _walkKeys.Contains(key);
     }
 
     private void SendButtons(PointerEventArgs e) =>
@@ -629,7 +806,7 @@ public sealed class ViewportView : Border, IViewCamera
     {
         viewer.SetDisplayMode(DisplayMode);
         viewer.SetRenderStyle(RenderStyle);
-        viewer.SetPerspective(IsPerspective);
+        viewer.SetPerspective(IsPerspective || _walk is not null);
         viewer.SetGridVisible(IsGridVisible);
         viewer.SetOverlay(Overlay);
         return true;

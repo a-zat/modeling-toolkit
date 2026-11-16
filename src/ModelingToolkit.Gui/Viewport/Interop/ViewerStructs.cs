@@ -136,3 +136,13 @@ internal unsafe struct NativeOverlay
     public NativeOverlayLabel* Labels;
     public int LabelCount;
 }
+
+/// <summary>Where the camera is and where it looks, in millimetres; the field of view is vertical, in degrees.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeCamera
+{
+    public fixed double Eye[3];
+    public fixed double Target[3];
+    public fixed double Up[3];
+    public double FieldOfView;
+}

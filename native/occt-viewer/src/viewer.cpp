@@ -613,6 +613,34 @@ void mtk::Viewer::set_perspective(bool perspective) {
     view_->Invalidate();
 }
 
+mtk_viewer_camera mtk::Viewer::camera() const {
+    const occ::handle<Graphic3d_Camera>& camera = view_->Camera();
+    mtk_viewer_camera result{};
+    const gp_Pnt eye = camera->Eye(), target = camera->Center();
+    const gp_Dir up = camera->Up();
+    for (int axis = 0; axis < 3; ++axis) {
+        result.eye[axis] = eye.Coord(axis + 1);
+        result.target[axis] = target.Coord(axis + 1);
+        result.up[axis] = up.Coord(axis + 1);
+    }
+    result.field_of_view = camera->FOVy();
+    return result;
+}
+
+void mtk::Viewer::set_camera(const mtk_viewer_camera& camera) {
+    // Stopped first: an animation of the ViewCube would turn the camera back.
+    if (!myViewAnimation.IsNull()) {
+        myViewAnimation->Stop();
+    }
+    const occ::handle<Graphic3d_Camera>& view_camera = view_->Camera();
+    view_camera->SetEyeAndCenter(gp_Pnt(camera.eye[0], camera.eye[1], camera.eye[2]),
+                                 gp_Pnt(camera.target[0], camera.target[1], camera.target[2]));
+    view_camera->SetUp(gp_Dir(camera.up[0], camera.up[1], camera.up[2]));
+    view_camera->OrthogonalizeUp();
+    view_camera->SetFOVy(camera.field_of_view);
+    view_->Invalidate();
+}
+
 void mtk::Viewer::set_grid_visible(bool visible) {
     grid_visible_ = visible;
     if (visible) {
@@ -1305,6 +1333,44 @@ mtk_status mtk_viewer_set_perspective(mtk_viewer* viewer, int32_t perspective) {
             return mtk::invalid_argument("viewer must not be null.");
         }
         viewer->set_perspective(perspective != 0);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_get_camera(const mtk_viewer* viewer, mtk_viewer_camera* out_camera) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || out_camera == nullptr) {
+            return mtk::invalid_argument("viewer and out_camera must not be null.");
+        }
+        *out_camera = viewer->camera();
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_camera(mtk_viewer* viewer, const mtk_viewer_camera* camera) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || camera == nullptr) {
+            return mtk::invalid_argument("viewer and camera must not be null.");
+        }
+        const gp_Vec direction(camera->target[0] - camera->eye[0], camera->target[1] - camera->eye[1],
+                               camera->target[2] - camera->eye[2]);
+        const gp_Vec up(camera->up[0], camera->up[1], camera->up[2]);
+        bool finite = std::isfinite(camera->field_of_view);
+        for (int axis = 0; axis < 3; ++axis) {
+            finite = finite && std::isfinite(camera->eye[axis]) && std::isfinite(camera->target[axis])
+                     && std::isfinite(camera->up[axis]);
+        }
+        if (!finite) {
+            return mtk::invalid_argument("the camera must be finite.");
+        }
+        if (direction.Magnitude() < 1e-9 || up.Magnitude() < 1e-9
+            || direction.Crossed(up).Magnitude() < 1e-9 * direction.Magnitude() * up.Magnitude()) {
+            return mtk::invalid_argument("the target must be away from the eye, and up not along the direction.");
+        }
+        if (camera->field_of_view < 1.0 || camera->field_of_view > 170.0) {
+            return mtk::invalid_argument("the field of view must be between 1 and 170 degrees.");
+        }
+        viewer->set_camera(*camera);
         return MTK_STATUS_OK;
     });
 }

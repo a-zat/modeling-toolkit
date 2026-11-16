@@ -41,7 +41,31 @@
       </StackPanel>
 
       <!-- How to move around the 3D view, which has no other hint. -->
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="14" Margin="12,0">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="14" Margin="12,0"
+                  IsVisible="{Binding IsWalking}">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="W A S D" /></Border>
+          <TextBlock Classes="secondary" Text="walk" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="{OnPlatform Default='Shift', macOS='⇧'}" /></Border>
+          <TextBlock Classes="secondary" Text="run" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="Drag" /></Border>
+          <TextBlock Classes="secondary" Text="look" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="Click" /></Border>
+          <TextBlock Classes="secondary" Text="open or close" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Border Classes="key"><TextBlock Text="Esc" /></Border>
+          <TextBlock Classes="secondary" Text="stop walking" />
+        </StackPanel>
+      </StackPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="14" Margin="12,0"
+                  IsVisible="{Binding !IsWalking}">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Border Classes="key"><TextBlock Text="Drag" /></Border>
           <TextBlock Classes="secondary" Text="orbit" />

@@ -215,6 +215,40 @@ TEST(Viewer, ChangesHowItShowsTheScene) {
     EXPECT_STRNE(mtk_viewer_last_error_message(), "");
 }
 
+TEST(Viewer, PlacesTheCameraWhereItIsAsked) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const mtk_viewer_camera camera{{1000, 2000, 1600}, {1000, 5000, 1600}, {0, 0, 1}, 60};
+
+    ASSERT_EQ(mtk_viewer_set_camera(viewer.get(), &camera), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    mtk_viewer_camera read{};
+    ASSERT_EQ(mtk_viewer_get_camera(viewer.get(), &read), MTK_STATUS_OK);
+
+    for (int axis = 0; axis < 3; ++axis) {
+        EXPECT_NEAR(read.eye[axis], camera.eye[axis], 1e-6);
+        EXPECT_NEAR(read.up[axis], camera.up[axis], 1e-9);
+    }
+    // The target is along the same direction, at whatever distance.
+    EXPECT_NEAR(read.target[0], 1000, 1e-6);
+    EXPECT_GT(read.target[1], 2000);
+    EXPECT_NEAR(read.target[2], 1600, 1e-6);
+    EXPECT_NEAR(read.field_of_view, 60, 1e-9);
+
+    mtk_viewer_camera wrong = camera;
+    wrong.up[0] = 0;
+    wrong.up[1] = 1;
+    wrong.up[2] = 0; // along the direction of view
+    EXPECT_EQ(mtk_viewer_set_camera(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
+    wrong = camera;
+    wrong.field_of_view = 180;
+    EXPECT_EQ(mtk_viewer_set_camera(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
+    wrong = camera;
+    wrong.target[1] = 2000;
+    EXPECT_EQ(mtk_viewer_set_camera(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_camera(viewer.get(), nullptr), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_get_camera(nullptr, &read), MTK_STATUS_INVALID_ARGUMENT);
+}
+
 TEST(Viewer, NumbersWhatItAddsToTheSceneFromZero) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);

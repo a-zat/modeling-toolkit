@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 17;
+    public const int AbiVersion = 18;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -69,6 +69,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_perspective")]
     public static partial NativeStatus SetPerspective(ViewerHandle viewer, int perspective);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_get_camera")]
+    public static partial NativeStatus GetCamera(ViewerHandle viewer, out NativeCamera camera);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_camera")]
+    public static partial NativeStatus SetCamera(ViewerHandle viewer, in NativeCamera camera);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_grid_visible")]
     public static partial NativeStatus SetGridVisible(ViewerHandle viewer, int visible);

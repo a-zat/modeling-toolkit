@@ -47,6 +47,10 @@
           </Border>
           <Border Classes="group">
             <StackPanel Orientation="Horizontal" Spacing="2">
+              <ToggleButton Classes="tool" IsChecked="{Binding IsWalking}"
+                            ToolTip.Tip="Walk through the model at the height of the eyes">
+                <PathIcon Data="{StaticResource Icon.Walk}" />
+              </ToggleButton>
               <Button Classes="tool" Command="{Binding FitAllCommand}" ToolTip.Tip="Fit all">
                 <PathIcon Data="{StaticResource Icon.ZoomFit}" />
               </Button>
@@ -158,6 +162,7 @@
                              IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}"
                              Pose="{Binding Animations.Pose}"
+                             IsWalking="{Binding IsWalking}"
                              Overlay="{Binding Overlay}" />
 
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsInspectorOpen}" />
