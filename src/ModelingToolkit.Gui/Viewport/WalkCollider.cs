@@ -13,18 +13,26 @@ internal sealed class WalkCollider
     /// <summary>How near the eyes come to what they bump into, in millimetres.</summary>
     public const double Radius = 250;
 
-    // From the eyes, at the height of the eyes above a floor: the knees, the hips, the chest and above the head.
-    private static readonly double[] Heights = [-1200, -700, -200, 100];
+    // The knees, the hips, the chest and above the head, as parts of the height of the eyes above the floor.
+    private static readonly double[] HeightParts = [0.25, 0.5625, 0.875, 1.0625];
 
     // Rays beside the one from the eyes, as parts of the radius: a thin post between them still stops the walk.
     private static readonly double[] Sides = [0, -0.7, 0.7];
 
     private readonly List<Part> _parts = [];
+    private readonly double _radius;
+    private readonly double[] _heights; // from the eyes
 
     /// <param name="meshes">The meshes of the model, each with its placement in the model space.</param>
-    public WalkCollider(IEnumerable<(MeshEntity Mesh, Transform Placement)> meshes)
+    /// <param name="radius">How near the eyes come to what they bump into.</param>
+    /// <param name="eyeHeight">Of the eyes above the floor, which the heights of the rays follow.</param>
+    public WalkCollider(
+        IEnumerable<(MeshEntity Mesh, Transform Placement)> meshes, double radius = Radius,
+        double eyeHeight = WalkCamera.EyeHeight)
     {
         ArgumentNullException.ThrowIfNull(meshes);
+        _radius = radius;
+        _heights = [.. HeightParts.Select(part => (part - 1) * eyeHeight)];
         foreach ((MeshEntity mesh, Transform placement) in meshes)
         {
             Point3d[] vertices = [.. mesh.Vertices.Select(placement.Apply)];
@@ -77,12 +85,12 @@ internal sealed class WalkCollider
         var side = new Vector3d(-direction.Y, direction.X, 0);
         double allowed = length;
         Vector3d? stop = null;
-        foreach (double height in Heights)
+        foreach (double height in _heights)
         {
             foreach (double offset in Sides)
             {
-                Point3d origin = eye + new Vector3d(0, 0, height) + side * (offset * Radius);
-                if (Cast(origin, direction, length + 2 * Radius) is not { } hit)
+                Point3d origin = eye + new Vector3d(0, 0, height) + side * (offset * _radius);
+                if (Cast(origin, direction, length + 2 * _radius) is not { } hit)
                 {
                     continue;
                 }
@@ -104,7 +112,7 @@ internal sealed class WalkCollider
                 // The eyes stay the radius away from the plane through the point hit.
                 Point3d point = origin + direction * hit.Distance;
                 double distance = (eye.X - point.X) * normal.X + (eye.Y - point.Y) * normal.Y;
-                double reach = Math.Max(0, (distance - Radius) / approach);
+                double reach = Math.Max(0, (distance - _radius) / approach);
                 if (reach < allowed)
                 {
                     allowed = reach;

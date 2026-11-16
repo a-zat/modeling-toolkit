@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 19
+#define MTK_OCCT_VIEWER_ABI_VERSION 20
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -241,6 +241,10 @@ typedef struct mtk_viewer_environment {
 
 /* Sets the environment, which the rendered display mode shows. */
 MTK_VIEWER_API mtk_status mtk_viewer_set_environment(mtk_viewer* viewer, const mtk_viewer_environment* environment);
+
+/* The widths, in points, of the edges drawn over the faces (initially 1) and of the outlines of the CAD render style
+   (initially 1.5); each from 0.25 to 10. */
+MTK_VIEWER_API mtk_status mtk_viewer_set_line_widths(mtk_viewer* viewer, double edge_width, double outline_width);
 
 /* Shows (1), as initially, or hides (0) the grid on the ground and the axes through the origin. */
 MTK_VIEWER_API mtk_status mtk_viewer_set_grid_visible(mtk_viewer* viewer, int32_t visible);

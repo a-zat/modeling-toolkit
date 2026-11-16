@@ -197,7 +197,11 @@ TEST(Viewer, ChangesHowItShowsTheScene) {
         }
         EXPECT_EQ(mtk_viewer_set_perspective(viewer.get(), 0), MTK_STATUS_OK);
         EXPECT_EQ(mtk_viewer_set_perspective(viewer.get(), 1), MTK_STATUS_OK);
-        EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 0), MTK_STATUS_OK);
+        EXPECT_EQ(mtk_viewer_set_line_widths(viewer.get(), 2.0, 3.0), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_line_widths(viewer.get(), 0.0, 3.0), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_line_widths(viewer.get(), 2.0, 11.0), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_line_widths(nullptr, 2.0, 3.0), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 0), MTK_STATUS_OK);
         EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 1), MTK_STATUS_OK);
 
         ASSERT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_WIREFRAME), MTK_STATUS_OK);

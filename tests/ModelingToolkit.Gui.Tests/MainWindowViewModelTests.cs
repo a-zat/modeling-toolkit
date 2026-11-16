@@ -429,13 +429,32 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void TheDisplayModesAreASelectorAndTheDefaultIsShadedWithEdges()
+    {
+        MainWindowViewModel viewModel = Create();
+        Assert.Equal(DisplayMode.ShadedWithEdges, viewModel.DisplayMode);
+        Assert.True(viewModel.IsShadedWithEdges);
+
+        // A button of the selector, switched off while chosen, leaves the choice as it is.
+        viewModel.IsShadedWithEdges = false;
+        Assert.Equal(DisplayMode.ShadedWithEdges, viewModel.DisplayMode);
+
+        viewModel.IsWireframe = true;
+        Assert.Equal(DisplayMode.Wireframe, viewModel.DisplayMode);
+        Assert.False(viewModel.IsShadedWithEdges);
+        viewModel.IsRendered = true;
+        Assert.True(viewModel.IsRendered);
+        Assert.False(viewModel.IsWireframe);
+    }
+
+    [Fact]
     public void TheApplicationNeverStartsRendered()
     {
         var store = new MemorySettingsStore(new AppSettings { DisplayMode = DisplayMode.Rendered, Collisions = false });
 
         var viewModel = new MainWindowViewModel(new DocumentFormats([], []), new RecordingAppearance(), settings: store);
 
-        Assert.Equal(DisplayMode.Shaded, viewModel.DisplayMode);
+        Assert.Equal(DisplayMode.ShadedWithEdges, viewModel.DisplayMode);
         Assert.False(viewModel.Collisions);
     }
 
@@ -453,11 +472,20 @@ public sealed class MainWindowViewModelTests
         viewModel.UseGlb = true;
         viewModel.Latitude = 41.9;
         viewModel.Collisions = false;
+        viewModel.SunDate = new DateTime(2026, 12, 21);
+        viewModel.Cloudiness = 0.8;
+        viewModel.EdgeWidth = 2;
+        viewModel.EyeHeight = 1750;
+        viewModel.LookSensitivity = 0.5;
 
         Assert.Equal(new AppSettings
         {
             DarkTheme = true, UseGlb = true, TimeOfDay = 18, Grid = false, Latitude = 41.9, Collisions = false,
+            SunDate = new DateOnly(2026, 12, 21), Cloudiness = 0.8, EdgeWidth = 2, EyeHeight = 1750, LookSensitivity = 0.5,
         }, store.Load());
+        // What the view walks with follows, the look sensitivity in radians.
+        Assert.Equal(1750, viewModel.WalkSettings.EyeHeight);
+        Assert.Equal(0.5 * Math.PI / 180, viewModel.WalkSettings.LookSensitivity, 1e-12);
     }
 
     [Fact]
@@ -513,7 +541,7 @@ public sealed class MainWindowViewModelTests
         MainWindowViewModel viewModel = Create();
         var camera = new RecordingCamera();
         viewModel.Camera = camera;
-        Assert.True(viewModel.IsShaded);
+        Assert.True(viewModel.IsShadedWithEdges);
         Assert.True(viewModel.IsPerspective);
         Assert.True(viewModel.IsGridVisible);
 

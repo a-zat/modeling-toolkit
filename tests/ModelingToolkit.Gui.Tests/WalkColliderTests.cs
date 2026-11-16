@@ -44,6 +44,15 @@ public sealed class WalkColliderTests
     }
 
     [Fact]
+    public void The_distance_kept_follows_the_radius_given()
+    {
+        var collider = new WalkCollider(
+            [(Wall(x: 1000), Transform.Identity)], radius: 500, eyeHeight: WalkCamera.EyeHeight);
+
+        Assert.Equal(500, collider.Limit(Eye, new Vector3d(2000, 0, 0)).X, Tolerance);
+    }
+
+    [Fact]
     public void Walking_with_a_collider_stops_the_camera_at_the_wall()
     {
         WalkCollider collider = Of(Wall(x: 1000));

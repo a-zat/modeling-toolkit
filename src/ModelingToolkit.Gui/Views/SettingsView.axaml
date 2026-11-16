@@ -1,5 +1,6 @@
-<!-- The settings of the application, by category: the categories on the left, the settings of the one chosen on the
-     right, and where they are kept below. -->
+<!-- The settings of the application, by category: the categories on the left, the chosen one on the right, in groups of
+     rows, each a setting with its control; and where they are kept below. Every setting is also a value of the
+     settings file. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
@@ -7,13 +8,17 @@
              x:DataType="vm:MainWindowViewModel">
 
   <UserControl.Styles>
-    <!-- The categories as a list on the left, the chosen one marked. -->
+    <!-- The categories as a list on the left, the chosen one marked, a line between them and the page. -->
     <Style Selector="TabControl.settings">
       <Setter Property="TabStripPlacement" Value="Left" />
       <Setter Property="Padding" Value="0" />
     </Style>
     <Style Selector="TabControl.settings /template/ ItemsPresenter#PART_ItemsPresenter">
       <Setter Property="Margin" Value="8" />
+    </Style>
+    <Style Selector="TabControl.settings /template/ ContentPresenter#PART_SelectedContentHost">
+      <Setter Property="BorderThickness" Value="1,0,0,0" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
     </Style>
     <Style Selector="TabControl.settings TabItem">
       <Setter Property="FontSize" Value="13" />
@@ -30,14 +35,51 @@
     <Style Selector="TabControl.settings TabItem /template/ Border#PART_SelectedPipe">
       <Setter Property="IsVisible" Value="False" />
     </Style>
+
+    <!-- A page: its title over a line, then groups of rows. -->
+    <Style Selector="Border.pageTitle">
+      <Setter Property="Padding" Value="20,12,20,10" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    </Style>
+    <Style Selector="Border.pageTitle > TextBlock">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
     <Style Selector="StackPanel.page">
-      <Setter Property="Margin" Value="20,14,20,14" />
-      <Setter Property="Spacing" Value="16" />
+      <Setter Property="Margin" Value="20,16,20,20" />
+      <Setter Property="Spacing" Value="20" />
+    </Style>
+    <Style Selector="StackPanel.group">
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+    <!-- Rows with a hairline between them, in a frame of its own. -->
+    <Style Selector="Border.rows">
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.row">
+      <Setter Property="Padding" Value="14,9" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    </Style>
+    <Style Selector="Border.row:nth-last-child(1)">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.row NumericUpDown">
+      <Setter Property="Width" Value="130" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.row ToggleSwitch">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
   </UserControl.Styles>
 
   <DockPanel>
-    <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Mtk.Border}"
+    <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Mtk.Separator}"
             Padding="16,8" IsVisible="{Binding SettingsLocation, Converter={x:Static ObjectConverters.IsNotNull}}">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <TextBlock Classes="secondary" FontSize="11" Text="Kept in" VerticalAlignment="Center" />
@@ -47,79 +89,265 @@
     </Border>
 
     <TabControl Classes="settings">
+
       <TabItem Header="Files">
-        <ScrollViewer>
-          <StackPanel Classes="page">
-            <TextBlock Classes="label" Text="GLTF" />
-            <CheckBox IsChecked="{Binding UseGlb}">
-              <StackPanel>
-                <TextBlock Text="Open and save glTF directly" />
-                <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                           Text="Save writes the .glb opened, with warnings for what glTF cannot hold; its root node is the model." />
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="pageTitle"><TextBlock Text="Files" /></Border>
+          <ScrollViewer>
+            <StackPanel Classes="page">
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="GLTF" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Open and save glTF directly" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="Save writes the .glb opened, with warnings for what glTF cannot hold; its root node is the model." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding UseGlb}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                </StackPanel></Border>
               </StackPanel>
-            </CheckBox>
-          </StackPanel>
-        </ScrollViewer>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
       </TabItem>
 
       <TabItem Header="Appearance">
-        <ScrollViewer>
-          <StackPanel Classes="page">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="label" Text="THEME" />
-              <CheckBox Content="Dark theme" IsChecked="{Binding IsDark}" />
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="pageTitle"><TextBlock Text="Appearance" /></Border>
+          <ScrollViewer>
+            <StackPanel Classes="page">
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="THEME" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="Dark theme" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsDark}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
+
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="RENDER STYLE" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row">
+                    <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsStandardRenderStyle}">
+                      <StackPanel>
+                        <TextBlock Text="Standard" />
+                        <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                   Text="Lit by the materials, with their highlights." />
+                      </StackPanel>
+                    </RadioButton>
+                  </Border>
+                  <Border Classes="row">
+                    <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsCadRenderStyle}">
+                      <StackPanel>
+                        <TextBlock Text="CAD" />
+                        <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                   Text="As in technical drawings: on white, flat shades without highlights, thick dark outlines." />
+                      </StackPanel>
+                    </RadioButton>
+                  </Border>
+                </StackPanel></Border>
+              </StackPanel>
+
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="LINES" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Edge width" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="Of the edges drawn over the faces, in points." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding EdgeWidth}" Minimum="0.25" Maximum="10" Increment="0.25"
+                                   FormatString="0.##" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Outline width" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="Of the outlines of the CAD render style, in points." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding OutlineWidth}" Minimum="0.25" Maximum="10" Increment="0.25"
+                                   FormatString="0.##" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
             </StackPanel>
-            <StackPanel Spacing="8">
-              <TextBlock Classes="label" Text="RENDER STYLE" />
-              <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsStandardRenderStyle}">
-                <StackPanel>
-                  <TextBlock Text="Standard" />
-                  <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                             Text="Lit by the materials, with their highlights." />
-                </StackPanel>
-              </RadioButton>
-              <RadioButton GroupName="RenderStyle" IsChecked="{Binding IsCadRenderStyle}">
-                <StackPanel>
-                  <TextBlock Text="CAD" />
-                  <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                             Text="As in technical drawings: on white, flat shades without highlights, thick dark outlines." />
-                </StackPanel>
-              </RadioButton>
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
+      <TabItem Header="3D view">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="pageTitle"><TextBlock Text="3D view" /></Border>
+          <ScrollViewer>
+            <StackPanel Classes="page">
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="DISPLAY" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Show the grid" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="The grid on the ground and the axes through the origin, in the modes other than rendered." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsGridVisible}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Perspective" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="Perspective projection; off, parallel (orthographic)." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsPerspective}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
             </StackPanel>
-          </StackPanel>
-        </ScrollViewer>
+          </ScrollViewer>
+        </DockPanel>
       </TabItem>
 
       <TabItem Header="Rendered view">
-        <ScrollViewer>
-          <StackPanel Classes="page">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="label" Text="SITE" />
-              <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                         Text="Where the model is, for the course of the sun." />
-              <Grid ColumnDefinitions="140,160" RowDefinitions="Auto,Auto" RowSpacing="6">
-                <TextBlock Text="Latitude (°N)" VerticalAlignment="Center" />
-                <NumericUpDown Grid.Column="1" Value="{Binding Latitude}" Minimum="-90" Maximum="90" Increment="0.5"
-                               FormatString="0.##" />
-                <TextBlock Grid.Row="1" Text="North (° from Y)" VerticalAlignment="Center"
-                           ToolTip.Tip="The direction of north from the Y axis of the model, counterclockwise" />
-                <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding NorthAngle}" Minimum="-360" Maximum="360"
-                               Increment="5" FormatString="0.##" />
-              </Grid>
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="pageTitle"><TextBlock Text="Rendered view" /></Border>
+          <ScrollViewer>
+            <StackPanel Classes="page">
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="SITE" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Latitude" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="Where the model is, in degrees north." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding Latitude}" Minimum="-90" Maximum="90" Increment="0.5"
+                                   FormatString="0.##" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="North" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="The direction of north from the Y axis of the model, in degrees counterclockwise." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding NorthAngle}" Minimum="-360" Maximum="360" Increment="5"
+                                   FormatString="0.##" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
+
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="SKY" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Day" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="Of the course of the sun; today when none is chosen." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <CalendarDatePicker SelectedDate="{Binding SunDate}" Width="150" />
+                      <Button Content="Today" Command="{Binding SetSunDateTodayCommand}" />
+                    </StackPanel>
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Clouds" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="From a clear sky to an overcast one." />
+                    </StackPanel>
+                    <Slider Grid.Column="1" Width="160" Minimum="0" Maximum="1" Value="{Binding Cloudiness}"
+                            VerticalAlignment="Center" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
             </StackPanel>
-            <StackPanel Spacing="8">
-              <TextBlock Classes="label" Text="WALKING" />
-              <CheckBox IsChecked="{Binding Collisions}">
-                <StackPanel>
-                  <TextBlock Text="Collisions" />
-                  <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                             Text="Walls and the other parts of the model stop the walk, which slides along them; thresholds are stepped over." />
-                </StackPanel>
-              </CheckBox>
-            </StackPanel>
-          </StackPanel>
-        </ScrollViewer>
+          </ScrollViewer>
+        </DockPanel>
       </TabItem>
+
+      <TabItem Header="Walking">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="pageTitle"><TextBlock Text="Walking" /></Border>
+          <ScrollViewer>
+            <StackPanel Classes="page">
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="COLLISIONS" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Stop at walls" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="Walls and the other parts of the model stop the walk, which slides along them; thresholds are stepped over." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding Collisions}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Distance kept" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="How near the eyes come to a wall, in millimetres." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding CollisionRadius}" Minimum="50" Maximum="1000" Increment="25"
+                                   FormatString="0" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
+
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="PERSON" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Eye height" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="Above the floor, in millimetres." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding EyeHeight}" Minimum="500" Maximum="3000" Increment="50"
+                                   FormatString="0" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Field of view" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="Vertical, in degrees." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding WalkFieldOfView}" Minimum="10" Maximum="120" Increment="5"
+                                   FormatString="0" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
+
+              <StackPanel Classes="group">
+                <TextBlock Classes="label" Text="MOVEMENT" />
+                <Border Classes="rows"><StackPanel>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Walking speed" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="In millimetres per second." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding WalkSpeed}" Minimum="100" Maximum="10000" Increment="100"
+                                   FormatString="0" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Running" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="How much faster than walking, with Shift held." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding RunFactor}" Minimum="1" Maximum="10" Increment="0.5"
+                                   FormatString="0.##" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Look sensitivity" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="The turn of a drag, in degrees per point." />
+                    </StackPanel>
+                    <NumericUpDown Grid.Column="1" Value="{Binding LookSensitivity}" Minimum="0.01" Maximum="2" Increment="0.05"
+                                   FormatString="0.##" />
+                  </Grid></Border>
+                </StackPanel></Border>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
     </TabControl>
   </DockPanel>
 

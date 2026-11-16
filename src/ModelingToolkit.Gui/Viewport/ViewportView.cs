@@ -47,7 +47,7 @@ public sealed class ViewportView : Border, IViewCamera
         AvaloniaProperty.Register<ViewportView, ICommand?>(nameof(WarningsCommand));
 
     public static readonly StyledProperty<DisplayMode> DisplayModeProperty =
-        AvaloniaProperty.Register<ViewportView, DisplayMode>(nameof(DisplayMode));
+        AvaloniaProperty.Register<ViewportView, DisplayMode>(nameof(DisplayMode), DisplayMode.ShadedWithEdges);
 
     public static readonly StyledProperty<RenderStyle> RenderStyleProperty =
         AvaloniaProperty.Register<ViewportView, RenderStyle>(nameof(RenderStyle));
@@ -73,6 +73,18 @@ public sealed class ViewportView : Border, IViewCamera
     /// <summary>Whether walking stops at the parts of the model in the way, sliding along them.</summary>
     public static readonly StyledProperty<bool> CollidesProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(Collides));
+
+    /// <summary>How the person walks in the walk mode.</summary>
+    public static readonly StyledProperty<WalkSettings> WalkSettingsProperty =
+        AvaloniaProperty.Register<ViewportView, WalkSettings>(nameof(WalkSettings), WalkSettings.Default);
+
+    /// <summary>The widths, in points, of the edges drawn over the faces.</summary>
+    public static readonly StyledProperty<double> EdgeWidthProperty =
+        AvaloniaProperty.Register<ViewportView, double>(nameof(EdgeWidth), 1.0);
+
+    /// <summary>The widths, in points, of the outlines of the CAD render style.</summary>
+    public static readonly StyledProperty<double> OutlineWidthProperty =
+        AvaloniaProperty.Register<ViewportView, double>(nameof(OutlineWidth), 1.5);
 
     /// <summary>The sky and the sun of the rendered display mode.</summary>
     public static readonly StyledProperty<ViewEnvironment> EnvironmentProperty =
@@ -104,7 +116,8 @@ public sealed class ViewportView : Border, IViewCamera
     private bool _frameRequested;
     private int _shownDocuments;
     private ViewportScene? _shownScene;
-    private (IReadOnlyList<ViewportInstance> Instances, WalkCollider Collider)? _collider; // for the instances shown
+    // For the instances shown, and the radius and the height of the eyes it was made for.
+    private (IReadOnlyList<ViewportInstance> Instances, WalkSettings Settings, WalkCollider Collider)? _collider;
     private Document? _followedDocument;
     private KeyModifiers _clickModifiers; // held when a button was last released, which ends a click
     private int _clickCount = 1; // of the button last pressed, 2 for a double click
@@ -158,6 +171,24 @@ public sealed class ViewportView : Border, IViewCamera
     {
         get => GetValue(EnvironmentProperty);
         set => SetValue(EnvironmentProperty, value);
+    }
+
+    public WalkSettings WalkSettings
+    {
+        get => GetValue(WalkSettingsProperty);
+        set => SetValue(WalkSettingsProperty, value);
+    }
+
+    public double EdgeWidth
+    {
+        get => GetValue(EdgeWidthProperty);
+        set => SetValue(EdgeWidthProperty, value);
+    }
+
+    public double OutlineWidth
+    {
+        get => GetValue(OutlineWidthProperty);
+        set => SetValue(OutlineWidthProperty, value);
     }
 
     public bool Collides
@@ -342,6 +373,15 @@ public sealed class ViewportView : Border, IViewCamera
         else if (change.Property == EnvironmentProperty)
         {
             Send(ApplyEnvironment);
+        }
+        else if (change.Property == WalkSettingsProperty && _walk is { } walking)
+        {
+            walking.Settings = WalkSettings;
+            PlaceWalkCamera(); // the field of view
+        }
+        else if (change.Property == EdgeWidthProperty || change.Property == OutlineWidthProperty)
+        {
+            Send(ApplySettings);
         }
         else if (change.Property == IsWalkingProperty)
         {
@@ -561,7 +601,7 @@ public sealed class ViewportView : Border, IViewCamera
             {
                 _orbitCamera = viewer.GetCamera();
                 double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
-                _walk = WalkCamera.Enter(_orbitCamera, floor);
+                _walk = WalkCamera.Enter(_orbitCamera, floor, WalkSettings);
                 _walk.Limit = LimitWalk;
                 viewer.SetPerspective(true);
                 viewer.SetCamera(_walk.ToCamera());
@@ -589,9 +629,12 @@ public sealed class ViewportView : Border, IViewCamera
         {
             return move;
         }
-        if (_collider is not { } collider || !ReferenceEquals(collider.Instances, scene.Instances))
+        WalkSettings settings = WalkSettings;
+        if (_collider is not { } collider || !ReferenceEquals(collider.Instances, scene.Instances) ||
+            collider.Settings.CollisionRadius != settings.CollisionRadius || collider.Settings.EyeHeight != settings.EyeHeight)
         {
-            collider = (scene.Instances, new WalkCollider(scene.PlacedMeshes()));
+            collider = (scene.Instances, settings,
+                new WalkCollider(scene.PlacedMeshes(), settings.CollisionRadius, settings.EyeHeight));
             _collider = collider;
         }
         return collider.Collider.Limit(eye, move);
@@ -863,6 +906,7 @@ public sealed class ViewportView : Border, IViewCamera
         viewer.SetRenderStyle(RenderStyle);
         viewer.SetPerspective(IsPerspective || _walk is not null);
         viewer.SetGridVisible(IsGridVisible);
+        viewer.SetLineWidths(EdgeWidth, OutlineWidth);
         viewer.SetOverlay(Overlay);
         return true;
     }

@@ -11,6 +11,8 @@ public sealed record ViewCamera(Point3d Eye, Point3d Target, Vector3d Up, double
 /// </summary>
 public sealed class WalkCamera
 {
+    // The defaults of the <see cref="WalkSettings"/>.
+
     /// <summary>Above the floor, in millimetres.</summary>
     public const double EyeHeight = 1600;
 
@@ -27,14 +29,18 @@ public sealed class WalkCamera
 
     private const double MaxPitch = 85 * Math.PI / 180;
 
-    private WalkCamera(Point3d eye, double yaw, double pitch)
+    private WalkCamera(Point3d eye, double yaw, double pitch, WalkSettings settings)
     {
+        Settings = settings;
         Eye = eye;
         Yaw = yaw;
         Pitch = pitch;
     }
 
     public Point3d Eye { get; private set; }
+
+    /// <summary>How the person walks; changed while walking, it applies from the next move.</summary>
+    public WalkSettings Settings { get; set; }
 
     /// <summary>
     /// What of a move of the eyes on the floor goes through, given where they are, as a <see cref="WalkCollider"/>
@@ -52,21 +58,22 @@ public sealed class WalkCamera
     /// Stands on a floor where the orbit camera looked, at the height of the eyes, facing the way it faced: entering a
     /// model seen from outside puts the person in the middle of it.
     /// </summary>
-    public static WalkCamera Enter(ViewCamera camera, double floor)
+    public static WalkCamera Enter(ViewCamera camera, double floor, WalkSettings? settings = null)
     {
+        settings ??= WalkSettings.Default;
         ArgumentNullException.ThrowIfNull(camera);
         Vector3d direction = camera.Target - camera.Eye;
         // Looking straight down, the top of the screen is the way ahead.
         Vector3d ahead = Math.Abs(direction.X) + Math.Abs(direction.Y) > 1e-6 * direction.Length ? direction : camera.Up;
         double yaw = Math.Atan2(ahead.Y, ahead.X);
-        return new WalkCamera(new Point3d(camera.Target.X, camera.Target.Y, floor + EyeHeight), yaw, 0);
+        return new WalkCamera(new Point3d(camera.Target.X, camera.Target.Y, floor + settings.EyeHeight), yaw, 0, settings);
     }
 
     /// <summary>Turns by a drag of the pointer, in points: to the right turns right, up looks up.</summary>
     public void Look(double right, double up)
     {
-        Yaw = Normalized(Yaw - right * LookSensitivity);
-        Pitch = Math.Clamp(Pitch + up * LookSensitivity, -MaxPitch, MaxPitch);
+        Yaw = Normalized(Yaw - right * Settings.LookSensitivity);
+        Pitch = Math.Clamp(Pitch + up * Settings.LookSensitivity, -MaxPitch, MaxPitch);
     }
 
     /// <summary>
@@ -80,7 +87,7 @@ public sealed class WalkCamera
         {
             return;
         }
-        double step = Speed * (run ? RunFactor : 1) * seconds / Math.Max(length, 1);
+        double step = Settings.Speed * (run ? Settings.RunFactor : 1) * seconds / Math.Max(length, 1);
         Vector3d ahead = new(Math.Cos(Yaw), Math.Sin(Yaw), 0), side = new(Math.Sin(Yaw), -Math.Cos(Yaw), 0);
         Move((ahead * forward + side * right) * step);
     }
@@ -95,7 +102,7 @@ public sealed class WalkCamera
     {
         var direction = new Vector3d(
             Math.Cos(Pitch) * Math.Cos(Yaw), Math.Cos(Pitch) * Math.Sin(Yaw), Math.Sin(Pitch));
-        return new ViewCamera(Eye, Eye + direction * 1000, Vector3d.UnitZ, FieldOfView);
+        return new ViewCamera(Eye, Eye + direction * 1000, Vector3d.UnitZ, Settings.FieldOfView);
     }
 
     private static double Normalized(double angle) => Math.IEEERemainder(angle, 2 * Math.PI);

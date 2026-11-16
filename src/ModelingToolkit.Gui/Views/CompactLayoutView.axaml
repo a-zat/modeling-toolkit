@@ -80,25 +80,17 @@
           </Border>
           <Border Classes="group">
             <StackPanel Orientation="Horizontal" Spacing="2">
-              <ToggleButton Classes="tool" IsChecked="{Binding IsShaded, Mode=OneWay}"
-                            Command="{Binding SetDisplayModeCommand}"
-                            CommandParameter="{x:Static viewport:DisplayMode.Shaded}" ToolTip.Tip="Shaded">
+              <!-- A selector: one mode is always chosen, and clicking it again keeps it. -->
+              <ToggleButton Classes="tool" IsChecked="{Binding IsShaded}" ToolTip.Tip="Shaded">
                 <PathIcon Data="{StaticResource Icon.Cube}" />
               </ToggleButton>
-              <ToggleButton Classes="tool" IsChecked="{Binding IsShadedWithEdges, Mode=OneWay}"
-                            Command="{Binding SetDisplayModeCommand}"
-                            CommandParameter="{x:Static viewport:DisplayMode.ShadedWithEdges}"
-                            ToolTip.Tip="Shaded with edges">
+              <ToggleButton Classes="tool" IsChecked="{Binding IsShadedWithEdges}" ToolTip.Tip="Shaded with edges">
                 <PathIcon Data="{StaticResource Icon.BorderOutside}" />
               </ToggleButton>
-              <ToggleButton Classes="tool" IsChecked="{Binding IsWireframe, Mode=OneWay}"
-                            Command="{Binding SetDisplayModeCommand}"
-                            CommandParameter="{x:Static viewport:DisplayMode.Wireframe}" ToolTip.Tip="Wireframe">
+              <ToggleButton Classes="tool" IsChecked="{Binding IsWireframe}" ToolTip.Tip="Wireframe">
                 <PathIcon Data="{StaticResource Icon.Grid}" />
               </ToggleButton>
-              <ToggleButton Classes="tool" IsChecked="{Binding IsRendered, Mode=OneWay}"
-                            Command="{Binding SetDisplayModeCommand}"
-                            CommandParameter="{x:Static viewport:DisplayMode.Rendered}"
+              <ToggleButton Classes="tool" IsChecked="{Binding IsRendered}"
                             ToolTip.Tip="Rendered: under the sky, on the ground">
                 <PathIcon Data="{StaticResource Icon.WeatherSunny}" />
               </ToggleButton>
@@ -161,6 +153,8 @@
                              Pose="{Binding Animations.Pose}"
                              IsWalking="{Binding IsWalking}"
                              Environment="{Binding SkyEnvironment}" Collides="{Binding Collisions}"
+                             WalkSettings="{Binding WalkSettings}" EdgeWidth="{Binding EdgeWidth}"
+                             OutlineWidth="{Binding OutlineWidth}"
                              Overlay="{Binding Overlay}" />
       <!-- The time of day, in the rendered display mode, in the corner of the ViewCube, which it hides: a popup, as
            nothing else is drawn over the native view, opened once the window is (see the code behind). -->
@@ -182,12 +176,15 @@
              Placement="Center" IsLightDismissEnabled="True">
         <Border Classes="popover" Width="680" Height="440" Padding="0">
           <DockPanel>
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,10,8,0">
-              <TextBlock Text="Settings" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
-              <Button Grid.Column="1" Classes="tool" Command="{Binding CloseSettingsCommand}" ToolTip.Tip="Close (Esc)">
-                <PathIcon Data="{StaticResource Icon.Dismiss}" Width="12" Height="12" />
-              </Button>
-            </Grid>
+            <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Mtk.Separator}"
+                    Padding="16,6,8,6">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Settings" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="tool" Command="{Binding CloseSettingsCommand}" ToolTip.Tip="Close (Esc)">
+                  <PathIcon Data="{StaticResource Icon.Dismiss}" Width="12" Height="12" />
+                </Button>
+              </Grid>
+            </Border>
             <views:SettingsView />
           </DockPanel>
         </Border>

@@ -41,7 +41,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsOutlineExpanded = true;
         // The application starts in a view to edit with, never rendered.
         AppSettings saved = _settingsStore.Load();
-        ApplySettings(saved.DisplayMode == DisplayMode.Rendered ? saved with { DisplayMode = DisplayMode.Shaded } : saved);
+        ApplySettings(saved.DisplayMode == DisplayMode.Rendered ? saved with { DisplayMode = DisplayMode.ShadedWithEdges } : saved);
         _settingsStore.Changed += (_, _) =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsStore.Load()));
 
@@ -732,7 +732,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Whether the view is rendered, under the sky at <see cref="TimeOfDay"/>: only to look at, the tools taking no input,
     /// nothing highlighted, a click opening or closing the part under the pointer that an animation moves.
     /// </summary>
-    public bool IsRendered => DisplayMode == DisplayMode.Rendered;
+    public bool IsRendered
+    {
+        get => DisplayMode == DisplayMode.Rendered;
+        set => Choose(value, DisplayMode.Rendered, nameof(IsRendered));
+    }
 
     /// <summary>Whether the tools edit the model through the 3D view: not when it is rendered, nor while walking.</summary>
     public bool IsEditable => !IsRendered && !IsWalking;
@@ -759,16 +763,45 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The sky and the sun of the rendered display mode, today at <see cref="TimeOfDay"/> where the model is.</summary>
     public ViewEnvironment SkyEnvironment => new(
-        SunPosition.Direction(TimeOfDay, DateOnly.FromDateTime(DateTime.Today), Latitude, NorthAngle), 0.35f);
+        SunPosition.Direction(TimeOfDay, DateOnly.FromDateTime(SunDate ?? DateTime.Today), Latitude, NorthAngle),
+        (float)Cloudiness);
 
     /// <summary>The hour shown by the slider of the rendered display mode: "14:30".</summary>
     public string TimeOfDayText => $"{(int)TimeOfDay:00}:{(int)Math.Round(TimeOfDay % 1 * 60) % 60:00}";
 
-    public bool IsShaded => DisplayMode == DisplayMode.Shaded;
+    // The display modes are those of a selector: one is always chosen. For its buttons, which turn themselves off when
+    // clicked while chosen: the choice is set again, and the button shows it.
 
-    public bool IsShadedWithEdges => DisplayMode == DisplayMode.ShadedWithEdges;
+    public bool IsShaded
+    {
+        get => DisplayMode == DisplayMode.Shaded;
+        set => Choose(value, DisplayMode.Shaded, nameof(IsShaded));
+    }
 
-    public bool IsWireframe => DisplayMode == DisplayMode.Wireframe;
+    public bool IsShadedWithEdges
+    {
+        get => DisplayMode == DisplayMode.ShadedWithEdges;
+        set => Choose(value, DisplayMode.ShadedWithEdges, nameof(IsShadedWithEdges));
+    }
+
+    public bool IsWireframe
+    {
+        get => DisplayMode == DisplayMode.Wireframe;
+        set => Choose(value, DisplayMode.Wireframe, nameof(IsWireframe));
+    }
+
+    private void Choose(bool chosen, DisplayMode mode, string property)
+    {
+        if (chosen)
+        {
+            DisplayMode = mode;
+        }
+        else if (DisplayMode == mode)
+        {
+            // After the button has finished unchecking itself.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => OnPropertyChanged(property));
+        }
+    }
 
     /// <summary>How the 3D view shades the faces, chosen in the settings.</summary>
     [ObservableProperty]
@@ -963,7 +996,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
             TimeOfDay = Math.Clamp(settings.TimeOfDay, 0, 24);
             Latitude = Math.Clamp(settings.Latitude, -90, 90);
             NorthAngle = settings.NorthAngle;
+            SunDate = settings.SunDate?.ToDateTime(TimeOnly.MinValue);
+            Cloudiness = Math.Clamp(settings.Cloudiness, 0, 1);
+            EdgeWidth = Math.Clamp(settings.EdgeWidth, 0.25, 10);
+            OutlineWidth = Math.Clamp(settings.OutlineWidth, 0.25, 10);
             Collisions = settings.Collisions;
+            CollisionRadius = Math.Clamp(settings.CollisionRadius, 50, 1000);
+            EyeHeight = Math.Clamp(settings.EyeHeight, 500, 3000);
+            WalkSpeed = Math.Clamp(settings.WalkSpeed, 100, 10000);
+            RunFactor = Math.Clamp(settings.RunFactor, 1, 10);
+            WalkFieldOfView = Math.Clamp(settings.WalkFieldOfView, 10, 120);
+            LookSensitivity = Math.Clamp(settings.LookSensitivity, 0.01, 2);
         }
         finally
         {
@@ -977,7 +1020,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         base.OnPropertyChanged(e);
         if (_applyingSettings || _settingsStore is null || e.PropertyName is not (nameof(UseGlb) or nameof(IsDark)
                 or nameof(RenderStyle) or nameof(DisplayMode) or nameof(IsPerspective) or nameof(IsGridVisible)
-                or nameof(TimeOfDay) or nameof(Latitude) or nameof(NorthAngle) or nameof(Collisions)))
+                or nameof(TimeOfDay) or nameof(Latitude) or nameof(NorthAngle) or nameof(Collisions)
+                or nameof(SunDate) or nameof(Cloudiness) or nameof(EdgeWidth) or nameof(OutlineWidth)
+                or nameof(CollisionRadius) or nameof(EyeHeight) or nameof(WalkSpeed) or nameof(RunFactor)
+                or nameof(WalkFieldOfView) or nameof(LookSensitivity)))
         {
             return;
         }
@@ -985,7 +1031,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             UseGlb = UseGlb, DarkTheme = IsDark, RenderStyle = RenderStyle, DisplayMode = DisplayMode,
             Perspective = IsPerspective, Grid = IsGridVisible, TimeOfDay = TimeOfDay, Latitude = Latitude,
-            NorthAngle = NorthAngle, Collisions = Collisions,
+            NorthAngle = NorthAngle, Collisions = Collisions, SunDate = SunDate is { } day ? DateOnly.FromDateTime(day) : null,
+            Cloudiness = Cloudiness, EdgeWidth = EdgeWidth, OutlineWidth = OutlineWidth, CollisionRadius = CollisionRadius,
+            EyeHeight = EyeHeight, WalkSpeed = WalkSpeed, RunFactor = RunFactor, WalkFieldOfView = WalkFieldOfView,
+            LookSensitivity = LookSensitivity,
         };
         _settingsStore.Save(_settings);
     }
@@ -1008,6 +1057,56 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Whether walking stops at walls and other parts of the model, sliding along them.</summary>
     [ObservableProperty]
     public partial bool Collisions { get; set; }
+
+    /// <summary>The day of the sun in the rendered display mode; null for today.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SkyEnvironment))]
+    public partial DateTime? SunDate { get; set; }
+
+    /// <summary>The cover of clouds in the rendered display mode, from 0, a clear sky, to 1.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SkyEnvironment))]
+    public partial double Cloudiness { get; set; }
+
+    [RelayCommand]
+    private void SetSunDateToday() => SunDate = null;
+
+    /// <summary>The widths, in points, of the edges over the faces and of the outlines of the CAD render style.</summary>
+    [ObservableProperty]
+    public partial double EdgeWidth { get; set; }
+
+    [ObservableProperty]
+    public partial double OutlineWidth { get; set; }
+
+    // How a person walks, in millimetres and seconds; the look sensitivity in degrees per point.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WalkSettings))]
+    public partial double CollisionRadius { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WalkSettings))]
+    public partial double EyeHeight { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WalkSettings))]
+    public partial double WalkSpeed { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WalkSettings))]
+    public partial double RunFactor { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WalkSettings))]
+    public partial double WalkFieldOfView { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WalkSettings))]
+    public partial double LookSensitivity { get; set; }
+
+    /// <summary>How the 3D view lets a person walk.</summary>
+    public WalkSettings WalkSettings => new(
+        EyeHeight, WalkSpeed, RunFactor, WalkFieldOfView, LookSensitivity * Math.PI / 180, CollisionRadius);
 
     // The initial value is applied by the application, once Avalonia is ready.
     partial void OnIsDarkChanged(bool value)

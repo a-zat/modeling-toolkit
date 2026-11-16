@@ -24,6 +24,23 @@ public sealed class WalkCameraTests
     }
 
     [Fact]
+    public void A_person_of_other_settings_stands_taller_walks_faster_and_sees_wider()
+    {
+        var settings = new WalkSettings(
+            EyeHeight: 1200, Speed: 700, RunFactor: 3, FieldOfView: 90, LookSensitivity: 0.01, CollisionRadius: 100);
+        var orbit = new ViewCamera(new Point3d(0, -3000, 3000), default, Vector3d.UnitZ, 35);
+
+        WalkCamera walk = WalkCamera.Enter(orbit, floor: 0, settings);
+        Assert.Equal(1200, walk.Eye.Z);
+        Assert.Equal(90, walk.ToCamera().FieldOfView);
+        double yaw = walk.Yaw;
+        walk.Walk(forward: 1, right: 0, seconds: 1, run: true);
+        Assert.Equal(2100, (walk.Eye - new Point3d(0, 0, 1200)).Length, Tolerance);
+        walk.Look(right: 10, up: 0);
+        Assert.Equal(yaw - 0.1, walk.Yaw, Tolerance);
+    }
+
+    [Fact]
     public void Looking_straight_down_faces_the_top_of_the_screen()
     {
         var top = new ViewCamera(new Point3d(0, 0, 10000), default, Vector3d.UnitY, 35);

@@ -57,9 +57,6 @@ static_assert(sizeof(void*) != 8 || sizeof(mtk_viewer_overlay) == 48);
 namespace {
 
 // Sizes in device-independent units, like the rest of the interface; the viewer multiplies them by the scale.
-// The outlines of the CAD render style, and the edges of shapes in the standard one, in device-independent units.
-constexpr double outline_width = 1.5;
-constexpr double edge_width = 1.0;
 // The edges highlighted, hovered or selected, in device-independent units.
 constexpr double highlighted_edge_width = 3.0;
 constexpr double view_cube_size = 42.0;
@@ -560,14 +557,14 @@ mtk::EdgeStyle mtk::Viewer::edge_style() const {
     if (render_style_ == MTK_VIEWER_RENDER_CAD) {
         // The edges of their own outline the faces in every mode; without faces, they keep the colour that stands out
         // from the ground, and the meshes without edges show those of their triangles.
-        return EdgeStyle{wireframe, true, !wireframe, static_cast<float>(outline_width * scale_),
+        return EdgeStyle{wireframe, true, !wireframe, static_cast<float>(outline_width_ * scale_),
                          wireframe ? edge_color_ : outline_color_, true};
     }
     // The edges are drawn in the modes with edges, those of their own where meshes have them, else those of the
     // triangles, one unit wide, as the lines that the tools draw over the view; the meshes made of lines only in every
     // mode, as they would otherwise not show.
     const bool edges = display_mode_ != MTK_VIEWER_DISPLAY_SHADED;
-    return EdgeStyle{edges, edges, true, static_cast<float>(edge_width * scale_), edge_color_, true};
+    return EdgeStyle{edges, edges, true, static_cast<float>(edge_width_ * scale_), edge_color_, true};
 }
 
 // The CAD render style lights the faces from the upper left of the camera, so that faces turned differently take
@@ -748,6 +745,12 @@ void mtk::Viewer::set_camera(const mtk_viewer_camera& camera) {
     view_camera->OrthogonalizeUp();
     view_camera->SetFOVy(camera.field_of_view);
     view_->Invalidate();
+}
+
+void mtk::Viewer::set_line_widths(double edge, double outline) {
+    edge_width_ = edge;
+    outline_width_ = outline;
+    set_display_mode(display_mode_); // the edges are drawn again, with the new widths
 }
 
 void mtk::Viewer::set_grid_visible(bool visible) {
@@ -1508,6 +1511,21 @@ mtk_status mtk_viewer_set_environment(mtk_viewer* viewer, const mtk_viewer_envir
             return mtk::invalid_argument("the ground must have a finite height and a positive size.");
         }
         viewer->set_environment(*environment);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_line_widths(mtk_viewer* viewer, double edge_width, double outline_width) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        for (const double width : {edge_width, outline_width}) {
+            if (!std::isfinite(width) || width < 0.25 || width > 10.0) {
+                return mtk::invalid_argument("The widths of lines must be between 0.25 and 10 pixels.");
+            }
+        }
+        viewer->set_line_widths(edge_width, outline_width);
         return MTK_STATUS_OK;
     });
 }

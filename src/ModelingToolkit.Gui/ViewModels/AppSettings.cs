@@ -18,7 +18,7 @@ public sealed record AppSettings
     public RenderStyle RenderStyle { get; init; } = RenderStyle.Standard;
 
     [JsonConverter(typeof(JsonStringEnumConverter<DisplayMode>))]
-    public DisplayMode DisplayMode { get; init; } = DisplayMode.Shaded;
+    public DisplayMode DisplayMode { get; init; } = DisplayMode.ShadedWithEdges;
 
     public bool Perspective { get; init; } = true;
 
@@ -33,8 +33,38 @@ public sealed record AppSettings
     /// <summary>The direction of north from the Y axis of the model, in degrees counterclockwise.</summary>
     public double NorthAngle { get; init; }
 
+    /// <summary>The day of the sun in the rendered display mode; null for today.</summary>
+    public DateOnly? SunDate { get; init; }
+
+    /// <summary>The cover of clouds in the rendered display mode, from 0, a clear sky, to 1.</summary>
+    public double Cloudiness { get; init; } = 0.35;
+
+    /// <summary>The width, in points, of the edges drawn over the faces.</summary>
+    public double EdgeWidth { get; init; } = 1.0;
+
+    /// <summary>The width, in points, of the outlines of the CAD render style.</summary>
+    public double OutlineWidth { get; init; } = 1.5;
+
     /// <summary>Whether walking stops at walls and other parts of the model.</summary>
     public bool Collisions { get; init; } = true;
+
+    /// <summary>How near the eyes come to what stops the walk, in millimetres.</summary>
+    public double CollisionRadius { get; init; } = 250;
+
+    /// <summary>Of the eyes above the floor when walking, in millimetres.</summary>
+    public double EyeHeight { get; init; } = 1600;
+
+    /// <summary>The speed of a walk, in millimetres per second.</summary>
+    public double WalkSpeed { get; init; } = 1400;
+
+    /// <summary>How much faster running is than walking.</summary>
+    public double RunFactor { get; init; } = 2.5;
+
+    /// <summary>The vertical field of view when walking, in degrees.</summary>
+    public double WalkFieldOfView { get; init; } = 65;
+
+    /// <summary>The turn of a drag when walking, in degrees per point of the screen.</summary>
+    public double LookSensitivity { get; init; } = 0.23;
 }
 
 /// <summary>Where the settings are kept.</summary>

@@ -305,6 +305,10 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         NativeMethods.SetEnvironment(_handle, native).ThrowIfFailed();
     }
 
+    /// <summary>The widths, in points, of the edges over the faces and of the outlines of the CAD style.</summary>
+    public void SetLineWidths(double edgeWidth, double outlineWidth) =>
+        NativeMethods.SetLineWidths(_handle, edgeWidth, outlineWidth).ThrowIfFailed();
+
     public void SetGridVisible(bool visible) => NativeMethods.SetGridVisible(_handle, visible ? 1 : 0).ThrowIfFailed();
 
     // Each input method returns whether the view changed: Redraw should then be called on the next frame.

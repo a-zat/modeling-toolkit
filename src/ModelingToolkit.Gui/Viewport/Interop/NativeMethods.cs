@@ -6,7 +6,7 @@ namespace ModelingToolkit.Gui.Viewport.Interop;
 internal static partial class NativeMethods
 {
     /// <summary>Must match MTK_OCCT_VIEWER_ABI_VERSION in the native header.</summary>
-    public const int AbiVersion = 19;
+    public const int AbiVersion = 20;
 
     private const string LibraryName = "mtk_occt_viewer";
 
@@ -78,6 +78,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_environment")]
     public static partial NativeStatus SetEnvironment(ViewerHandle viewer, in NativeEnvironment environment);
+
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_line_widths")]
+    public static partial NativeStatus SetLineWidths(ViewerHandle viewer, double edgeWidth, double outlineWidth);
 
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_grid_visible")]
     public static partial NativeStatus SetGridVisible(ViewerHandle viewer, int visible);
