@@ -41,7 +41,11 @@ public enum DisplayMode
 /// <summary>The world around the model in the rendered display mode.</summary>
 /// <param name="Sun">Towards the sun, Z up; below the horizon at night.</param>
 /// <param name="Cloudiness">From 0, a clear sky, to 1.</param>
-public sealed record ViewEnvironment(ModelingToolkit.Core.Geometry.Vector3d Sun, float Cloudiness)
+/// <param name="Ground">The colour of the ground under the model.</param>
+public sealed record ViewEnvironment(ModelingToolkit.Core.Geometry.Vector3d Sun, float Cloudiness, Avalonia.Media.Color Ground)
 {
-    public static ViewEnvironment Noon { get; } = new(new ModelingToolkit.Core.Geometry.Vector3d(0, -0.5, 0.85), 0.3f);
+    /// <summary>A dry lawn.</summary>
+    public static Avalonia.Media.Color Lawn { get; } = Avalonia.Media.Color.FromRgb(0x5C, 0x6B, 0x4D);
+
+    public static ViewEnvironment Noon { get; } = new(new ModelingToolkit.Core.Geometry.Vector3d(0, -0.5, 0.85), 0.3f, Lawn);
 }

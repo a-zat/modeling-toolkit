@@ -178,7 +178,7 @@ private:
     double outline_width_ = 1.5; // of the outlines of the CAD render style, in points
     // The rendered display mode: its environment, the ground shown under the model, the colours of the background of
     // the other modes, and the shading of the view in those modes.
-    mtk_viewer_environment environment_{{0.3, -0.5, 0.8}, 0.3f, 0.0, 100000.0};
+    mtk_viewer_environment environment_{{0.3, -0.5, 0.8}, 0.3f, 0.0, 100000.0, {0.36f, 0.42f, 0.30f}};
     occ::handle<AIS_InteractiveObject> ground_;
     occ::handle<Graphic3d_CubeMap> sky_; // painted for the sun and the clouds of sky_of_
     mtk_viewer_environment sky_of_{};

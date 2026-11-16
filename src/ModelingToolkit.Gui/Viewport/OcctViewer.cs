@@ -302,6 +302,9 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         native.SunDirection[0] = environment.Sun.X;
         native.SunDirection[1] = environment.Sun.Y;
         native.SunDirection[2] = environment.Sun.Z;
+        native.GroundColor[0] = environment.Ground.R / 255f;
+        native.GroundColor[1] = environment.Ground.G / 255f;
+        native.GroundColor[2] = environment.Ground.B / 255f;
         NativeMethods.SetEnvironment(_handle, native).ThrowIfFailed();
     }
 

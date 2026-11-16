@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Incremented on every change of this API; the managed side checks it when loading the library. */
-#define MTK_OCCT_VIEWER_ABI_VERSION 20
+#define MTK_OCCT_VIEWER_ABI_VERSION 21
 
 MTK_VIEWER_API int32_t mtk_viewer_abi_version(void);
 
@@ -237,6 +237,7 @@ typedef struct mtk_viewer_environment {
     float cloudiness;        /* from 0, a clear sky, to 1 */
     double ground_height;    /* of the ground under the model */
     double ground_size;      /* the side of the square ground, around the origin */
+    float ground_color[3];   /* sRGB, from 0 to 1 */
 } mtk_viewer_environment;
 
 /* Sets the environment, which the rendered display mode shows. */

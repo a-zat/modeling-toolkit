@@ -256,11 +256,11 @@ TEST(Viewer, PlacesTheCameraWhereItIsAsked) {
 TEST(Viewer, RendersUnderTheSkyOfItsEnvironment) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);
-    const mtk_viewer_environment noon{{0.0, -0.5, 0.85}, 0.3f, -240.0, 100000.0};
+    const mtk_viewer_environment noon{{0.0, -0.5, 0.85}, 0.3f, -240.0, 100000.0, {0.4f, 0.5f, 0.3f}};
 
     ASSERT_EQ(mtk_viewer_set_environment(viewer.get(), &noon), MTK_STATUS_OK) << mtk_viewer_last_error_message();
     EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_RENDERED), MTK_STATUS_OK);
-    const mtk_viewer_environment night{{0.0, 0.3, -0.9}, 0.0f, 0.0, 1000.0};
+    const mtk_viewer_environment night{{0.0, 0.3, -0.9}, 0.0f, 0.0, 1000.0, {0.1f, 0.1f, 0.1f}};
     EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &night), MTK_STATUS_OK);
     EXPECT_EQ(mtk_viewer_set_grid_visible(viewer.get(), 1), MTK_STATUS_OK);
     EXPECT_EQ(mtk_viewer_set_display_mode(viewer.get(), MTK_VIEWER_DISPLAY_SHADED), MTK_STATUS_OK);
@@ -270,6 +270,9 @@ TEST(Viewer, RendersUnderTheSkyOfItsEnvironment) {
     EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
     wrong = noon;
     wrong.cloudiness = 2.0f;
+    EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
+    wrong = noon;
+    wrong.ground_color[1] = 1.5f;
     EXPECT_EQ(mtk_viewer_set_environment(viewer.get(), &wrong), MTK_STATUS_INVALID_ARGUMENT);
     wrong = noon;
     wrong.ground_size = 0.0;

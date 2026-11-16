@@ -258,6 +258,14 @@
                     <Slider Grid.Column="1" Width="160" Minimum="0" Maximum="1" Value="{Binding Cloudiness}"
                             VerticalAlignment="Center" />
                   </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Ground" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="The colour of the ground under the model." />
+                    </StackPanel>
+                    <ColorPicker Grid.Column="1" Color="{Binding GroundColor}" IsAlphaVisible="False"
+                                 IsAlphaEnabled="False" VerticalAlignment="Center" />
+                  </Grid></Border>
                 </StackPanel></Border>
               </StackPanel>
             </StackPanel>

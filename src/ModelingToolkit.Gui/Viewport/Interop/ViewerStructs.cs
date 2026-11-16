@@ -155,4 +155,5 @@ internal unsafe struct NativeEnvironment
     public float Cloudiness;
     public double GroundHeight;
     public double GroundSize;
+    public fixed float GroundColor[3];
 }

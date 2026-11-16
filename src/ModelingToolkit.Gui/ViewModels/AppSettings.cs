@@ -39,6 +39,9 @@ public sealed record AppSettings
     /// <summary>The cover of clouds in the rendered display mode, from 0, a clear sky, to 1.</summary>
     public double Cloudiness { get; init; } = 0.35;
 
+    /// <summary>The colour of the ground in the rendered display mode, as "#RRGGBB".</summary>
+    public string GroundColor { get; init; } = "#5C6B4D";
+
     /// <summary>The width, in points, of the edges drawn over the faces.</summary>
     public double EdgeWidth { get; init; } = 1.0;
 

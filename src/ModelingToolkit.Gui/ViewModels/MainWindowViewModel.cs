@@ -764,7 +764,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>The sky and the sun of the rendered display mode, today at <see cref="TimeOfDay"/> where the model is.</summary>
     public ViewEnvironment SkyEnvironment => new(
         SunPosition.Direction(TimeOfDay, DateOnly.FromDateTime(SunDate ?? DateTime.Today), Latitude, NorthAngle),
-        (float)Cloudiness);
+        (float)Cloudiness, GroundColor);
 
     /// <summary>The hour shown by the slider of the rendered display mode: "14:30".</summary>
     public string TimeOfDayText => $"{(int)TimeOfDay:00}:{(int)Math.Round(TimeOfDay % 1 * 60) % 60:00}";
@@ -998,6 +998,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             NorthAngle = settings.NorthAngle;
             SunDate = settings.SunDate?.ToDateTime(TimeOnly.MinValue);
             Cloudiness = Math.Clamp(settings.Cloudiness, 0, 1);
+            GroundColor = Avalonia.Media.Color.TryParse(settings.GroundColor, out Avalonia.Media.Color ground)
+                ? Avalonia.Media.Color.FromRgb(ground.R, ground.G, ground.B) : ViewEnvironment.Lawn;
             EdgeWidth = Math.Clamp(settings.EdgeWidth, 0.25, 10);
             OutlineWidth = Math.Clamp(settings.OutlineWidth, 0.25, 10);
             Collisions = settings.Collisions;
@@ -1021,7 +1023,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (_applyingSettings || _settingsStore is null || e.PropertyName is not (nameof(UseGlb) or nameof(IsDark)
                 or nameof(RenderStyle) or nameof(DisplayMode) or nameof(IsPerspective) or nameof(IsGridVisible)
                 or nameof(TimeOfDay) or nameof(Latitude) or nameof(NorthAngle) or nameof(Collisions)
-                or nameof(SunDate) or nameof(Cloudiness) or nameof(EdgeWidth) or nameof(OutlineWidth)
+                or nameof(SunDate) or nameof(Cloudiness) or nameof(GroundColor) or nameof(EdgeWidth) or nameof(OutlineWidth)
                 or nameof(CollisionRadius) or nameof(EyeHeight) or nameof(WalkSpeed) or nameof(RunFactor)
                 or nameof(WalkFieldOfView) or nameof(LookSensitivity)))
         {
@@ -1032,7 +1034,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             UseGlb = UseGlb, DarkTheme = IsDark, RenderStyle = RenderStyle, DisplayMode = DisplayMode,
             Perspective = IsPerspective, Grid = IsGridVisible, TimeOfDay = TimeOfDay, Latitude = Latitude,
             NorthAngle = NorthAngle, Collisions = Collisions, SunDate = SunDate is { } day ? DateOnly.FromDateTime(day) : null,
-            Cloudiness = Cloudiness, EdgeWidth = EdgeWidth, OutlineWidth = OutlineWidth, CollisionRadius = CollisionRadius,
+            Cloudiness = Cloudiness, GroundColor = $"#{GroundColor.R:X2}{GroundColor.G:X2}{GroundColor.B:X2}",
+            EdgeWidth = EdgeWidth, OutlineWidth = OutlineWidth, CollisionRadius = CollisionRadius,
             EyeHeight = EyeHeight, WalkSpeed = WalkSpeed, RunFactor = RunFactor, WalkFieldOfView = WalkFieldOfView,
             LookSensitivity = LookSensitivity,
         };
@@ -1067,6 +1070,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SkyEnvironment))]
     public partial double Cloudiness { get; set; }
+
+    /// <summary>The colour of the ground in the rendered display mode.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SkyEnvironment))]
+    public partial Avalonia.Media.Color GroundColor { get; set; }
 
     [RelayCommand]
     private void SetSunDateToday() => SunDate = null;

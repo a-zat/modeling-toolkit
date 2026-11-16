@@ -235,6 +235,18 @@ mtk::Viewer::Viewer(void* parent) {
     apply_scale(1.0);
     context_->Display(view_cube_, false);
 
+    // The camera turns as on a turntable, around the point under the pointer where the drag starts, the vertical up;
+    // either button drags it round, the middle one, or Shift with the left one, pans; the wheel and the pinch of a
+    // trackpad zoom.
+    SetRotationMode(AIS_RotationMode_PickLast);
+    SetLockOrbitZUp(true);
+    NCollection_DataMap<unsigned int, AIS_MouseGesture>& gestures = ChangeMouseGestureMap();
+    const auto keys = [](unsigned int button, unsigned int modifiers) { return button | modifiers; };
+    gestures.Bind(Aspect_VKeyMouse_RightButton, AIS_MouseGesture_RotateOrbit);
+    gestures.Bind(keys(Aspect_VKeyMouse_RightButton, Aspect_VKeyFlags_SHIFT), AIS_MouseGesture_Pan);
+    gestures.UnBind(keys(Aspect_VKeyMouse_RightButton, Aspect_VKeyFlags_CTRL));
+    gestures.UnBind(keys(Aspect_VKeyMouse_LeftButton, Aspect_VKeyFlags_CTRL)); // a right click on macOS
+
     native_view_ = NativeView::create(*this, parent);
 }
 
@@ -627,10 +639,10 @@ void mtk::Viewer::set_perspective(bool perspective) {
 
 namespace {
 
-// The ground of the rendered display mode: a square, lit, which receives the shadows; never selected.
+// The ground of the rendered display mode: a square of a colour, lit; never selected.
 class Ground : public AIS_InteractiveObject {
 public:
-    Ground(double height, double size) : height_(height), size_(size) {}
+    Ground(double height, double size, const Quantity_Color& color) : height_(height), size_(size), color_(color) {}
 
     bool AcceptDisplayMode(const int mode) const override { return mode == 0; }
 
@@ -647,9 +659,8 @@ public:
         square->AddEdges(1, 2, 3);
         square->AddEdges(1, 3, 4);
 
-        const Quantity_Color color(0.36, 0.42, 0.30, Quantity_TOC_sRGB); // a dry lawn
         Graphic3d_MaterialAspect material(Graphic3d_NameOfMaterial_UserDefined);
-        material.SetColor(color);
+        material.SetColor(color_);
         material.SetSpecularColor(Quantity_NOC_BLACK);
         occ::handle<Graphic3d_AspectFillArea3d> aspect = new Graphic3d_AspectFillArea3d();
         aspect->SetInteriorStyle(Aspect_IS_SOLID);
@@ -665,6 +676,7 @@ public:
 private:
     double height_;
     double size_;
+    Quantity_Color color_;
 };
 
 } // namespace
@@ -714,7 +726,7 @@ void mtk::Viewer::apply_environment() {
     context_->Erase(vertical_axis_, false);
     context_->Erase(view_cube_, false); // its corner holds the time of day of the application
 
-    ground_ = new Ground(environment_.ground_height, environment_.ground_size);
+    ground_ = new Ground(environment_.ground_height, environment_.ground_size, to_color(environment_.ground_color));
     context_->Display(ground_, 0, -1, false);
     view_->Invalidate();
 }
@@ -1509,6 +1521,9 @@ mtk_status mtk_viewer_set_environment(mtk_viewer* viewer, const mtk_viewer_envir
         if (!std::isfinite(environment->ground_height) || !(environment->ground_size > 0.0) ||
             !std::isfinite(environment->ground_size)) {
             return mtk::invalid_argument("the ground must have a finite height and a positive size.");
+        }
+        if (!is_color(environment->ground_color)) {
+            return mtk::invalid_argument("the colour of the ground must have components from 0 to 1.");
         }
         viewer->set_environment(*environment);
         return MTK_STATUS_OK;

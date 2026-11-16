@@ -25,7 +25,7 @@ public sealed class ViewerInteropTests
         Assert.Equal(120, Unsafe.SizeOf<NativePick>());
         Assert.Equal(12, Unsafe.SizeOf<ViewerElement>());
         Assert.Equal(80, Unsafe.SizeOf<NativeCamera>());
-        Assert.Equal(48, Unsafe.SizeOf<NativeEnvironment>());
+        Assert.Equal(64, Unsafe.SizeOf<NativeEnvironment>());
         Assert.Equal(32, Unsafe.SizeOf<NativeOverlayLine>());
         Assert.Equal(40, Unsafe.SizeOf<NativeOverlayMarker>());
         Assert.Equal(56, Unsafe.SizeOf<NativeOverlayLabel>());
