@@ -105,6 +105,30 @@ public sealed class AnimationsViewModelTests
         Assert.False(animations.ToggleAt([_document.Root.Entities[1]]));
     }
 
+    [Fact]
+    public void Animations_are_grouped_by_layer_and_a_group_or_all_move_together()
+    {
+        // The cabinet is the layer holding the door and the drawer; the table is a layer of its own.
+        var table = (BlockReference)_document.Root.Entities[1];
+        var moveTable = new Animation("Move_table", [Slide(table)]);
+        _document.Animations.Add(moveTable);
+        var animations = new AnimationsViewModel(useTimer: false);
+        animations.Show(_document);
+
+        Assert.Equal(["Cabinet", "Table"], animations.Groups.Select(group => group.Name));
+        AnimationGroupViewModel cabinet = animations.Groups[0];
+        Assert.Equal([_openAll, _openDoor, _openDrawer], cabinet.Items.Select(item => item.Animation));
+
+        cabinet.Position = 0.5;
+        Assert.All(cabinet.Items, item => Assert.Equal(0.5, item.Position));
+        Assert.True(cabinet.IsOpen);
+        Assert.False(animations.Pose.ContainsKey(table));
+
+        animations.All.IsOpen = true;
+        animations.Advance(10);
+        Assert.All(animations.Items, item => Assert.Equal(1, item.Position));
+    }
+
     // 500 mm along X in two seconds.
     private static AnimationChannel Slide(BlockReference target) => new(
         target, AnimatedProperty.Translation, AnimationInterpolation.Linear, [0, 2], [0, 0, 0, 500, 0, 0]);

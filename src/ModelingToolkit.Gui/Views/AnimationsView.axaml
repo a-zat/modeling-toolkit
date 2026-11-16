@@ -1,34 +1,72 @@
-<!-- The animations of the selection: a switch opens or closes each one, a slider shows it at any point. -->
+<!-- The animations of the selection, by layer: a switch opens or closes each one, a slider shows it at any point; the
+     same at the top for all of them, and in the header of each group for those of the group. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
              x:Class="ModelingToolkit.Gui.Views.AnimationsView"
              x:DataType="vm:AnimationsViewModel">
 
+  <UserControl.DataTemplates>
+    <!-- A name with a switch, and a slider below. -->
+    <DataTemplate DataType="vm:AnimationItemViewModel">
+      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,2">
+        <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+        <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsOpen}" OnContent="{x:Null}" OffContent="{x:Null}"
+                      MinWidth="0" ToolTip.Tip="Open or close" />
+        <Slider Grid.Row="1" Grid.ColumnSpan="2" Minimum="0" Maximum="1" Value="{Binding Position}" Margin="0,-6" />
+      </Grid>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
   <Panel>
     <ScrollViewer IsVisible="{Binding HasItems}">
-      <ItemsControl ItemsSource="{Binding Items}" Margin="10,0,10,10">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <StackPanel Spacing="8" />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate DataType="vm:AnimationItemViewModel">
-            <Border Classes="card" Padding="12,8">
-              <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
-                <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
-                <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding IsOpen}"
-                              OnContent="{x:Null}" OffContent="{x:Null}" MinWidth="0"
-                              ToolTip.Tip="Open or close" />
-                <Slider Grid.Row="1" Grid.ColumnSpan="2" Classes="compact" Minimum="0" Maximum="1"
-                        Value="{Binding Position}" />
-              </Grid>
-            </Border>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+      <StackPanel Margin="10,0,10,10" Spacing="8">
+        <!-- All of them at once. -->
+        <Border Classes="card" Padding="12,6">
+          <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+            <TextBlock Text="All" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding All.IsOpen}" OnContent="{x:Null}" OffContent="{x:Null}"
+                          MinWidth="0" ToolTip.Tip="Open or close all" />
+            <Slider Grid.Row="1" Grid.ColumnSpan="2" Minimum="0" Maximum="1" Value="{Binding All.Position}"
+                    Margin="0,-6" />
+          </Grid>
+        </Border>
+
+        <ItemsControl ItemsSource="{Binding Groups}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="8" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:AnimationGroupViewModel">
+              <Border Classes="card" Padding="12,6">
+                <StackPanel>
+                  <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                    <ToggleButton Classes="tool" Width="20" Height="20" Padding="0" Margin="0,0,6,0"
+                                  IsChecked="{Binding IsExpanded}" ToolTip.Tip="Show or hide the animations">
+                      <Panel>
+                        <PathIcon Data="{StaticResource Icon.ChevronDown}" Width="10" Height="10"
+                                  IsVisible="{Binding IsExpanded}" />
+                        <PathIcon Data="{StaticResource Icon.ChevronRight}" Width="10" Height="10"
+                                  IsVisible="{Binding !IsExpanded}" />
+                      </Panel>
+                    </ToggleButton>
+                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <ToggleSwitch Grid.Column="2" IsChecked="{Binding IsOpen}" OnContent="{x:Null}"
+                                  OffContent="{x:Null}" MinWidth="0" ToolTip.Tip="Open or close all of the group" />
+                    <Slider Grid.Row="1" Grid.ColumnSpan="3" Minimum="0" Maximum="1" Value="{Binding Position}"
+                            Margin="0,-6" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsExpanded}" Margin="12,4,0,0" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
     </ScrollViewer>
 
     <TextBlock Classes="placeholder" Text="{Binding Placeholder}" IsVisible="{Binding !HasItems}" />

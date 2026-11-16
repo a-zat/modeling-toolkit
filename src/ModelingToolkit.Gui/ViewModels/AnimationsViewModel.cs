@@ -50,6 +50,18 @@ public sealed partial class AnimationItemViewModel : ObservableObject
     /// <summary>Plays it from where it is to its end, or back to its start.</summary>
     public void Toggle() => IsOpen = !IsOpen;
 
+    /// <summary>Plays it to its end, or back to its start, even if it is open, or closed, already, but not all the way.</summary>
+    internal void Play(bool open)
+    {
+        if (IsOpen != open)
+        {
+            IsOpen = open;
+            return;
+        }
+        Goal = open ? 1 : 0;
+        _owner.OnPlayed(this);
+    }
+
     // A drag of the slider shows the animation there and stops it playing.
     partial void OnPositionChanged(double value)
     {
@@ -145,11 +157,21 @@ public sealed partial class AnimationsViewModel : ObservableObject
     internal AnimationsViewModel(bool useTimer)
     {
         _useTimer = useTimer;
+        All = new AnimationGroupViewModel("All", [], isExpanded: true);
         Pose = new Dictionary<BlockReference, Transform>(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>The animations of the selection: those that move it, a part of it or a part holding it.</summary>
     public ObservableCollection<AnimationItemViewModel> Items { get; } = [];
+
+    /// <summary>
+    /// <see cref="Items"/> by layer, the entity of the model space holding the parts they move; those moving parts of
+    /// several layers come first, in a group of their own.
+    /// </summary>
+    public ObservableCollection<AnimationGroupViewModel> Groups { get; } = [];
+
+    /// <summary>All the animations shown together, as one.</summary>
+    public AnimationGroupViewModel All { get; }
 
     /// <summary>The transformation of each part moved by the animations, in place of the one of the document.</summary>
     [ObservableProperty]
@@ -217,6 +239,19 @@ public sealed partial class AnimationsViewModel : ObservableObject
             Items.Add(item);
         }
         HasItems = Items.Count > 0;
+
+        // The groups keep whether they are expanded while the selection changes.
+        var expanded = Groups.ToDictionary(group => group.Name, group => group.IsExpanded);
+        Groups.Clear();
+        Dictionary<Block, Entity> layers = LayersOf(_document);
+        foreach (IGrouping<string, AnimationItemViewModel> group in shown
+                     .GroupBy(item => LayerName(item, layers))
+                     .OrderBy(group => group.Key == SeveralLayers ? 0 : 1))
+        {
+            Groups.Add(new AnimationGroupViewModel(group.Key, [.. group],
+                expanded.GetValueOrDefault(group.Key, false)));
+        }
+        All.Set([.. shown]);
     }
 
     /// <summary>
@@ -332,6 +367,45 @@ public sealed partial class AnimationsViewModel : ObservableObject
         _clock.Reset();
     }
 
+    private const string SeveralLayers = "Several layers";
+
+    // For each block, the entity of the model space through which it is placed, when there is one.
+    private static Dictionary<Block, Entity> LayersOf(Document? document)
+    {
+        var layers = new Dictionary<Block, Entity>(ReferenceEqualityComparer.Instance);
+        if (document is null)
+        {
+            return layers;
+        }
+        foreach (BlockReference layer in document.Root.Entities.OfType<BlockReference>())
+        {
+            var pending = new Stack<Block>([layer.Block]);
+            while (pending.TryPop(out Block? block))
+            {
+                if (layers.TryAdd(block, layer))
+                {
+                    foreach (BlockReference reference in block.Entities.OfType<BlockReference>())
+                    {
+                        pending.Push(reference.Block);
+                    }
+                }
+            }
+        }
+        return layers;
+    }
+
+    private string LayerName(AnimationItemViewModel item, Dictionary<Block, Entity> layers)
+    {
+        var names = new HashSet<string>();
+        foreach (BlockReference target in item.Targets)
+        {
+            Entity? layer = target.Owner == _document?.Root ? target
+                : target.Owner is { } owner ? layers.GetValueOrDefault(owner) : null;
+            names.Add(layer is BlockReference reference ? reference.Name ?? reference.Block.Name : layer?.Name ?? "Model");
+        }
+        return names.Count == 1 ? names.First() : SeveralLayers;
+    }
+
     // The parts erased from the document move nothing; their animation comes back with them, by an undo.
     private static bool InScene(AnimationItemViewModel item) => item.Targets.Any(target => target.Owner is not null);
 
@@ -365,5 +439,73 @@ public sealed partial class AnimationsViewModel : ObservableObject
             }
         }
         return item.Targets.Any(target => target.Owner is { } owner && blocks.Contains(owner));
+    }
+}
+
+/// <summary>
+/// Animations shown together, as those of a layer, with a switch and a slider that open, close or move them all at
+/// once, and whether the group is expanded in the panel.
+/// </summary>
+public sealed partial class AnimationGroupViewModel : ObservableObject
+{
+    private List<AnimationItemViewModel> _items;
+    private bool _setting;
+
+    internal AnimationGroupViewModel(string name, List<AnimationItemViewModel> items, bool isExpanded)
+    {
+        Name = name;
+        _items = items;
+        IsExpanded = isExpanded;
+    }
+
+    public string Name { get; }
+
+    public IReadOnlyList<AnimationItemViewModel> Items => _items;
+
+    public string Title => $"{Name.Replace('_', ' ')} ({_items.Count})";
+
+    [ObservableProperty]
+    public partial bool IsExpanded { get; set; }
+
+    /// <summary>Where all the animations of the group are shown, from 0 to 1, as the slider last set them.</summary>
+    [ObservableProperty]
+    public partial double Position { get; set; }
+
+    /// <summary>Opens, or closes, all the animations of the group.</summary>
+    [ObservableProperty]
+    public partial bool IsOpen { get; set; }
+
+    internal void Set(List<AnimationItemViewModel> items)
+    {
+        _items = items;
+        OnPropertyChanged(nameof(Items));
+        OnPropertyChanged(nameof(Title));
+    }
+
+    partial void OnPositionChanged(double value)
+    {
+        if (_setting)
+        {
+            return;
+        }
+        foreach (AnimationItemViewModel item in _items)
+        {
+            item.Position = value;
+        }
+        _setting = true;
+        IsOpen = value > 0;
+        _setting = false;
+    }
+
+    partial void OnIsOpenChanged(bool value)
+    {
+        if (_setting)
+        {
+            return;
+        }
+        foreach (AnimationItemViewModel item in _items)
+        {
+            item.Play(value);
+        }
     }
 }

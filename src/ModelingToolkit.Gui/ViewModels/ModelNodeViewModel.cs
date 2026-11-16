@@ -236,7 +236,7 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         return new(name, detail, entity, [.. Path, entity], (entity as BlockReference)?.Block, null);
     }
 
-    private static (string Name, string? Detail) Label(Entity entity)
+    internal static (string Name, string? Detail) Label(Entity entity)
     {
         switch (entity)
         {
