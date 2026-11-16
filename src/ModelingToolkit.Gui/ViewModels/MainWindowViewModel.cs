@@ -90,10 +90,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     Elements?.Clear();
                     LeaveTo(node.Path);
                 }
+                SelectedInView = _selectingInView && ModelTree.SelectedNode is not null;
                 ShowProperties();
                 Animations.Filter(ModelTree.SelectedNode?.Path);
                 OnEditingChanged();
                 OnPropertyChanged(nameof(EmphasizedPath));
+                ShowOverlay();
             }
         };
         Palette.Commands =
@@ -273,7 +275,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<Entity>? EmphasizedPath => IsRendered
         ? null
-        : ModelTree.SelectedNode?.Path ?? (Context is { IsModel: false } context ? context.Path : null);
+        : (SelectedInView ? null : ModelTree.SelectedNode?.Path) ??
+          (Context is { IsModel: false } context ? context.Path : null);
+
+    /// <summary>
+    /// Whether the selected node was picked in the 3D view, which frames it by its box, rather than in the outline, which
+    /// shows it in front of the rest.
+    /// </summary>
+    public bool SelectedInView { get; private set; }
+
+    private bool _selectingInView;
 
     /// <summary>The references entered, by name, from the model: "Car › Front wheel".</summary>
     public string ContextName => Context is null
@@ -453,7 +464,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         public IReadOnlyList<Entity>? SelectedEntity => owner.ModelTree.SelectedNode?.Path;
 
-        public void SelectEntity(IReadOnlyList<Entity>? path) => owner.ModelTree.SelectCommand.Execute(path);
+        // Selected in the 3D view: framed by its box, the rest as it is.
+        public void SelectEntity(IReadOnlyList<Entity>? path)
+        {
+            owner._selectingInView = true;
+            try
+            {
+                owner.ModelTree.SelectCommand.Execute(path);
+            }
+            finally
+            {
+                owner._selectingInView = false;
+            }
+        }
 
         public void ShowPreview(ToolPreview preview)
         {
@@ -1302,6 +1325,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void OnDocumentEdited(object? sender, DocumentChange change)
     {
         ShowProperties(refresh: true);
+        ShowOverlay(); // the box of the selection, moved
         Animations.Refresh();
         if (Document is { } document)
         {
@@ -1401,7 +1425,39 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Transform placement = Context?.Placement ?? Transform.Identity;
         GuideLine[] guides = Context is null ? [] : [.. Context.Block.Entities.OfType<GuideEntity>()
             .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
-        Overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
+        ViewOverlay overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
+        Overlay = SelectionBox() is { } box ? overlay with { Lines = [.. overlay.Lines, .. box] } : overlay;
+    }
+
+    private static readonly Avalonia.Media.Color SelectionBoxColor = Avalonia.Media.Color.FromRgb(0x2F, 0x7B, 0xF5);
+
+    // The box of the entity selected in the 3D view, turned with it: its twelve edges.
+    private List<OverlayLine>? SelectionBox()
+    {
+        if (!SelectedInView || IsRendered || ModelTree.SelectedNode is not { Entity: { } entity, Path: { } path })
+        {
+            return null;
+        }
+        Transform placement = path.Take(path.Count - 1).OfType<BlockReference>()
+            .Aggregate(Transform.Identity, (current, reference) => current * reference.Transform);
+        BoundingBox box;
+        if (entity is BlockReference selected)
+        {
+            box = selected.Block.GetBoundingBox();
+            placement *= selected.Transform;
+        }
+        else
+        {
+            box = entity.GetBoundingBox();
+        }
+        if (box.IsEmpty)
+        {
+            return null;
+        }
+        Point3d Corner(int i) => placement.Apply(new Point3d(
+            (i & 1) == 0 ? box.Min.X : box.Max.X, (i & 2) == 0 ? box.Min.Y : box.Max.Y, (i & 4) == 0 ? box.Min.Z : box.Max.Z));
+        int[][] edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+        return [.. edges.Select(edge => new OverlayLine([Corner(edge[0]), Corner(edge[1])], SelectionBoxColor, 1.5))];
     }
 
     private async Task WriteAsync(string path)

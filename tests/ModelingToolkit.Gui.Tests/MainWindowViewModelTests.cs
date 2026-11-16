@@ -448,6 +448,27 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task ASelectionInTheViewIsFramedByItsBoxOneInTheOutlineIsShownInFrontOfTheRest()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        ModelNodeViewModel reference = Flatten(viewModel.ModelTree.Model!).First(node => node.IsReference);
+
+        // A click in the 3D view, through the select tool.
+        viewModel.ViewInputCommand.Execute(new ViewportPick(reference.Path, null, default, default, KeyModifiers.None, 1,
+            ViewportInputKind.Click));
+        Assert.True(viewModel.SelectedInView);
+        Assert.Null(viewModel.EmphasizedPath);
+        Assert.Equal(12, viewModel.Overlay.Lines.Count);
+
+        viewModel.ModelTree.SelectedNode = null;
+        viewModel.ModelTree.SelectedNode = reference;
+        Assert.False(viewModel.SelectedInView);
+        Assert.Equal(reference.Path, viewModel.EmphasizedPath);
+        Assert.Empty(viewModel.Overlay.Lines);
+    }
+
+    [Fact]
     public void TheApplicationNeverStartsRendered()
     {
         var store = new MemorySettingsStore(new AppSettings { DisplayMode = DisplayMode.Rendered, Collisions = false });
