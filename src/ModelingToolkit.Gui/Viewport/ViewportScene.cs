@@ -57,6 +57,7 @@ internal sealed class ViewportScene
 
     private List<ViewportInstance> _instances = [];
     private List<BrepEntity> _reachedShapes = [];
+    private IReadOnlyDictionary<BlockReference, Transform> _pose = new Dictionary<BlockReference, Transform>();
 
     // The viewer that shows the scene, and the index there of each mesh, texture, material and instance of the scene,
     // -1 for those it could not show.
@@ -205,6 +206,16 @@ internal sealed class ViewportScene
 
         _instances = next;
         ReleaseUnusedMeshes();
+    }
+
+    /// <summary>
+    /// Places block references, such as the parts moved by animations, with other transformations than their own,
+    /// from the next <see cref="Update"/>: the document is left as it is.
+    /// </summary>
+    public void SetPose(IReadOnlyDictionary<BlockReference, Transform> pose)
+    {
+        ArgumentNullException.ThrowIfNull(pose);
+        _pose = pose;
     }
 
     /// <summary>
@@ -401,7 +412,8 @@ internal sealed class ViewportScene
                     }
                     break;
                 case BlockReference reference:
-                    Visit(reference.Block, placement * reference.Transform, path, instances, reached);
+                    Transform transform = _pose.TryGetValue(reference, out Transform? posed) ? posed : reference.Transform;
+                    Visit(reference.Block, placement * transform, path, instances, reached);
                     break;
             }
             path.RemoveAt(path.Count - 1);

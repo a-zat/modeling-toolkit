@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Kernel.Occt.Interop;
@@ -47,7 +48,27 @@ public sealed class GltfReader : IDocumentReader
             {
                 warnings.Add(warning);
             }
+            ReadAnimations(fullPath, document, warnings);
             return document;
+        }
+    }
+
+    // The geometry is read already: animations that cannot be read leave it as it is.
+    private static void ReadAnimations(string path, Document document, ICollection<string> warnings)
+    {
+        var found = new List<string>();
+        try
+        {
+            document.Animations.AddRange(GltfAnimations.Read(path, document, found));
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException or IOException
+                                              or InvalidOperationException or ArgumentException)
+        {
+            found.Add($"The animations cannot be read: {exception.Message}");
+        }
+        foreach (string warning in found.Distinct())
+        {
+            warnings.Add(warning);
         }
     }
 

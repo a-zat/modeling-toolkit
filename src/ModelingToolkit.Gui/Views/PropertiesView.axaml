@@ -6,8 +6,6 @@
              x:DataType="vm:PropertiesViewModel">
 
   <DockPanel>
-    <TextBlock DockPanel.Dock="Top" Classes="label panelHeader" Text="PROPERTIES" />
-
     <Panel>
       <ScrollViewer IsVisible="{Binding HasSelection}">
         <Border Classes="card" Margin="10,0,10,10" VerticalAlignment="Top">

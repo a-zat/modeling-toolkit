@@ -7,7 +7,7 @@ namespace ModelingToolkit.Core.Tests.Editing;
 public sealed class ImportCommandTests
 {
     [Fact]
-    public void A_model_imported_becomes_a_block_placed_at_the_origin_with_its_blocks_and_materials_until_undone()
+    public void A_model_imported_becomes_a_block_placed_at_the_origin_with_its_blocks_materials_and_animations_until_undone()
     {
         var document = new Document();
         document.Blocks.Add(new Block("Chair"));
@@ -20,7 +20,12 @@ public sealed class ImportCommandTests
         imported.Materials.Add(oak);
         var seat = new BrepEntity(new NoKernel(), new NoShape());
         imported.Root.Entities.Add(seat);
-        imported.Root.Entities.Add(new BlockReference(leg, Transform.Translation(10, 0, 0)));
+        var legReference = new BlockReference(leg, Transform.Translation(10, 0, 0));
+        imported.Root.Entities.Add(legReference);
+        var fold = new Animation("Fold", [
+            new AnimationChannel(legReference, AnimatedProperty.Scale, AnimationInterpolation.Step, [0], [1, 1, 0.5]),
+        ]);
+        imported.Animations.Add(fold);
 
         var import = new ImportCommand(document, document.Root, imported, "Chair");
         session.Execute(import);
@@ -33,6 +38,7 @@ public sealed class ImportCommandTests
         Assert.Same(placed.Block, seat.Owner);
         Assert.Equal(["Chair", "Leg", "Chair 2"], document.Blocks.Select(block => block.Name));
         Assert.Equal([oak], document.Materials);
+        Assert.Equal([fold], document.Animations);
         Assert.Empty(imported.Root.Entities);
         Assert.Equal("Import", session.UndoName);
 
@@ -40,8 +46,10 @@ public sealed class ImportCommandTests
         Assert.Empty(document.Root.Entities);
         Assert.Equal(["Chair"], document.Blocks.Select(block => block.Name));
         Assert.Empty(document.Materials);
+        Assert.Empty(document.Animations);
         session.Redo();
         Assert.Same(placed, Assert.Single(document.Root.Entities));
+        Assert.Equal([fold], document.Animations);
     }
 
     [Fact]

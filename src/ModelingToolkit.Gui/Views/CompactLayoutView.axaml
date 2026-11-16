@@ -157,6 +157,7 @@
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
                              IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}"
+                             Pose="{Binding Animations.Pose}"
                              Overlay="{Binding Overlay}" />
 
       <GridSplitter Grid.Column="2" IsVisible="{Binding IsInspectorOpen}" />
@@ -178,7 +179,27 @@
         <views:ModelTreeView Grid.Row="1" DataContext="{Binding ModelTree}" />
         <GridSplitter Grid.Row="2" Classes="horizontal" ResizeDirection="Rows"
                       IsVisible="{Binding IsOutlineExpanded}" />
-        <views:PropertiesView Grid.Row="3" DataContext="{Binding Properties}" />
+        <!-- The properties of the selection, or its animations, in tabs. -->
+        <DockPanel Grid.Row="3">
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="14,0">
+            <Button Classes="tab" Classes.active="{Binding IsPropertiesTab}" Command="{Binding ShowInspectorTabCommand}"
+                    CommandParameter="Properties">
+              <TextBlock Classes="label" Text="PROPERTIES" />
+            </Button>
+            <Button Classes="tab" Classes.active="{Binding IsAnimationsTab}" Command="{Binding ShowInspectorTabCommand}"
+                    CommandParameter="Animations">
+              <TextBlock Classes="label" Text="ANIMATIONS" />
+            </Button>
+          </StackPanel>
+          <Panel>
+            <Panel IsVisible="{Binding IsPropertiesTab}">
+              <views:PropertiesView DataContext="{Binding Properties}" />
+            </Panel>
+            <Panel IsVisible="{Binding IsAnimationsTab}">
+              <views:AnimationsView DataContext="{Binding Animations}" />
+            </Panel>
+          </Panel>
+        </DockPanel>
       </Grid>
     </Grid>
   </DockPanel>

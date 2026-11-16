@@ -1,0 +1,37 @@
+<!-- The animations of the selection: a switch opens or closes each one, a slider shows it at any point. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
+             x:Class="ModelingToolkit.Gui.Views.AnimationsView"
+             x:DataType="vm:AnimationsViewModel">
+
+  <Panel>
+    <ScrollViewer IsVisible="{Binding HasItems}">
+      <ItemsControl ItemsSource="{Binding Items}" Margin="10,0,10,10">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="8" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:AnimationItemViewModel">
+            <Border Classes="card" Padding="12,8">
+              <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                <ToggleSwitch Grid.Column="1" Classes="compact" IsChecked="{Binding IsOpen}"
+                              OnContent="{x:Null}" OffContent="{x:Null}" MinWidth="0"
+                              ToolTip.Tip="Open or close" />
+                <Slider Grid.Row="1" Grid.ColumnSpan="2" Classes="compact" Minimum="0" Maximum="1"
+                        Value="{Binding Position}" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <TextBlock Classes="placeholder" Text="{Binding Placeholder}" IsVisible="{Binding !HasItems}" />
+  </Panel>
+
+</UserControl>

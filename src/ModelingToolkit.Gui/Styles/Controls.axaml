@@ -275,6 +275,20 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <!-- The tabs of the inspector: labels, the one shown in the colour of the text. -->
+  <Style Selector="Button.tab">
+    <Setter Property="Padding" Value="0,14,0,8" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+  <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.tab:pointerover TextBlock, Button.tab.active TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.Foreground}" />
+  </Style>
+
   <Style Selector="Border.palette">
     <Setter Property="Padding" Value="8" />
     <Setter Property="CornerRadius" Value="12" />

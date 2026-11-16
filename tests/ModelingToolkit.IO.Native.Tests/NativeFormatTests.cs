@@ -127,7 +127,7 @@ public sealed class NativeFormatTests : IDisposable
         using Stream stream = archive.GetEntry("manifest.json")!.Open();
         using JsonDocument manifest = JsonDocument.Parse(stream);
         Assert.Equal("modeling-toolkit", manifest.RootElement.GetProperty("format").GetString());
-        Assert.Equal(4, manifest.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(5, manifest.RootElement.GetProperty("version").GetInt32());
         Assert.Equal("mm", manifest.RootElement.GetProperty("units").GetString());
     }
 
@@ -205,6 +205,66 @@ public sealed class NativeFormatTests : IDisposable
     }
 
     [Fact]
+    public void Animations_survive_a_round_trip_without_the_motions_of_references_no_longer_in_the_document()
+    {
+        var document = new Document();
+        var part = new Block("Part");
+        document.Blocks.Add(part);
+        var door = new BlockReference(part, Transform.Translation(1, 2, 3)) { Name = "Door" };
+        var hinge = new Block("Hinge");
+        document.Blocks.Add(hinge);
+        hinge.Entities.Add(door);
+        document.Root.Entities.Add(new BlockReference(hinge, Transform.Identity));
+        var drawer = new BlockReference(part, Transform.Identity);
+        document.Root.Entities.Add(drawer);
+        var gone = new BlockReference(part, Transform.Identity);
+        document.Animations.Add(new Animation("Open", [
+            new AnimationChannel(door, AnimatedProperty.Rotation, AnimationInterpolation.Linear,
+                [0, 1.5], [0, 0, 0, 1, 0, 0, 1, 0]),
+            new AnimationChannel(drawer, AnimatedProperty.Translation, AnimationInterpolation.CubicSpline,
+                [0], [0, 0, 0, 1, 2, 3, 0, 0, 0]),
+            new AnimationChannel(gone, AnimatedProperty.Scale, AnimationInterpolation.Step, [0], [1, 1, 1]),
+        ]));
+        document.Animations.Add(new Animation("Lost", [
+            new AnimationChannel(gone, AnimatedProperty.Scale, AnimationInterpolation.Step, [0], [1, 1, 1]),
+        ]));
+        string path = PathOf("animations.mtk");
+
+        _writer.Write(document, path);
+        Document copy = _reader.Read(path, []);
+
+        Animation open = Assert.Single(copy.Animations);
+        Assert.Equal("Open", open.Name);
+        Assert.Equal(2, open.Channels.Count);
+        AnimationChannel rotation = open.Channels[0];
+        Assert.Same(copy.Blocks[1].Entities[0], rotation.Target);
+        Assert.Equal(
+            (AnimatedProperty.Rotation, AnimationInterpolation.Linear),
+            (rotation.Property, rotation.Interpolation));
+        Assert.Equal([0, 1.5], rotation.Times);
+        Assert.Equal([0, 0, 0, 1, 0, 0, 1, 0], rotation.Values);
+        AnimationChannel translation = open.Channels[1];
+        Assert.Same(copy.Root.Entities[1], translation.Target);
+        Assert.Equal(AnimationInterpolation.CubicSpline, translation.Interpolation);
+        Assert.Equal([0, 0, 0, 1, 2, 3, 0, 0, 0], translation.Values);
+    }
+
+    [Fact]
+    public void An_animation_of_an_entity_that_is_not_a_reference_makes_the_file_invalid()
+    {
+        string path = Archive("animated.mtk", Manifest("""
+            {"version": 5, "root": {"name": "Model", "entities": [
+                {"type": "guide", "point": [0, 0, 0], "direction": [1, 0, 0]}]},
+             "animations": [{"name": "Wrong", "channels": [{"entity": 0, "property": "rotation",
+                "interpolation": "linear", "times": [0], "values": [0, 0, 0, 1]}]}]}
+            """));
+
+        var exception = Assert.Throws<InvalidDataException>(() => _reader.Read(path, []));
+
+        Assert.Contains("not a block reference", exception.Message);
+    }
+
+    [Fact]
     public void A_shape_file_that_is_not_a_shape_makes_the_file_invalid()
     {
         var document = new Document();
@@ -270,7 +330,7 @@ public sealed class NativeFormatTests : IDisposable
     }
 
     [Theory]
-    [InlineData(5)] // newer than this reader
+    [InlineData(6)] // newer than this reader
     [InlineData(0)]
     [InlineData(-1)]
     public void Versions_that_this_reader_does_not_know_are_rejected(int version)

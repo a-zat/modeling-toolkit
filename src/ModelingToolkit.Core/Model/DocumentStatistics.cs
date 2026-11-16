@@ -24,6 +24,7 @@ public sealed record DocumentStatistics(
     long PlacedBrepShapes,
     int Materials,
     int Textures,
+    int Animations,
     BoundingBox BoundingBox)
 {
     public static DocumentStatistics Of(Document document)
@@ -48,6 +49,7 @@ public sealed record DocumentStatistics(
             PlacedBrepShapes: placedBrepShapes,
             Materials: document.Materials.Count,
             Textures: document.Textures.Count,
+            Animations: document.Animations.Count,
             BoundingBox: PlacedBoundingBox(document.Root, Transform.Identity, BoundingBox.Empty));
     }
 

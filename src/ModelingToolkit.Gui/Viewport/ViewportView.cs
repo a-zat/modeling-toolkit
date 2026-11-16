@@ -11,7 +11,9 @@ using Avalonia.Threading;
 using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Gui.Viewport.Interop;
 using ModelingToolkit.Core.Kernel;
+using BlockReference = ModelingToolkit.Core.Model.BlockReference;
 using BrepEntity = ModelingToolkit.Core.Model.BrepEntity;
+using Transform = ModelingToolkit.Core.Geometry.Transform;
 using Document = ModelingToolkit.Core.Model.Document;
 using DocumentChange = ModelingToolkit.Core.Model.DocumentChange;
 using ElementReference = ModelingToolkit.Core.Model.ElementReference;
@@ -53,6 +55,10 @@ public sealed class ViewportView : Border, IViewCamera
 
     public static readonly StyledProperty<bool> IsGridVisibleProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsGridVisible), defaultValue: true);
+
+    /// <summary>The block references placed otherwise than by their transformation, as by animations.</summary>
+    public static readonly StyledProperty<IReadOnlyDictionary<BlockReference, Transform>?> PoseProperty =
+        AvaloniaProperty.Register<ViewportView, IReadOnlyDictionary<BlockReference, Transform>?>(nameof(Pose));
 
     public static readonly StyledProperty<ViewOverlay> OverlayProperty =
         AvaloniaProperty.Register<ViewportView, ViewOverlay>(nameof(Overlay), ViewOverlay.Empty);
@@ -116,6 +122,12 @@ public sealed class ViewportView : Border, IViewCamera
             e.Handled = true;
         };
         ActualThemeVariantChanged += (_, _) => ApplyColors();
+    }
+
+    public IReadOnlyDictionary<BlockReference, Transform>? Pose
+    {
+        get => GetValue(PoseProperty);
+        set => SetValue(PoseProperty, value);
     }
 
     /// <summary>What the active tool draws over the scene, such as the line it draws.</summary>
@@ -278,6 +290,10 @@ public sealed class ViewportView : Border, IViewCamera
                 scene.ShowSelectionIn(viewer, Selection);
                 return true;
             });
+        }
+        else if (change.Property == PoseProperty && _shownScene is not null)
+        {
+            UpdateScene();
         }
         else if (change.Property == OverlayProperty)
         {
@@ -577,6 +593,7 @@ public sealed class ViewportView : Border, IViewCamera
             return; // the scene being prepared is updated once ready
         }
 
+        scene.SetPose(Pose ?? new Dictionary<BlockReference, Transform>());
         Send(viewer =>
         {
             scene.Update();

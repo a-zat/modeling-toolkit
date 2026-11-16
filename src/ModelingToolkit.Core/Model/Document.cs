@@ -33,6 +33,12 @@ public sealed class Document
 
     public List<Texture> Textures { get; } = [];
 
+    /// <summary>
+    /// The motions of parts of the model, such as doors that open. Like materials, they do not raise
+    /// <see cref="Changed"/>; those whose block references are no longer in the document move nothing.
+    /// </summary>
+    public List<Animation> Animations { get; } = [];
+
     public BoundingBox GetBoundingBox() => Root.GetBoundingBox();
 
     internal void Raise(DocumentChange change) => Changed?.Invoke(this, change);

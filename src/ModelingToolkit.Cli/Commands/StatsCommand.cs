@@ -41,6 +41,10 @@ internal static class StatsCommand
             }
             Row(console, "Materials", Count(statistics.Materials));
             Row(console, "Textures", Count(statistics.Textures));
+            if (statistics.Animations > 0)
+            {
+                Row(console, "Animations", Count(statistics.Animations));
+            }
             BoundingBox box = statistics.BoundingBox;
             if (box.IsEmpty)
             {

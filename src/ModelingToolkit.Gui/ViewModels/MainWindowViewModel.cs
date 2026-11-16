@@ -85,6 +85,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     LeaveTo(node.Path);
                 }
                 ShowProperties();
+                Animations.Filter(ModelTree.SelectedNode?.Path);
                 OnEditingChanged();
                 OnPropertyChanged(nameof(EmphasizedPath));
             }
@@ -126,6 +127,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ModelTreeViewModel ModelTree { get; } = new();
 
     public PropertiesViewModel Properties { get; } = new();
+
+    /// <summary>The animations of the document, which the inspector plays and the 3D view shows.</summary>
+    public AnimationsViewModel Animations { get; } = new();
+
+    /// <summary>Whether the inspector shows the animations of the selection, in place of its properties.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPropertiesTab))]
+    public partial bool IsAnimationsTab { get; set; }
+
+    public bool IsPropertiesTab => !IsAnimationsTab;
+
+    [RelayCommand]
+    private void ShowInspectorTab(string tab) => IsAnimationsTab = tab == "Animations";
 
     public CommandPaletteViewModel Palette { get; } = new();
 
@@ -1016,6 +1030,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void OnDocumentEdited(object? sender, DocumentChange change)
     {
         ShowProperties(refresh: true);
+        Animations.Refresh();
         if (Document is { } document)
         {
             ShowSummary(DocumentStatistics.Of(document));
@@ -1092,6 +1107,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnToolMeasurementChanged(this, EventArgs.Empty);
 
         Properties.Know(document, statistics);
+        Animations.Show(document);
         ModelTree.Show(document);
         ShowProperties(); // of the model, nothing being selected
         Document = document;

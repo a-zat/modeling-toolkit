@@ -86,6 +86,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             {
                 Fill(document.Blocks[index], manifest.Blocks[index], document);
             }
+            document.Animations.AddRange((manifest.Animations ?? []).Select(entry => ToAnimation(entry, document)));
             return document;
         }
 
@@ -272,6 +273,43 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             }
             var transform = new Transform(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11]);
             return new BlockReference(At(blocks, entry.Block, "block"), transform);
+        }
+
+        private static Animation ToAnimation(AnimationEntry entry, Document document)
+        {
+            var channels = new List<AnimationChannel>();
+            foreach (ChannelEntry channel in Required(entry.Channels, "channels"))
+            {
+                Block block = channel.Block is { } index ? At(document.Blocks, index, "block") : document.Root;
+                if (At(block.Entities, channel.Entity, "entity") is not BlockReference target)
+                {
+                    throw new InvalidDataException("An animation moves an entity that is not a block reference.");
+                }
+                try
+                {
+                    channels.Add(new AnimationChannel(
+                        target,
+                        Parse<AnimatedProperty>(channel.Property),
+                        Parse<AnimationInterpolation>(channel.Interpolation),
+                        Required(channel.Times, "times"),
+                        Required(channel.Values, "values")));
+                }
+                catch (ArgumentException exception)
+                {
+                    throw new InvalidDataException($"Animation '{entry.Name}' is invalid: {exception.Message}", exception);
+                }
+            }
+            if (channels.Count == 0)
+            {
+                throw new InvalidDataException($"Animation '{entry.Name}' has no channels.");
+            }
+            return new Animation(Required(entry.Name, "animation name"), channels);
+
+            static T Parse<T>(string? value)
+                where T : struct, Enum =>
+                Enum.TryParse(value, ignoreCase: true, out T parsed) && Enum.IsDefined(parsed)
+                    ? parsed
+                    : throw new InvalidDataException($"'{value}' is not a valid {typeof(T).Name}.");
         }
 
         private ZipArchiveEntry Entry(string path) =>

@@ -5,8 +5,8 @@ namespace ModelingToolkit.Core.Editing;
 
 /// <summary>
 /// Brings a model read from a file into a document: its top-level entities become a block named after it, placed by a
-/// reference at the origin of a block of the document, with the blocks, materials and textures they use. Undoing takes
-/// them all away again.
+/// reference at the origin of a block of the document, with the blocks, materials, textures and animations they use.
+/// Undoing takes them all away again.
 /// </summary>
 public sealed class ImportCommand : IEditCommand
 {
@@ -15,6 +15,7 @@ public sealed class ImportCommand : IEditCommand
     private readonly List<Block> _blocks;
     private readonly List<Material> _materials;
     private readonly List<Texture> _textures;
+    private readonly List<Animation> _animations;
 
     /// <param name="imported">The model read, which the command takes apart: it must not be used afterwards.</param>
     /// <param name="name">The name of the block, such as the name of the file.</param>
@@ -55,6 +56,7 @@ public sealed class ImportCommand : IEditCommand
         _blocks.Add(block);
         _materials = [.. imported.Materials.Where(material => !document.Materials.Contains(material))];
         _textures = [.. imported.Textures.Where(texture => !document.Textures.Contains(texture))];
+        _animations = [.. imported.Animations];
         Reference = new BlockReference(block, Transform.Identity);
     }
 
@@ -68,12 +70,17 @@ public sealed class ImportCommand : IEditCommand
         _document.Textures.AddRange(_textures);
         _document.Materials.AddRange(_materials);
         _document.Blocks.AddRange(_blocks);
+        _document.Animations.AddRange(_animations);
         _into.Entities.Add(Reference);
     }
 
     public void Revert()
     {
         _into.Entities.Remove(Reference);
+        foreach (Animation animation in _animations)
+        {
+            _document.Animations.Remove(animation);
+        }
         foreach (Block block in _blocks)
         {
             _document.Blocks.Remove(block);

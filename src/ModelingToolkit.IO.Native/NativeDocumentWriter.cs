@@ -79,10 +79,54 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                 document.Textures.Select(WriteTexture).ToList(),
                 document.Materials.Select(ToEntry).ToList(),
                 ToEntry(document.Root),
-                document.Blocks.Select(ToEntry).ToList());
+                document.Blocks.Select(ToEntry).ToList(),
+                AnimationEntries());
 
             using Stream stream = archive.CreateEntry(NativeFormat.ManifestEntry, CompressionLevel.Optimal).Open();
             JsonSerializer.Serialize(stream, manifest, ManifestContext.Default.Manifest);
+        }
+
+        // The channels of block references that are no longer in the document are left out, and so are the animations
+        // left without any.
+        private List<AnimationEntry>? AnimationEntries()
+        {
+            var entries = new List<AnimationEntry>();
+            foreach (Animation animation in document.Animations)
+            {
+                var channels = new List<ChannelEntry>();
+                foreach (AnimationChannel channel in animation.Channels)
+                {
+                    int? block;
+                    if (channel.Target.Owner is not { } owner)
+                    {
+                        continue;
+                    }
+                    if (owner == document.Root)
+                    {
+                        block = null;
+                    }
+                    else if (_blocks.TryGetValue(owner, out int index))
+                    {
+                        block = index;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                    channels.Add(new ChannelEntry(
+                        block,
+                        owner.Entities.IndexOf(channel.Target),
+                        JsonNamingPolicy.CamelCase.ConvertName(channel.Property.ToString()),
+                        JsonNamingPolicy.CamelCase.ConvertName(channel.Interpolation.ToString()),
+                        [.. channel.Times],
+                        [.. channel.Values]));
+                }
+                if (channels.Count > 0)
+                {
+                    entries.Add(new AnimationEntry(animation.Name, channels));
+                }
+            }
+            return entries.Count > 0 ? entries : null;
         }
 
         private TextureEntry WriteTexture(Texture texture, int index)

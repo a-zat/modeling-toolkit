@@ -12,7 +12,8 @@ internal sealed record Manifest(
     List<TextureEntry> Textures,
     List<MaterialEntry> Materials,
     BlockEntry Root,
-    List<BlockEntry> Blocks);
+    List<BlockEntry> Blocks,
+    List<AnimationEntry>? Animations = null);
 
 internal sealed record TextureEntry(string Name, string MediaType, string Path);
 
@@ -51,6 +52,15 @@ internal sealed record FaceMaterialEntry(int Face, int Material);
 internal sealed record GuideEntry(string? Name, double[] Point, double[] Direction) : EntityEntry(Name);
 
 internal sealed record BlockReferenceEntry(string? Name, int Block, double[] Transform) : EntityEntry(Name);
+
+internal sealed record AnimationEntry(string Name, List<ChannelEntry> Channels);
+
+/// <param name="Block">The block holding the reference moved, null for the root.</param>
+/// <param name="Entity">The index of the reference among the entities of its block.</param>
+/// <param name="Property">translation, rotation or scale.</param>
+/// <param name="Interpolation">step, linear or cubicSpline.</param>
+internal sealed record ChannelEntry(
+    int? Block, int Entity, string Property, string Interpolation, double[] Times, double[] Values);
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
