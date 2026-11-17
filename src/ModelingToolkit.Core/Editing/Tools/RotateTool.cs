@@ -11,7 +11,7 @@ namespace ModelingToolkit.Core.Editing.Tools;
 /// </summary>
 public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
 {
-    private const string CentreHint = "Click the centre of the rotation · arrows choose the axis";
+    private const string CentreHint = "Click the centre of the rotation · arrows or X Y Z choose the axis · ⇧ on a face takes its plane";
     private const string FromHint = "Click where the angle starts";
     private const string AngleHint = "Click the angle or type it in degrees · ⌥ copies · Esc stops";
     private const double Step = 15;
@@ -27,12 +27,14 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
     private Vector3d? _axis; // chosen by an arrow key
     private double _radius = 100;
     private Point3d _pointer;
+    private bool _onFace; // Shift held: on the plane of the face under the pointer
 
     public override string Name => "Rotate";
 
     public override void Hover(ToolInput input)
     {
         Follow(input);
+        _onFace = input.Modifiers.HasFlag(ToolModifiers.Shift);
         Track(_centre is null ? input.Pick : Clear(input.Pick));
         Show();
     }
@@ -40,6 +42,7 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
     public override void Click(ToolInput input)
     {
         Follow(input);
+        _onFace = input.Modifiers.HasFlag(ToolModifiers.Shift);
         Track(_centre is null ? input.Pick : Clear(input.Pick));
         if (Last is not { Kind: not InferenceKind.None } point)
         {
@@ -69,6 +72,25 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
             return;
         }
         RotateBy(_angle);
+    }
+
+    public override Point3d? TakenAt => _centre;
+
+    /// <summary>Takes the selection to turn it around a point, as a click there would.</summary>
+    public override bool Grab(Inference grip)
+    {
+        ArgumentNullException.ThrowIfNull(grip);
+        Restart();
+        if (!TakeTarget(ToolPick.Nothing))
+        {
+            return false;
+        }
+        Last = grip;
+        _centre = grip.Point;
+        _plane = PlaneThrough(grip);
+        Hint = FromHint;
+        Show();
+        return true;
     }
 
     public override bool Key(ToolKey key, ToolModifiers modifiers)
@@ -141,7 +163,11 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
 
     private Plane PlaneThrough(Inference point)
     {
-        Vector3d normal = _axis ?? PlaneAt(point).Normal;
+        // Around the vertical, the turn of furniture, unless an axis is chosen, a face held with Shift, or the middle of a
+        // face of the box of the selection taken.
+        Vector3d normal = _axis ?? (_onFace || point.Kind == InferenceKind.Centre
+            ? PlaneAt(point).Normal
+            : Host.Context.Placement.ApplyVector(Vector3d.UnitZ).Normalized());
         return new Plane(normal, normal.Dot(point.Point - Point3d.Origin));
     }
 

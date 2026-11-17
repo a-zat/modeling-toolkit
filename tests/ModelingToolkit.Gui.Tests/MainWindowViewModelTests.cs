@@ -461,7 +461,7 @@ public sealed class MainWindowViewModelTests
             ViewportInputKind.Click));
         Assert.True(viewModel.SelectedInView);
         Assert.Null(viewModel.EmphasizedPath);
-        Assert.Equal(12, viewModel.Overlay.Lines.Count);
+        Assert.Equal(12, viewModel.Overlay.Lines.Count(line => line.Width == 1.5)); // its box, besides the arrows to turn
 
         viewModel.ModelTree.SelectedNode = null;
         viewModel.ModelTree.SelectedNode = reference;
@@ -525,6 +525,31 @@ public sealed class MainWindowViewModelTests
         Assert.True(viewModel.SelectedInView);
         Assert.Null(viewModel.EmphasizedPath);
         Assert.Same(reference, viewModel.ModelTree.SelectedNode);
+    }
+
+    [Fact]
+    public async Task TabPassesBetweenMoveAndRotateKeepingThePointTaken()
+    {
+        MainWindowViewModel viewModel = CreateWithKernel();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        await viewModel.ImportAsync(Paths.Asset("gltf", "BoxTextured.glb"));
+        viewModel.EscapeCommand.Execute(null); // not placed: taken out
+        await viewModel.ImportAsync(Paths.Asset("gltf", "BoxTextured.glb"));
+        var down = new PointerRay(new Point3d(0, 0, 1000), new Vector3d(0, 0, -1), 1, 0);
+        viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None, 1,
+            ViewportInputKind.Click, down)); // placed where it was
+        Assert.False(viewModel.SwitchMoveRotate()); // the select tool
+
+        viewModel.ActivateToolCommand.Execute(viewModel.Tools.First(item => item.Tool is MoveTool));
+        viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None, 1,
+            ViewportInputKind.Click, down));
+        Point3d? taken = Assert.IsType<MoveTool>(viewModel.ActiveTool).TakenAt;
+        Assert.NotNull(taken);
+        Assert.True(viewModel.SwitchMoveRotate());
+
+        Assert.Equal(taken, Assert.IsType<RotateTool>(viewModel.ActiveTool).TakenAt);
+        Assert.True(viewModel.SwitchMoveRotate());
+        Assert.Equal(taken, Assert.IsType<MoveTool>(viewModel.ActiveTool).TakenAt);
     }
 
     private static MainWindowViewModel CreateWithKernel()

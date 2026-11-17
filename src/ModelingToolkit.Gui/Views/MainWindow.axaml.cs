@@ -13,10 +13,34 @@ public partial class MainWindow : Window
         InitializeComponent();
         // Digits typed outside the fields go to the measurement field, as the value of the active tool.
         AddHandler(TextInputEvent, OnTextTyped, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnKeyPressed, RoutingStrategies.Tunnel);
+    }
+
+    // Tab, outside the fields, passes between the move and rotate tools, keeping the point taken.
+    private void OnKeyPressed(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Tab && e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox &&
+            DataContext is MainWindowViewModel viewModel && viewModel.SwitchMoveRotate())
+        {
+            e.Handled = true;
+        }
     }
 
     private void OnTextTyped(object? sender, TextInputEventArgs e)
     {
+        // X, Y and Z typed outside the fields lock the axis, as the arrows do.
+        if (e.Source is not TextBox && e.Text is [var letter] && char.ToUpperInvariant(letter) is 'X' or 'Y' or 'Z' &&
+            DataContext is MainWindowViewModel axes)
+        {
+            axes.PressToolKeyCommand.Execute(char.ToUpperInvariant(letter) switch
+            {
+                'X' => Core.Editing.Tools.ToolKey.Right,
+                'Y' => Core.Editing.Tools.ToolKey.Left,
+                _ => Core.Editing.Tools.ToolKey.Up,
+            });
+            e.Handled = true;
+            return;
+        }
         if (e.Source is TextBox || string.IsNullOrEmpty(e.Text) || !(char.IsDigit(e.Text[0]) || e.Text[0] is '.' or ','))
         {
             return;

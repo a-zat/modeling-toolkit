@@ -58,6 +58,10 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<bool> IsGridVisibleProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsGridVisible), defaultValue: true);
 
+    /// <summary>Where the camera is, as of the last frame drawn; the view sets it, for what is shown by the side it faces.</summary>
+    public static readonly StyledProperty<Point3d?> EyeProperty =
+        AvaloniaProperty.Register<ViewportView, Point3d?>(nameof(Eye), defaultBindingMode: Avalonia.Data.BindingMode.OneWayToSource);
+
     public static readonly StyledProperty<bool> HighlightsHoverProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(HighlightsHover));
 
@@ -367,6 +371,12 @@ public sealed class ViewportView : Border, IViewCamera
     {
         get => GetValue(IsGridVisibleProperty);
         set => SetValue(IsGridVisibleProperty, value);
+    }
+
+    public Point3d? Eye
+    {
+        get => GetValue(EyeProperty);
+        set => SetValue(EyeProperty, value);
     }
 
     /// <summary>Whether what is under the pointer is tinted; it is found either way.</summary>
@@ -820,11 +830,13 @@ public sealed class ViewportView : Border, IViewCamera
         {
             _frameRequested = false;
             ViewerPick? picked = null, hovered = null;
+            Point3d? eye = null;
             bool hoverMoved = _hoverMoved;
             _hoverMoved = false;
             Send(viewer =>
             {
                 bool animating = viewer.Redraw();
+                eye = viewer.GetCamera().Eye;
                 if (viewer.TakePick(out ViewerPick pick))
                 {
                     picked = pick;
@@ -836,6 +848,10 @@ public sealed class ViewportView : Border, IViewCamera
 
                 return animating;
             });
+            if (eye is { } seen && seen != Eye)
+            {
+                Eye = seen;
+            }
             if (hovered is { } hover)
             {
                 _hovered = ToInput(hover, _hoverModifiers, 1, ViewportInputKind.Hover);

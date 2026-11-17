@@ -85,6 +85,23 @@ public sealed class MoveToolTests
     }
 
     [Fact]
+    public void Three_lengths_typed_move_by_them_along_the_axes()
+    {
+        var block = new Block("Part");
+        block.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10)));
+        _document.Blocks.Add(block);
+        var reference = new BlockReference(block, Transform.Identity);
+        _document.Root.Entities.Add(reference);
+        _host.SelectedPath = [reference];
+
+        _tool.Click(Ground(0, 0));
+        Assert.True(_tool.TypeMeasurement("500, 0, 120"));
+
+        Assert.Equal(new Point3d(500, 0, 120), reference.Transform.Apply(Point3d.Origin));
+        Assert.False(_tool.TypeMeasurement("500, 0"));
+    }
+
+    [Fact]
     public void Taken_by_the_middle_of_a_face_of_its_box_a_selection_moves_across_that_face_only()
     {
         var block = new Block("Part");

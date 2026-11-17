@@ -151,4 +151,36 @@ public sealed class SelectionHandlesTests
         Assert.Contains(move.GripPoints, grip => grip.Point == new Point3d(1000, 700, 0));
         Assert.DoesNotContain(move.GripPoints, grip => grip.Point == new Point3d(1000, 0, 0));
     }
+
+    [Fact]
+    public void Only_the_handles_on_the_faces_turned_to_the_eye_show_and_no_turn_on_a_face_seen_edge_on()
+    {
+        var handles = new SelectionHandles(_reference, Transform.Identity);
+
+        // From the front, right and above: the faces at X = 1100, Y = 0 and the top.
+        IReadOnlyList<int> seen = handles.VisibleFrom(new Point3d(4000, -3000, 3000));
+        Assert.Equal(7, seen.Count(i => handles.Handles[i].Kind == HandleKind.Move));
+        Assert.Equal(9, seen.Count(i => handles.Handles[i].Kind == HandleKind.Slide));
+        Assert.Equal(3, seen.Count(i => handles.Handles[i].Kind == HandleKind.Rotate));
+        Assert.DoesNotContain(seen, i => handles.Handles[i].Point == new Point3d(1000, 100, 0)); // the corner behind
+
+        // Straight from the front, at the height of the middle: the top and the sides are seen edge-on.
+        IReadOnlyList<int> front = handles.VisibleFrom(new Point3d(1050, -3000, 50));
+        SelectionHandle turn = Assert.Single(front.Select(i => handles.Handles[i]), handle => handle.Kind == HandleKind.Rotate);
+        Assert.Equal(-Vector3d.UnitY, turn.Grip.Direction);
+    }
+
+    [Fact]
+    public void The_arrow_to_turn_lies_on_its_face()
+    {
+        var handles = new SelectionHandles(_reference, Transform.Identity);
+        SelectionHandle top = handles.Handles[TopFace];
+
+        IReadOnlyList<IReadOnlyList<Point3d>> arrow = handles.TurnArrow(top);
+
+        Assert.Equal(2, arrow.Count);
+        Assert.All(arrow.SelectMany(stroke => stroke), point => Assert.Equal(100, point.Z, Tolerance));
+        Assert.All(arrow[0], point => Assert.Equal(20, point.DistanceTo(top.Point), Tolerance)); // 0.4 of half of 100
+        Assert.Empty(handles.TurnArrow(handles.Handles[0]));
+    }
 }

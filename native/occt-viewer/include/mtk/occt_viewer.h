@@ -335,7 +335,9 @@ typedef enum mtk_viewer_marker_shape {
     MTK_VIEWER_MARKER_DOT = 0,    /* a filled disc */
     MTK_VIEWER_MARKER_CIRCLE = 1, /* a ring */
     MTK_VIEWER_MARKER_CROSS = 2,  /* an X */
-    MTK_VIEWER_MARKER_PLUS = 3    /* a + */
+    MTK_VIEWER_MARKER_PLUS = 3,   /* a + */
+    MTK_VIEWER_MARKER_SQUARE = 4, /* a filled square, edged in white */
+    MTK_VIEWER_MARKER_DIAMOND = 5 /* a filled square on its corner, edged in white */
 } mtk_viewer_marker_shape;
 
 typedef struct mtk_viewer_overlay_marker {

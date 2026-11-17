@@ -6,8 +6,9 @@ namespace ModelingToolkit.Core.Editing.Tools;
 /// <summary>
 /// Moves an entity of the block being edited, the one selected or else the one clicked: a click takes the point to move
 /// from, a second click the point to move to, both snapped to what is inferred, or a distance typed towards the
-/// pointer. The arrow keys lock the direction on an axis; a point taken at the middle of a face of the box of the
-/// selection locks it across that face, and one at the middle of an edge on the axes; with Option (Alt) held, a copy is moved and the entity stays.
+/// pointer, or three lengths along X, Y and Z ("500, 0, 0"). The arrow keys, or X, Y and Z, lock the direction on an
+/// axis; a point taken at the middle of a face of the box of the selection locks it across that face, and one at the
+/// middle of an edge on the axes; with Option (Alt) held, a copy is moved and the entity stays.
 /// </summary>
 public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
 {
@@ -16,6 +17,8 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
 
     private Point3d? _start;
     private bool _alongAxes; // taken by the middle of an edge of its box
+
+    public override Point3d? TakenAt => _start;
 
     public override string Name => "Move";
 
@@ -50,7 +53,7 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
     /// Takes the selection by one of its points to take it by, as a click there would, to move it from there; whether
     /// there is a selection to take.
     /// </summary>
-    public bool Grab(Inference grip)
+    public override bool Grab(Inference grip)
     {
         ArgumentNullException.ThrowIfNull(grip);
         Restart();
@@ -139,6 +142,13 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
 
     public override bool TypeMeasurement(string text)
     {
+        // Three lengths move by them along the axes of the block being edited.
+        if (_start is { } from && Measurements.TryParseOffset(text, out double x, out double y, out double z))
+        {
+            Vector3d by = Host.Context.Placement.ApplyVector(new Vector3d(x, y, z));
+            MoveTo(from, from + by);
+            return true;
+        }
         if (_start is not { } start || Last is not { } last || !Measurements.TryParseLength(text, out double length))
         {
             return false;

@@ -55,6 +55,30 @@ public sealed class RotateToolTests
     }
 
     [Fact]
+    public void A_centre_on_a_side_turns_around_the_vertical_unless_Shift_takes_the_plane_of_the_side()
+    {
+        var box = new BrepEntity(_kernel, _kernel.MakeBox(200, 100, 50));
+        _document.Root.Entities.Add(box);
+        _host.SelectedPath = [box];
+        // On the side at X = 200, from in front of it.
+        ToolInput side = new(new ToolPick([box], null, new Point3d(200, 20, 10), Vector3d.UnitX,
+            new PointerRay(new Point3d(1200, 20, 10), new Vector3d(-1, 0, 0), 1, 0)));
+
+        _tool.Click(side);
+        _tool.Click(Ground(1200, 20)); // along X, on the level of the centre
+        _tool.Click(Ground(200, 1020)); // a quarter turn around the vertical
+
+        BoundingBox turned = box.GetBoundingBox();
+        Assert.Equal(0, turned.Min.Z, precision: 6);
+        Assert.Equal(50, turned.Max.Z, precision: 6);
+        Assert.Equal(100, turned.Max.X - turned.Min.X, precision: 6);
+
+        _tool.Hover(side with { Modifiers = ToolModifiers.Shift });
+        _tool.Click(side with { Modifiers = ToolModifiers.Shift });
+        Assert.Equal("Click where the angle starts", _tool.Hint);
+    }
+
+    [Fact]
     public void With_Option_a_copy_turns_by_the_angle_typed_towards_the_pointer()
     {
         var box = new BrepEntity(_kernel, _kernel.MakeBox(200, 100, 50));

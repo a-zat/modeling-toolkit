@@ -51,6 +51,33 @@ public static class Measurements
     }
 
     /// <summary>
+    /// Three lengths separated by commas or semicolons, as X, Y and Z, each of them 0 or negative too: "500, 0, -120" or
+    /// "0,5m; 0; 0".
+    /// </summary>
+    public static bool TryParseOffset(string? text, out double x, out double y, out double z)
+    {
+        x = y = z = 0;
+        string[] parts = (text ?? string.Empty).Split(text?.Contains(';', StringComparison.Ordinal) == true ? [';'] : [','],
+            StringSplitOptions.TrimEntries);
+        return parts.Length == 3 && TryParseSigned(parts[0], out x) && TryParseSigned(parts[1], out y) &&
+               TryParseSigned(parts[2], out z);
+
+        static bool TryParseSigned(string part, out double length)
+        {
+            bool negative = part.StartsWith('-');
+            string size = negative ? part[1..].Trim() : part;
+            if (size.TrimEnd('m', 'c', ' ') is "0" or "0.0" or "0,0")
+            {
+                length = 0;
+                return true;
+            }
+            bool parsed = TryParseLength(size, out length);
+            length = negative ? -length : length;
+            return parsed;
+        }
+    }
+
+    /// <summary>
     /// A length typed: a number in millimetres, or with a unit (mm, cm, m, in or ", ft or '); the decimal separator is a
     /// point or a comma. False for anything else, and for lengths that are not positive.
     /// </summary>

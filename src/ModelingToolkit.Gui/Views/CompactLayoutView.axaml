@@ -155,6 +155,7 @@
                              IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}"
                              HighlightsHover="{Binding HighlightsHover}"
+                             Eye="{Binding ViewEye, Mode=OneWayToSource}"
                              Pose="{Binding Pose}"
                              Handles="{Binding Handles}"
                              IsWalking="{Binding IsWalking}"

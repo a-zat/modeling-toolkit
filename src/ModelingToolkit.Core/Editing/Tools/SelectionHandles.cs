@@ -34,6 +34,11 @@ public sealed class SelectionHandles
         [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 4, 5], [2, 3, 6, 7], [0, 2, 4, 6], [1, 3, 5, 7]];
 
     private readonly Point3d[] _corners; // of the box, the bit 1 for X, 2 for Y, 4 for Z
+    private readonly List<int> _faceMasks = []; // for each handle, the faces it is on, a bit for each of Faces
+    private readonly (Point3d Centre, Vector3d Normal)?[] _faces = new (Point3d, Vector3d)?[6];
+
+    /// <summary>How far from edge-on, as the cosine of the angle to the line of sight, a face shows its handle to turn.</summary>
+    public const double EdgeOn = 0.15;
 
     /// <param name="placement">The placement in the model of the block that has the entity.</param>
     public SelectionHandles(Entity entity, Transform placement)
@@ -87,9 +92,29 @@ public sealed class SelectionHandles
 
     private IEnumerable<SelectionHandle> Make()
     {
-        foreach (Point3d corner in _corners)
+        Point3d centre = Middle(0, 1, 2, 3, 4, 5, 6, 7);
+        for (int f = 0; f < Faces.Length; f++)
         {
-            yield return new SelectionHandle(HandleKind.Move, corner, new Inference(InferenceKind.Endpoint, corner));
+            Point3d middle = Middle(Faces[f]);
+            Vector3d normal = middle - centre;
+            _faces[f] = normal.Length < 1e-9 ? null : (middle, normal.Normalized()); // a flat box has no thickness
+        }
+        int MaskOf(params int[] corners)
+        {
+            int mask = 0;
+            for (int f = 0; f < Faces.Length; f++)
+            {
+                if (corners.All(corner => Faces[f].Contains(corner)))
+                {
+                    mask |= 1 << f;
+                }
+            }
+            return mask;
+        }
+        for (int i = 0; i < _corners.Length; i++)
+        {
+            _faceMasks.Add(MaskOf(i));
+            yield return new SelectionHandle(HandleKind.Move, _corners[i], new Inference(InferenceKind.Endpoint, _corners[i]));
         }
         foreach (int[] edge in Edges)
         {
@@ -99,22 +124,105 @@ public sealed class SelectionHandles
                 continue; // a flat box: the edge is a corner
             }
             Point3d middle = Middle(edge);
+            _faceMasks.Add(MaskOf(edge));
             yield return new SelectionHandle(HandleKind.Slide, middle,
                 new Inference(InferenceKind.Midpoint, middle, Edge: (a, b)));
         }
-        Point3d centre = Middle(0, 1, 2, 3, 4, 5, 6, 7);
-        foreach (int[] face in Faces)
+        for (int f = 0; f < Faces.Length; f++)
         {
-            Point3d middle = Middle(face);
-            Vector3d normal = middle - centre;
-            if (normal.Length < 1e-9)
+            if (_faces[f] is not ({ } middle, { } normal))
             {
-                continue; // a flat box has no thickness to move across
+                continue;
             }
-            normal = normal.Normalized();
+            _faceMasks.Add(1 << f);
             yield return new SelectionHandle(HandleKind.Rotate, middle, new Inference(InferenceKind.Centre, middle,
                 new Plane(normal, normal.Dot(middle - Point3d.Origin)), normal));
         }
+    }
+
+    /// <summary>
+    /// The indices of the handles not hidden by the box itself, seen from an eye: those on a face turned to it, and of
+    /// the handles to turn, only on faces not seen nearly edge-on. A flat box, or an eye inside the box, shows them all.
+    /// </summary>
+    public IReadOnlyList<int> VisibleFrom(Point3d eye)
+    {
+        int front = 0, open = 0;
+        for (int f = 0; f < _faces.Length; f++)
+        {
+            if (_faces[f] is not ({ } middle, { } normal))
+            {
+                continue;
+            }
+            Vector3d sight = eye - middle;
+            double cosine = sight.Length < 1e-9 ? 1 : normal.Dot(sight) / sight.Length;
+            front |= cosine > 0 ? 1 << f : 0;
+            open |= cosine > EdgeOn ? 1 << f : 0;
+        }
+        bool all = front == 0 || _faces.Any(face => face is null);
+        var visible = new List<int>();
+        for (int i = 0; i < Handles.Count; i++)
+        {
+            int mask = _faceMasks[i];
+            if (all || (Handles[i].Kind == HandleKind.Rotate ? (mask & open) != 0 : (mask & front) != 0))
+            {
+                visible.Add(i);
+            }
+        }
+        return visible;
+    }
+
+    /// <summary>
+    /// The arc that shows a handle to turn, lying on its face around its middle: three quarters of a circle a fifth as
+    /// wide as the face is narrow, and the two strokes of its arrowhead; empty for the other handles.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<Point3d>> TurnArrow(SelectionHandle handle)
+    {
+        if (handle.Kind != HandleKind.Rotate || handle.Grip.Direction is not { } normal)
+        {
+            return [];
+        }
+        // The two directions along the face, from its middle to the middles of two of its edges.
+        Vector3d? u = null, v = null;
+        foreach (SelectionHandle other in Handles)
+        {
+            if (other.Kind != HandleKind.Slide)
+            {
+                continue;
+            }
+            Vector3d to = other.Point - handle.Point;
+            if (Math.Abs(to.Dot(normal)) > 1e-6 || to.Length < 1e-9)
+            {
+                continue;
+            }
+            if (u is null)
+            {
+                u = to;
+            }
+            else if (Math.Abs(u.Value.Normalized().Dot(to.Normalized())) < 0.5)
+            {
+                v = to;
+                break;
+            }
+        }
+        if (u is not { } a || v is not { } b)
+        {
+            return [];
+        }
+        double radius = 0.4 * Math.Min(a.Length, b.Length);
+        Vector3d x = a.Normalized(), y = normal.Cross(x).Normalized();
+        Point3d At(double angle) => handle.Point + (x * Math.Cos(angle) + y * Math.Sin(angle)) * radius;
+        const int Pieces = 24;
+        double start = Math.PI / 4, end = start + 1.5 * Math.PI;
+        Point3d[] arc = [.. Enumerable.Range(0, Pieces + 1).Select(i => At(start + (end - start) * i / Pieces))];
+        Point3d tip = arc[^1];
+        Vector3d along = (-x * Math.Sin(end) + y * Math.Cos(end)).Normalized(); // the way it turns, at the tip
+        Vector3d outward = (tip - handle.Point).Normalized();
+        double head = 0.35 * radius;
+        return
+        [
+            arc,
+            [tip - along * head + outward * head * 0.6, tip, tip - along * head - outward * head * 0.6],
+        ];
     }
 
     /// <summary>

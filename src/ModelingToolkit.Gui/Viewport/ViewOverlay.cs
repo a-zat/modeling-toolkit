@@ -32,6 +32,12 @@ public enum MarkerShape
 
     /// <summary>A +.</summary>
     Plus,
+
+    /// <summary>A filled square, edged in white.</summary>
+    Square,
+
+    /// <summary>A filled square on its corner, edged in white.</summary>
+    Diamond,
 }
 
 public sealed record OverlayMarker(Point3d Point, Color Color, MarkerShape Shape);

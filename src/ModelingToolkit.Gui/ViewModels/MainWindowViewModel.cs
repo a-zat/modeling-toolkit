@@ -438,6 +438,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>What the active tool expects next.</summary>
     public string ToolHint => ActiveTool.IsActive && IsEditable ? ActiveTool.Hint : string.Empty;
 
+    /// <summary>
+    /// Passes from the move tool to the rotate tool or back, the point the selection was taken by kept, to turn around
+    /// or move from; whether the active tool was one of them.
+    /// </summary>
+    public bool SwitchMoveRotate()
+    {
+        if (!IsEditable || IsBusy || ActiveTool is not TransformTool { IsActive: true } from || from is not (MoveTool or RotateTool) ||
+            Tools.FirstOrDefault(item => item.Tool is MoveTool or RotateTool && item.Tool.GetType() != from.GetType())
+                is not { } other)
+        {
+            return false;
+        }
+        Point3d? taken = from.TakenAt;
+        ActivateTool(other);
+        if (taken is { } point)
+        {
+            ((TransformTool)other.Tool).Grab(new Inference(InferenceKind.Endpoint, point));
+        }
+        ShowOverlay();
+        return true;
+    }
+
     [RelayCommand]
     private void ActivateTool(ToolItemViewModel item)
     {
@@ -537,7 +559,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var toolInput = new ToolInput(
             new ToolPick(input.Path, input.Element, input.Point, new Vector3d(input.Normal.X, input.Normal.Y, input.Normal.Z),
                 input.Ray),
-            ToToolModifiers(input.Modifiers), input.ClickCount, input.Handle);
+            ToToolModifiers(input.Modifiers), input.ClickCount,
+            input.Handle is { } point && point >= 0 && point < _handleIndices.Length ? _handleIndices[point] : null);
         switch (input.Kind)
         {
             case ViewportInputKind.Hover:
@@ -1622,31 +1645,112 @@ public sealed partial class MainWindowViewModel : ObservableObject
             .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
         ViewOverlay overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
         Overlay = SelectionBox() is { } box ? overlay with { Lines = [.. overlay.Lines, .. box] } : overlay;
-        // The points to take the selection by, with the move and rotate tools, shown so as not to be looked for.
-        if (SelectedInView && IsEditable && ActiveTool is TransformTool { IsActive: true } transform)
+        // The points to take the selection by, with the move and rotate tools, shown so as not to be looked for: those
+        // the box does not hide, by their kind, squares at the corners, diamonds at the middles of the edges.
+        IReadOnlyList<int>? seen = null;
+        if (SelectedInView && IsEditable && ActiveTool is TransformTool { IsActive: true } transform &&
+            transform.GripPoints is { Count: > 0 } grips && SelectedHandles() is { } selectedBox)
         {
+            seen = Seen(selectedBox);
             Overlay = Overlay with
             {
-                // As the handles of the select tool: dots move, rings turn.
-                Markers = [.. transform.GripPoints.Select(grip => new OverlayMarker(grip.Point, SelectionBoxColor,
-                    transform is RotateTool ? MarkerShape.Circle : MarkerShape.Dot)), .. Overlay.Markers],
+                Markers = [.. seen.Where(i => i < grips.Count).Select(i => new OverlayMarker(grips[i].Point,
+                    SelectionBoxColor, ShapeOf(grips[i].Kind))), .. Overlay.Markers],
             };
         }
         if (FocusAxes() is { } axes)
         {
             Overlay = Overlay with { Lines = [.. Overlay.Lines, .. axes] };
         }
+        // With the select tool, the handles: squares and diamonds move, arrows lying on the faces turn.
         SelectionHandles? handles = ShownHandles();
-        Handles = handles is null ? [] : [.. handles.Handles.Select(handle => handle.Point)];
+        var points = new List<Point3d>();
+        var indices = new List<int>();
         if (handles is not null)
         {
-            Overlay = Overlay with
+            seen = Seen(handles);
+            var markers = new List<OverlayMarker>();
+            var lines = new List<OverlayLine>();
+            foreach (int i in seen)
             {
-                Markers = [.. Overlay.Markers, .. handles.Handles.Select(handle => new OverlayMarker(handle.Point,
-                    SelectionBoxColor, handle.Kind == HandleKind.Rotate ? MarkerShape.Circle : MarkerShape.Dot))],
-            };
+                SelectionHandle handle = handles.Handles[i];
+                points.Add(handle.Point);
+                indices.Add(i);
+                if (handle.Kind != HandleKind.Rotate)
+                {
+                    markers.Add(new OverlayMarker(handle.Point, SelectionBoxColor, ShapeOf(handle.Grip.Kind)));
+                    continue;
+                }
+                IReadOnlyList<IReadOnlyList<Point3d>> arrow = handles.TurnArrow(handle);
+                lines.AddRange(arrow.Select(stroke => new OverlayLine(stroke, SelectionBoxColor, 2.5)));
+                // The arrow is taken anywhere along it.
+                foreach (Point3d along in arrow.Count > 0 ? arrow[0] : [])
+                {
+                    points.Add(along);
+                    indices.Add(i);
+                }
+            }
+            Overlay = Overlay with { Lines = [.. Overlay.Lines, .. lines], Markers = [.. Overlay.Markers, .. markers] };
+        }
+        Handles = points;
+        _handleIndices = [.. indices];
+        _seenHandles = seen is null ? null : string.Join(",", seen);
+    }
+
+    private static MarkerShape ShapeOf(InferenceKind kind) => kind switch
+    {
+        InferenceKind.Endpoint => MarkerShape.Square,
+        InferenceKind.Midpoint => MarkerShape.Diamond,
+        _ => MarkerShape.Dot,
+    };
+
+    // The handles the box of the selection does not hide from the camera; all of them before the view has drawn.
+    private IReadOnlyList<int> Seen(SelectionHandles handles) =>
+        ViewEye is { } eye ? handles.VisibleFrom(eye) : [.. Enumerable.Range(0, handles.Handles.Count)];
+
+    // The box of the selection in the 3D view, for the move and rotate tools.
+    private SelectionHandles? SelectedHandles()
+    {
+        if (Context is not { } context || ModelTree.SelectedNode?.Path is not { } path ||
+            context.Within(path) is not [{ } entity])
+        {
+            return null;
+        }
+        if (_selectedHandles is not { } made || !ReferenceEquals(made.Entity, entity) ||
+            _selectedHandlesFor != (context.Placement, Session?.Revision ?? 0))
+        {
+            _selectedHandles = new SelectionHandles(entity, context.Placement);
+            _selectedHandlesFor = (context.Placement, Session?.Revision ?? 0);
+        }
+        return _selectedHandles;
+    }
+
+    private SelectionHandles? _selectedHandles;
+    private (Transform, int)? _selectedHandlesFor;
+    private int[] _handleIndices = []; // for each point of Handles, the index of the handle of the select tool
+    private string? _seenHandles; // which handles were shown, to show them again only when the camera changes that
+
+    /// <summary>Where the camera of the 3D view is, as of its last frame.</summary>
+    public Point3d? ViewEye
+    {
+        get => _viewEye;
+        set
+        {
+            if (_viewEye == value)
+            {
+                return;
+            }
+            _viewEye = value;
+            // Turning the view shows other handles only when it shows other faces of the box.
+            SelectionHandles? handles = ShownHandles() ?? (ActiveTool is TransformTool ? SelectedHandles() : null);
+            if (handles is not null && value is { } eye && string.Join(",", handles.VisibleFrom(eye)) != _seenHandles)
+            {
+                ShowOverlay();
+            }
         }
     }
+
+    private Point3d? _viewEye;
 
     /// <summary>The points of the handles of the selection, which the 3D view lets drag.</summary>
     [ObservableProperty]

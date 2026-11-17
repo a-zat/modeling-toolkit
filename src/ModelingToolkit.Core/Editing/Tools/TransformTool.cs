@@ -61,6 +61,14 @@ public abstract class TransformTool : DrawingTool
             grip.Kind == InferenceKind.Midpoint && grip.Point.DistanceTo(point.Point) < 1e-9);
     }
 
+    /// <summary>The point the selection was taken by: to move from, or to turn around; null before.</summary>
+    public virtual Point3d? TakenAt => null;
+
+    /// <summary>
+    /// Takes the selection by a point, as a click there would; whether there is a selection to take.
+    /// </summary>
+    public virtual bool Grab(Inference grip) => false;
+
     /// <summary>
     /// What is under the pointer, but nothing where the target is, which moves with the pointer: the pointer would
     /// otherwise take points on it as it goes.
