@@ -65,7 +65,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ? [new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true }, Interact()]
             :
             [
-                new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true },
+                new ToolItemViewModel(new SelectTool(kernel), "Icon.Select") { IsActive = true },
                 Interact(),
                 new ToolItemViewModel(new LineTool(kernel), "Icon.Line"),
                 new ToolItemViewModel(new RectangleTool(kernel), "Icon.Rectangle"),
@@ -578,6 +578,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         if (ActiveTool is { IsActive: true } tool && tool.Key(ToolKey.Escape, ToolModifiers.None))
         {
+            return;
+        }
+        // What is shown in front of the rest, selected in the outline, goes back among it, still selected.
+        if (ModelTree.SelectedNode is not null && !SelectedInView && !IsRendered)
+        {
+            SelectedInView = true;
+            OnPropertyChanged(nameof(EmphasizedPath));
+            ShowOverlay();
             return;
         }
         LeaveContext();
@@ -1389,8 +1397,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             EndOperation(); // the edit is refused while busy
             if (Edit(command))
             {
-                ModelTree.SelectCommand.Execute((IReadOnlyList<Entity>)[.. Context.Path, command.Reference]);
-                // Placed at the origin, it is then moved where it goes.
+                // Selected as in the 3D view, framed by its box, the rest as it is; placed at the origin, it is then
+                // moved where it goes.
+                _toolHost.SelectEntity([.. Context.Path, command.Reference]);
                 bool placing = IsEditable && Tools.Any(item => item.Tool is MoveTool);
                 if (placing)
                 {
@@ -1606,8 +1615,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             Overlay = Overlay with
             {
+                // As the handles of the select tool: dots move, rings turn.
                 Markers = [.. transform.GripPoints.Select(grip => new OverlayMarker(grip.Point, SelectionBoxColor,
-                    grip.Kind == InferenceKind.Centre ? MarkerShape.Circle : MarkerShape.Dot)), .. Overlay.Markers],
+                    transform is RotateTool ? MarkerShape.Circle : MarkerShape.Dot)), .. Overlay.Markers],
             };
         }
         SelectionHandles? handles = ShownHandles();

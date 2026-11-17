@@ -114,9 +114,12 @@ internal static class EditCommand
             {
                 double degrees = double.Parse(value ?? throw new ArgumentException("rotate needs @DEGREES."), CultureInfo.InvariantCulture);
                 var handles = new SelectionHandles(entity, placement);
-                Point3d bottom = handles.Handles.FirstOrDefault(handle => handle.Kind == HandleKind.Move).Point;
+                // Around the vertical through the middle of the bottom of its box.
+                Point3d bottom = handles.IsEmpty ? Point3d.Origin : Point3d.Origin + handles.Corners.Take(4)
+                    .Aggregate(default(Vector3d), (sum, corner) => sum + (corner - Point3d.Origin)) / 4;
+                Vector3d up = placement.ApplyVector(Vector3d.UnitZ).Normalized();
                 session.Execute(TransformCommands.Of("Rotate", entity,
-                    placement.Inverse() * Transform.Rotation(bottom, handles.Up, degrees * Math.PI / 180) * placement));
+                    placement.Inverse() * Transform.Rotation(bottom, up, degrees * Math.PI / 180) * placement));
                 return $"Rotated {target}.";
             }
             case "rename":

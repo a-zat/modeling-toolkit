@@ -7,9 +7,12 @@ namespace ModelingToolkit.Core.Tests.Editing;
 public sealed class SelectionHandlesTests
 {
     private const double Tolerance = 1e-6;
+    private const int TopFace = 8 + 12 + 1; // the corners, the edges, then the faces: bottom, top
 
     private readonly Document _document = new();
     private readonly BlockReference _reference;
+    private readonly SelectToolTests.Host _host;
+    private readonly SelectTool _tool = new(new NoKernel());
 
     public SelectionHandlesTests()
     {
@@ -20,48 +23,41 @@ public sealed class SelectionHandlesTests
         _document.Blocks.Add(block);
         _reference = new BlockReference(block, Transform.Translation(1000, 0, 0));
         _document.Root.Entities.Add(_reference);
+        _host = new SelectToolTests.Host(_document);
     }
 
     // Looking straight down at a point, from 1 m above it.
     private static PointerRay Down(double x, double y, double z = 0) =>
         new(new Point3d(x, y, z + 1000), new Vector3d(0, 0, -1), 1, 0);
 
+    private static ToolInput At(PointerRay ray, int handle) => new(new ToolPick(null, null, default, default, ray), Handle: handle);
+
+    private Point3d Origin => _reference.Transform.Apply(Point3d.Origin);
+
     [Fact]
-    public void The_handles_are_at_the_middles_of_the_bottom_the_top_and_the_edges_of_the_bottom()
+    public void The_corners_move_the_middles_of_the_edges_slide_and_the_middles_of_the_faces_turn()
     {
         var handles = new SelectionHandles(_reference, Transform.Identity);
 
-        Assert.Equal(new SelectionHandle(HandleKind.Move, new Point3d(1050, 50, 0)), handles.Handles[0]);
-        Assert.Equal(new SelectionHandle(HandleKind.Lift, new Point3d(1050, 50, 100)), handles.Handles[1]);
-        Assert.Equal(4, handles.Handles.Count(handle => handle.Kind == HandleKind.Rotate));
+        Assert.Equal(8, handles.Handles.Count(handle => handle.Kind == HandleKind.Move));
+        Assert.Equal(12, handles.Handles.Count(handle => handle.Kind == HandleKind.Slide));
+        Assert.Equal(6, handles.Handles.Count(handle => handle.Kind == HandleKind.Rotate));
+        Assert.Equal(new Point3d(1000, 0, 0), handles.Handles[0].Point);
+        Assert.Equal(new Point3d(1050, 50, 100), handles.Handles[TopFace].Point);
+        Assert.Equal(Vector3d.UnitZ, handles.Handles[TopFace].Grip.Direction);
         Assert.Equal(12, handles.Box(Transform.Identity).Count());
     }
 
     [Fact]
-    public void Dragging_the_bottom_moves_snapping_along_the_axes_and_the_top_lifts()
+    public void A_face_turns_around_its_normal_from_where_the_pointer_first_went_snapping_to_right_angles()
     {
         var handles = new SelectionHandles(_reference, Transform.Identity);
+        SelectionHandle top = handles.Handles[TopFace];
+        Vector3d? from = null;
 
-        HandleDrag move = handles.Drag(handles.Handles[0], Down(1550, 80))!;
-        Assert.Equal(InferenceKind.AxisX, move.Along);
-        Assert.Equal(new Point3d(500, 0, 0), move.Transform.Apply(Point3d.Origin));
-
-        HandleDrag free = handles.Drag(handles.Handles[0], Down(1350, 350))!;
-        Assert.Equal(InferenceKind.None, free.Along);
-
-        var aside = new PointerRay(new Point3d(0, 50, 300), new Vector3d(1, 0, 0), 1, 0);
-        HandleDrag lift = handles.Drag(handles.Handles[1], aside)!;
-        Assert.Equal(200, lift.Transform.Apply(Point3d.Origin).Z, Tolerance);
-    }
-
-    [Fact]
-    public void Dragging_an_edge_turns_around_the_bottom_snapping_to_right_angles()
-    {
-        var handles = new SelectionHandles(_reference, Transform.Identity);
-        SelectionHandle front = handles.Handles.First(handle => handle.Kind == HandleKind.Rotate && handle.Point.Y < 1);
-
-        // From the front, (1050, 0), around (1050, 50), to nearly the right side.
-        HandleDrag turn = handles.Drag(front, Down(1100, 46))!;
+        Assert.Null(SelectionHandles.Turn(top, Down(1051, 50, 100), ref from)); // still at the middle
+        Assert.Equal(0, SelectionHandles.Turn(top, Down(1100, 50, 100), ref from)!.Measure, Tolerance);
+        HandleDrag turn = SelectionHandles.Turn(top, Down(1052, 100, 100), ref from)!;
 
         Assert.True(turn.IsAngle);
         Assert.Equal(90, turn.Measure, Tolerance);
@@ -71,22 +67,88 @@ public sealed class SelectionHandlesTests
     }
 
     [Fact]
-    public void The_select_tool_drags_a_handle_of_the_selection_as_one_command()
+    public void A_corner_moves_the_selection_anywhere_as_one_command()
     {
-        var host = new SelectToolTests.Host(_document);
-        var tool = new SelectTool();
-        tool.Activate(host);
-        host.SelectEntity([_reference]);
-        Assert.NotNull(tool.Handles);
+        _tool.Activate(_host);
+        _host.SelectEntity([_reference]);
 
-        tool.Press(new ToolInput(ToolPick.Nothing, Handle: 0));
-        Assert.True(tool.IsDraggingHandle);
-        tool.Drag(new ToolInput(new ToolPick(null, null, default, default, Down(1050, 550)), Handle: 0));
-        tool.Release(new ToolInput(ToolPick.Nothing, Handle: 0));
+        _tool.Press(At(Down(1000, 0), 0));
+        Assert.True(_tool.IsDraggingHandle);
+        _tool.Drag(At(Down(1500, 300), 0));
+        Assert.Equal("Distance", _tool.MeasurementName);
+        _tool.Release(At(Down(1500, 300), 0));
 
-        Assert.False(tool.IsDraggingHandle);
-        Assert.Equal(new Point3d(1000, 500, 0), _reference.Transform.Apply(Point3d.Origin));
-        host.Session.Undo();
-        Assert.Equal(new Point3d(1000, 0, 0), _reference.Transform.Apply(Point3d.Origin));
+        Assert.False(_tool.IsDraggingHandle);
+        Assert.Equal(new Point3d(1500, 300, 0), Origin);
+        _host.Session.Undo();
+        Assert.Equal(new Point3d(1000, 0, 0), Origin);
+    }
+
+    [Fact]
+    public void The_middle_of_an_edge_moves_the_selection_along_an_axis_only()
+    {
+        _tool.Activate(_host);
+        _host.SelectEntity([_reference]);
+        int front = _tool.Handles!.Handles.ToList().FindIndex(handle =>
+            handle.Kind == HandleKind.Slide && handle.Point == new Point3d(1050, 0, 0));
+
+        _tool.Press(At(Down(1050, 0), front));
+        _tool.Drag(At(Down(1300, 60), front));
+        _tool.Release(At(Down(1300, 60), front));
+
+        Assert.Equal(new Point3d(1250, 0, 0), Origin);
+    }
+
+    [Fact]
+    public void A_face_turns_the_selection_as_one_command_and_the_handles_follow_it()
+    {
+        _tool.Activate(_host);
+        _host.SelectEntity([_reference]);
+
+        _tool.Press(At(Down(1050, 50, 100), TopFace));
+        _tool.Drag(At(Down(1100, 50, 100), TopFace));
+        _tool.Drag(At(Down(1052, 100, 100), TopFace));
+        Assert.Equal("Angle", _tool.MeasurementName);
+        _tool.Release(At(Down(1052, 100, 100), TopFace));
+
+        Assert.Equal(1100, Origin.X, Tolerance);
+        Assert.Equal(0, Origin.Y, Tolerance);
+        // The box turned with it is the same box: its corners are where they were, the first now at the old second.
+        Assert.Equal(1100, _tool.Handles!.Handles[0].Point.X, Tolerance);
+        Assert.Equal(0, _tool.Handles!.Handles[0].Point.Y, Tolerance);
+        _host.Session.Undo();
+        Assert.Equal(new Point3d(1000, 0, 0), _tool.Handles!.Handles[0].Point);
+    }
+
+    [Fact]
+    public void Escape_lets_a_handle_go_without_a_change()
+    {
+        _tool.Activate(_host);
+        _host.SelectEntity([_reference]);
+
+        _tool.Press(At(Down(1000, 0), 0));
+        _tool.Drag(At(Down(1500, 300), 0));
+        Assert.True(_tool.Key(ToolKey.Escape, ToolModifiers.None));
+        _tool.Release(At(Down(1500, 300), 0));
+
+        Assert.Equal(new Point3d(1000, 0, 0), Origin);
+        Assert.False(_host.Session.CanUndo);
+    }
+
+    [Fact]
+    public void The_points_of_the_move_tool_follow_the_selection_and_hide_while_it_moves()
+    {
+        var move = new MoveTool(new NoKernel());
+        move.Activate(_host);
+        _host.SelectEntity([_reference]);
+        Assert.Contains(move.GripPoints, grip => grip.Point == new Point3d(1000, 0, 0));
+
+        move.Click(new ToolInput(new ToolPick(null, null, default, default, Down(1000, 0))));
+        Assert.Empty(move.GripPoints);
+        move.Click(new ToolInput(new ToolPick(null, null, default, default, Down(1000, 700))));
+
+        Assert.Equal(new Point3d(1000, 700, 0), Origin);
+        Assert.Contains(move.GripPoints, grip => grip.Point == new Point3d(1000, 700, 0));
+        Assert.DoesNotContain(move.GripPoints, grip => grip.Point == new Point3d(1000, 0, 0));
     }
 }

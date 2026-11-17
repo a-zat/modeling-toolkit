@@ -1,3 +1,4 @@
+using ModelingToolkit.Core.Editing.Tools;
 using Avalonia.Input;
 using ModelingToolkit.Gui.ViewModels;
 using ModelingToolkit.Gui.Viewport;
@@ -466,6 +467,33 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.SelectedInView);
         Assert.Equal(reference.Path, viewModel.EmphasizedPath);
         Assert.Empty(viewModel.Overlay.Lines);
+    }
+
+    [Fact]
+    public async Task AModelImportedIsSelectedInTheViewWithTheMoveToolAndEscapeBringsTheOutlineSelectionAmongTheRest()
+    {
+        var kernel = new OcctKernel();
+        var viewModel = new MainWindowViewModel(
+            new DocumentFormats([new GltfReader(), new NativeDocumentReader(kernel)], [new NativeDocumentWriter()]),
+            new RecordingAppearance(), kernel);
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+
+        await viewModel.ImportAsync(Paths.Asset("gltf", "BoxTextured.glb"));
+
+        Assert.IsType<MoveTool>(viewModel.ActiveTool);
+        Assert.True(viewModel.SelectedInView);
+        Assert.Null(viewModel.EmphasizedPath);
+        Assert.NotEmpty(((MoveTool)viewModel.ActiveTool).GripPoints);
+
+        // Picked in the outline, it is shown in front of the rest; Escape puts it back among it, still selected.
+        ModelNodeViewModel imported = viewModel.ModelTree.SelectedNode!;
+        viewModel.ModelTree.SelectedNode = null;
+        viewModel.ModelTree.SelectedNode = imported;
+        Assert.NotNull(viewModel.EmphasizedPath);
+        viewModel.EscapeCommand.Execute(null);
+        Assert.True(viewModel.SelectedInView);
+        Assert.Null(viewModel.EmphasizedPath);
+        Assert.Same(imported, viewModel.ModelTree.SelectedNode);
     }
 
     [Fact]

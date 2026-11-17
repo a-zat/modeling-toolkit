@@ -42,6 +42,9 @@ public sealed class EditSession
     /// <summary>Raised when what can be undone or redone changes.</summary>
     public event EventHandler? Changed;
 
+    /// <summary>A number that changes each time the document changes, done, undone or redone, to know a cache stale.</summary>
+    public int Revision { get; private set; }
+
     /// <summary>
     /// Applies a command. Outside a transaction it becomes the step to undo, and what could be redone is forgotten.
     /// </summary>
@@ -58,6 +61,7 @@ public sealed class EditSession
 
         _undo.Push(command);
         _redo.Clear();
+        Revision++;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -75,6 +79,7 @@ public sealed class EditSession
         }
 
         _transaction = new Transaction(this, name);
+        Revision++;
         Changed?.Invoke(this, EventArgs.Empty);
         return _transaction;
     }
@@ -89,6 +94,7 @@ public sealed class EditSession
         IEditCommand command = _undo.Peek();
         Run(command.Revert);
         _redo.Push(_undo.Pop());
+        Revision++;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -103,6 +109,7 @@ public sealed class EditSession
         IEditCommand command = _redo.Peek();
         Run(command.Apply);
         _undo.Push(_redo.Pop());
+        Revision++;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -110,6 +117,7 @@ public sealed class EditSession
     public void MarkSaved()
     {
         _saved = _undo.TryPeek(out IEditCommand? top) ? top : null;
+        Revision++;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -144,6 +152,7 @@ public sealed class EditSession
         {
             Run(() => new CompositeCommand(transaction.Name, transaction.Commands).Revert());
         }
+        Revision++;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

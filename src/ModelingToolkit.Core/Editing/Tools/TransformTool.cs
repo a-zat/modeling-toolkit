@@ -20,16 +20,16 @@ public abstract class TransformTool : DrawingTool
         Inference.AnyDirection = true;
     }
 
-    // The corners, the middles of the edges and of the faces of the box of the target, or else of the selection.
+    // The corners, the middles of the edges and of the faces of the box of the target, or else of the selection, and
+    // what they were made for: the entity, the placement of its block, and the revision of the document.
     private IReadOnlyList<Inference> _grips = [];
-    private Entity? _gripped;
-    private Transform? _grippedAt;
+    private (Entity, Transform, int)? _grippedFor;
 
     /// <summary>
-    /// The points of the box of the target, or else of the selection, to take it by: its corners, the middles of its
+    /// The points of the box of the selection to take it by, while nothing is taken: its corners, the middles of its
     /// edges and of its faces, these on the plane of the face, along its normal.
     /// </summary>
-    public IReadOnlyList<Inference> GripPoints => IsActive ? [.. Grips()] : [];
+    public IReadOnlyList<Inference> GripPoints => IsActive && Target is null ? [.. Grips()] : [];
 
     protected override IEnumerable<Inference> Grips()
     {
@@ -38,14 +38,22 @@ public abstract class TransformTool : DrawingTool
         {
             return [];
         }
-        Transform placement = Host.Context.Placement;
-        if (!ReferenceEquals(entity, _gripped) || placement != _grippedAt)
+        (Entity, Transform, int) key = (entity, Host.Context.Placement, Host.Session.Revision);
+        if (_grippedFor is not { } made || !ReferenceEquals(made.Item1, entity) || made.Item2 != key.Item2 ||
+            made.Item3 != key.Item3)
         {
-            _grips = GripsOf(entity, placement);
-            _gripped = entity;
-            _grippedAt = placement;
+            _grips = GripsOf(entity, key.Item2);
+            _grippedFor = key;
         }
         return _grips;
+    }
+
+    /// <summary>Whether a point is one of the middles of the edges of the box, which move along the axes only.</summary>
+    protected bool IsEdgeGrip(Inference point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        return point.Kind == InferenceKind.Midpoint &&
+               Grips().Any(grip => grip.Kind == InferenceKind.Midpoint && grip.Point.DistanceTo(point.Point) < 1e-9);
     }
 
     /// <summary>
@@ -122,38 +130,8 @@ public abstract class TransformTool : DrawingTool
     /// The corners of the box of an entity of the block being edited, turned with it, the middles of its edges and of
     /// its faces, in the model space.
     /// </summary>
-    protected static List<Inference> GripsOf(Entity entity, Transform placement)
-    {
-        ArgumentNullException.ThrowIfNull(entity);
-        ArgumentNullException.ThrowIfNull(placement);
-        var handles = new SelectionHandles(entity, placement);
-        var grips = new List<Inference>();
-        if (handles.IsEmpty)
-        {
-            return grips;
-        }
-        IReadOnlyList<Point3d> corners = handles.Corners;
-        grips.AddRange(corners.Select(corner => new Inference(InferenceKind.Endpoint, corner)));
-        foreach (PreviewLine edge in handles.Box(Transform.Identity))
-        {
-            grips.Add(new Inference(InferenceKind.Midpoint,
-                Point3d.Origin + ((edge.Start - Point3d.Origin) + (edge.End - Point3d.Origin)) / 2));
-        }
-        Point3d centre = Point3d.Origin + corners.Aggregate(default(Vector3d), (sum, c) => sum + (c - Point3d.Origin)) / 8;
-        foreach (int[] face in (int[][])[[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 4, 5], [2, 3, 6, 7], [0, 2, 4, 6], [1, 3, 5, 7]])
-        {
-            Point3d middle = Point3d.Origin + face.Aggregate(default(Vector3d), (sum, i) => sum + (corners[i] - Point3d.Origin)) / 4;
-            Vector3d normal = middle - centre;
-            if (normal.Length < 1e-9)
-            {
-                continue; // a flat box has no thickness to move across
-            }
-            normal = normal.Normalized();
-            grips.Add(new Inference(InferenceKind.Centre, middle,
-                new Plane(normal, normal.Dot(middle - Point3d.Origin)), normal));
-        }
-        return grips;
-    }
+    protected static List<Inference> GripsOf(Entity entity, Transform placement) =>
+        [.. new SelectionHandles(entity, placement).Grips];
 
     /// <summary>
     /// Transforms the target, or a copy of it, by a transform of the model space, as one command; reports why when it

@@ -12,7 +12,7 @@ public sealed class SelectToolTests
     private readonly BlockReference _left, _right;
     private readonly BrepEntity _loose = new(new NoKernel(), new NoShape());
     private readonly Host _host;
-    private readonly SelectTool _tool = new();
+    private readonly SelectTool _tool = new(new NoKernel());
 
     public SelectToolTests()
     {

@@ -1,4 +1,5 @@
 using ModelingToolkit.Core.Geometry;
+using ModelingToolkit.Core.Kernel;
 using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Editing.Tools;
@@ -8,11 +9,22 @@ namespace ModelingToolkit.Core.Editing.Tools;
 /// face, edge or vertex of a shape of that block, Shift adding it to the elements selected or taking it out; a mesh of
 /// that block. A click on what is outside the context leaves it, to the block that has what was clicked, and a click on
 /// nothing to the model. Escape clears the selection, or else leaves the block. The handles of the box of the entity
-/// selected move it across the ground, lift it, or turn it, as they are dragged.
+/// selected move it, by its corners anywhere and by the middles of its edges along the axes, snapping as the move tool
+/// does, or turn it, by the middles of its faces around their normal.
 /// </summary>
-public sealed class SelectTool : Tool
+public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
 {
-    private (SelectionHandles Handles, SelectionHandle Handle, HandleDrag? Drag)? _grab;
+    // Moves the selection by the corners and the edges of its box; without a kernel, as for viewing, only faces turn it.
+    private readonly MoveTool? _mover = kernel is null ? null : new MoveTool(kernel);
+    private Grab? _grab;
+
+    // A handle taken: by a corner or an edge, the mover moves the selection; by a face, it turns around its normal.
+    private sealed record Grab(SelectionHandles Handles, SelectionHandle Handle)
+    {
+        public Vector3d? From; // where the turn starts
+        public HandleDrag? Turn;
+        public bool Moved;
+    }
 
     public override string Name => "Select";
 
@@ -25,20 +37,18 @@ public sealed class SelectTool : Tool
             {
                 return null;
             }
-            if (_handles is not { } handles || !ReferenceEquals(handles.Entity, entity) || !_handlesPlacement!.Equals(Placed(entity)))
+            (Transform, int) madeFor = (Host.Context.Placement, Host.Session.Revision);
+            if (_handles is not { } handles || !ReferenceEquals(handles.Entity, entity) || _handlesFor != madeFor)
             {
                 _handles = new SelectionHandles(entity, Host.Context.Placement);
-                _handlesPlacement = Placed(entity);
+                _handlesFor = madeFor;
             }
             return _handles.IsEmpty ? null : _handles;
         }
     }
 
     private SelectionHandles? _handles;
-    private (Transform, Transform)? _handlesPlacement; // of the block and of the entity, when the handles were made
-
-    private (Transform, Transform) Placed(Entity entity) =>
-        (Host.Context.Placement, entity is BlockReference reference ? reference.Transform : Transform.Identity);
+    private (Transform, int)? _handlesFor; // the placement of the block and the revision of the document they were made at
 
     /// <summary>Whether a handle is being dragged.</summary>
     public bool IsDraggingHandle => _grab is not null;
@@ -46,59 +56,96 @@ public sealed class SelectTool : Tool
     public override void Press(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        _grab = input.Handle is { } index && Handles is { } handles && index >= 0 && index < handles.Handles.Count
-            ? (handles, handles.Handles[index], null)
-            : null;
-        if (_grab is not null)
+        _grab = null;
+        if (input.Handle is not { } index || Handles is not { } handles || index < 0 || index >= handles.Handles.Count)
         {
-            Hint = "Drag to place it · Esc stops";
+            return;
         }
+        SelectionHandle handle = handles.Handles[index];
+        if (handle.Kind != HandleKind.Rotate)
+        {
+            if (_mover is null)
+            {
+                return;
+            }
+            _mover.Activate(Host);
+            if (!_mover.Grab(handle.Grip))
+            {
+                _mover.Deactivate();
+                return;
+            }
+        }
+        _grab = new Grab(handles, handle);
+        Hint = handle.Kind == HandleKind.Rotate ? "Drag around to turn it · Esc stops" : "Drag where it goes · Esc stops";
     }
 
     public override void Drag(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        if (_grab is not { } grab || input.Pick.Ray is not { } ray || grab.Handles.Drag(grab.Handle, ray) is not { } drag)
-        {
-            return;
-        }
-        _grab = grab with { Drag = drag };
-        Measurement = drag.IsAngle ? Measurements.FormatAngle(drag.Measure) : Measurements.Format(drag.Measure);
-        MeasurementName = drag.IsAngle ? "Angle" : "Distance";
-        if (grab.Handles.Entity is BlockReference reference)
-        {
-            Transform placement = grab.Handles.Placement;
-            Host.PreviewPlacement(reference, placement.Inverse() * drag.Transform * placement * reference.Transform);
-        }
-        Host.ShowPreview(new ToolPreview([.. drag.Lines, .. grab.Handles.Box(drag.Transform)], null));
-    }
-
-    public override void Release(ToolInput input)
-    {
         if (_grab is not { } grab)
         {
             return;
         }
+        if (grab.Handle.Kind != HandleKind.Rotate)
+        {
+            grab.Moved = true;
+            _mover!.Hover(input);
+            MeasurementName = _mover.MeasurementName;
+            Measurement = _mover.Measurement;
+            return;
+        }
+        Vector3d? from = grab.From;
+        if (input.Pick.Ray is not { } ray || SelectionHandles.Turn(grab.Handle, ray, ref from) is not { } turn)
+        {
+            return;
+        }
+        grab.From = from;
+        grab.Turn = turn;
+        Measurement = Measurements.FormatAngle(turn.Measure);
+        MeasurementName = "Angle";
+        if (grab.Handles.Entity is BlockReference reference)
+        {
+            Transform placement = grab.Handles.Placement;
+            Host.PreviewPlacement(reference, placement.Inverse() * turn.Transform * placement * reference.Transform);
+        }
+        Host.ShowPreview(new ToolPreview([.. turn.Lines, .. grab.Handles.Box(turn.Transform)], null));
+    }
+
+    public override void Release(ToolInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (_grab is not { } grab)
+        {
+            return;
+        }
+        if (grab.Handle.Kind != HandleKind.Rotate)
+        {
+            IReadOnlyList<Entity>? selected = Host.SelectedEntity;
+            Entity entity = grab.Handles.Entity;
+            Block? owner = entity.Owner;
+            int index = owner?.Entities.IndexOf(entity) ?? -1;
+            if (grab.Moved)
+            {
+                _mover!.Click(input); // where it is let go
+            }
+            StopDrag();
+            Reselect(selected, entity, owner, index);
+            return;
+        }
         StopDrag();
-        if (grab.Drag is not { } drag || drag.Measure == 0 && !drag.IsAngle || drag.IsAngle && Math.Abs(drag.Measure) < 1e-9)
+        if (grab.Turn is not { } turn || Math.Abs(turn.Measure) < 1e-9)
         {
             return;
         }
         Transform placement = grab.Handles.Placement;
-        Entity entity = grab.Handles.Entity;
-        IReadOnlyList<Entity>? selected = Host.SelectedEntity;
-        Block? owner = entity.Owner;
-        int index = owner?.Entities.IndexOf(entity) ?? -1;
+        IReadOnlyList<Entity>? path = Host.SelectedEntity;
+        Entity turned = grab.Handles.Entity;
+        Block? block = turned.Owner;
+        int at = block?.Entities.IndexOf(turned) ?? -1;
         try
         {
-            Host.Session.Execute(TransformCommands.Of(
-                drag.IsAngle ? "Rotate" : "Move", entity, placement.Inverse() * drag.Transform * placement));
-            // A mesh or a shape is replaced by the one transformed, which stays selected.
-            if (selected is { Count: > 0 } && owner is not null && entity.Owner is null &&
-                index >= 0 && index < owner.Entities.Count)
-            {
-                Host.SelectEntity([.. selected.Take(selected.Count - 1), owner.Entities[index]]);
-            }
+            Host.Session.Execute(TransformCommands.Of("Rotate", turned, placement.Inverse() * turn.Transform * placement));
+            Reselect(path, turned, block, at);
         }
         catch (Exception exception) when (exception is Kernel.GeometryKernelException or ArgumentException or EditRefusedException)
         {
@@ -106,8 +153,22 @@ public sealed class SelectTool : Tool
         }
     }
 
+    // A mesh or a shape is replaced by the one transformed, which stays selected.
+    private void Reselect(IReadOnlyList<Entity>? selected, Entity entity, Block? owner, int index)
+    {
+        if (selected is { Count: > 0 } && owner is not null && entity.Owner is null &&
+            index >= 0 && index < owner.Entities.Count)
+        {
+            Host.SelectEntity([.. selected.Take(selected.Count - 1), owner.Entities[index]]);
+        }
+    }
+
     private void StopDrag()
     {
+        if (_mover is { IsActive: true })
+        {
+            _mover.Deactivate();
+        }
         if (_grab is { Handles.Entity: BlockReference reference })
         {
             Host.PreviewPlacement(reference, null);
