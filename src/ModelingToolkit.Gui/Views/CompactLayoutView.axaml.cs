@@ -1,3 +1,5 @@
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
@@ -17,6 +19,7 @@ public partial class CompactLayoutView : UserControl
         _inspectorColumn = new CollapsibleColumn(Panels.ColumnDefinitions[3]);
         // Set here rather than bound, which the popup might not have yet when it opens.
         TimeOfDayPopup.PlacementTarget = Viewport;
+        Viewport.MenuRequested += OnViewportContextRequested;
         Viewport.PropertyChanged += (_, e) =>
         {
             if (e.Property == BoundsProperty)
@@ -82,4 +85,34 @@ public partial class CompactLayoutView : UserControl
         _inspectorColumn.Show(viewModel.IsInspectorOpen);
         _outlineRow.Show(viewModel.IsOutlineExpanded);
     }
+
+    // A menu of what can be done with what was right-clicked, at the pointer.
+    private void OnViewportContextRequested(object? sender, Viewport.ViewportPick pick)
+    {
+        if (DataContext is not MainWindowViewModel viewModel ||
+            viewModel.ContextActions(pick) is not { Count: > 0 } actions)
+        {
+            return;
+        }
+        var menu = new ContextMenu { Placement = PlacementMode.Pointer };
+        foreach (ContextAction action in actions)
+        {
+            menu.Items.Add(action.IsSeparator
+                ? new Separator()
+                : new MenuItem
+                {
+                    Header = action.Header,
+                    Command = action.Command,
+                    CommandParameter = action.Parameter,
+                    InputGesture = action.Gesture is { } gesture ? KeyGesture.Parse(Gesture(gesture)) : null,
+                });
+        }
+        menu.Open(Viewport);
+    }
+
+    // The keys as Avalonia names them, from the symbols the menu shows.
+    private static string Gesture(string symbols) => symbols
+        .Replace("⇧", "Shift+", StringComparison.Ordinal)
+        .Replace("⌘", "Meta+", StringComparison.Ordinal)
+        .Replace("⌫", "Back", StringComparison.Ordinal);
 }

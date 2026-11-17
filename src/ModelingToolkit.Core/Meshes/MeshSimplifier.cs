@@ -85,9 +85,7 @@ public static class MeshSimplifier
         }
         return options.Normals == NormalsMode.Recompute || work.Normals is null
             ? Build(work, CreaseNormals(work, options.CreaseAngle))
-            : Build(work, options.SmoothIterations > 0 || options.KeepPercent < 100
-                ? Checked(work, [.. work.Normals])
-                : [.. work.Normals]);
+            : Build(work, [.. work.Normals]);
     }
 
     // Triangles without area, and repeated ones: the same corners in the same turn.
@@ -279,29 +277,6 @@ public static class MeshSimplifier
                     }
                 }
                 normals[3 * triangle + corner] = ToUnit(sum.Length > 0 ? sum : own);
-            }
-        }
-        return normals;
-    }
-
-    // The normals kept, but those that the changes turned away from their triangles, as smoothing and reducing may, made
-    // again from the triangles around.
-    private static Vector3[] Checked(WorkMesh work, Vector3[] normals)
-    {
-        Vector3[]? remade = null;
-        // Even as they come, the normals of rough meshes stray from their triangles by 60° or more: only those turned
-        // about away from them.
-        float away = (float)Math.Cos(80 * Math.PI / 180);
-        for (int triangle = 0; triangle < work.TriangleCount; triangle++)
-        {
-            Vector3 face = ToUnit(work.AreaNormal(triangle));
-            for (int corner = 3 * triangle; corner < 3 * triangle + 3; corner++)
-            {
-                if (Vector3.Dot(normals[corner], face) < away)
-                {
-                    remade ??= CreaseNormals(work, 60);
-                    normals[corner] = remade[corner];
-                }
             }
         }
         return normals;

@@ -68,6 +68,40 @@ public sealed class MoveToolTests
     }
 
     [Fact]
+    public void The_pointer_snaps_to_the_edges_and_corners_of_meshes()
+    {
+        var floor = new MeshEntity([new(0, 0, 0), new(1000, 0, 0), new(1000, 1000, 0), new(0, 1000, 0)],
+            [new Triangle(0, 1, 2), new Triangle(0, 2, 3)]);
+        _document.Root.Entities.Add(floor);
+
+        _tool.Hover(On(floor, new Point3d(996, 300, 0)));
+        Assert.Equal(new Inference(InferenceKind.OnEdge, new Point3d(1000, 300, 0), null, Vector3d.UnitY),
+            _host.Preview.Inference);
+
+        _tool.Hover(On(floor, new Point3d(997, 996, 0)));
+        Assert.Equal(new Inference(InferenceKind.Endpoint, new Point3d(1000, 1000, 0)), _host.Preview.Inference);
+    }
+
+    [Fact]
+    public void Taken_by_the_middle_of_a_face_of_its_box_a_selection_moves_across_that_face_only()
+    {
+        var block = new Block("Part");
+        block.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(100, 100, 100)));
+        _document.Blocks.Add(block);
+        var reference = new BlockReference(block, Transform.Identity);
+        _document.Root.Entities.Add(reference);
+        _host.SelectedPath = [reference];
+
+        // The middle of the top of the box, from above.
+        _tool.Click(Ground(50, 50) with { Pick = new ToolPick(null, null, default, default,
+            new PointerRay(new Point3d(50, 50, 1100), new Vector3d(0, 0, -1), 1, 0)) });
+        _tool.Click(new ToolInput(new ToolPick(null, null, default, default,
+            new PointerRay(new Point3d(800, 50, 300), new Vector3d(-1, 0, 0), 1, 0))));
+
+        Assert.Equal(new Point3d(0, 0, 200), reference.Transform.Apply(Point3d.Origin));
+    }
+
+    [Fact]
     public void With_Option_a_copy_of_the_selection_moves_by_the_distance_typed()
     {
         var block = new Block("Part");

@@ -6,7 +6,8 @@ namespace ModelingToolkit.Core.Editing.Tools;
 /// <summary>
 /// Moves an entity of the block being edited, the one selected or else the one clicked: a click takes the point to move
 /// from, a second click the point to move to, both snapped to what is inferred, or a distance typed towards the
-/// pointer. The arrow keys lock the direction on an axis; with Option (Alt) held, a copy is moved and the entity stays.
+/// pointer. The arrow keys lock the direction on an axis, and a point taken at the middle of a face of the box of the
+/// selection locks it across that face; with Option (Alt) held, a copy is moved and the entity stays.
 /// </summary>
 public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
 {
@@ -38,6 +39,11 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
             if (TakeTarget(input.Pick))
             {
                 _start = point.Point;
+                // Taken by the middle of a face of its box, it moves across that face only.
+                if (point is { Kind: InferenceKind.Centre, Direction: { } across })
+                {
+                    LockTo(across);
+                }
                 Hint = NextHint;
                 Show();
             }

@@ -10,12 +10,6 @@ using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Gui.ViewModels;
 
-/// <summary>A named set of the settings of the simplification.</summary>
-public sealed record SimplifyPreset(string Name, string Description, SimplifyOptions Options)
-{
-    public override string ToString() => Name;
-}
-
 /// <summary>A row of the measures: what is measured, before and after.</summary>
 public sealed record SimplifyMeasure(string Name, string Before, string After, bool IsBetter);
 
@@ -77,25 +71,7 @@ public sealed partial class SimplifyViewModel : ObservableObject, IDisposable
     /// <summary>The document the preview shows.</summary>
     public Document Preview { get; }
 
-    public static IReadOnlyList<SimplifyPreset> AllPresets { get; } =
-    [
-        new("Clean up", "Welds the vertices and takes out broken triangles; the shape stays as it is.",
-            new SimplifyOptions()),
-        new("Fewer lines", "Softens the creases of the file under 60°: fewer edges drawn, the geometry as it is.",
-            new SimplifyOptions { SoftenAngle = 60 }),
-        new("Furniture at room scale", "Takes out small parts, smooths lightly, reduces the triangles within 6 mm, softens creases.",
-            new SimplifyOptions
-            {
-                MinPieceSize = 15, SmoothIterations = 5, SmoothMaxMove = 3, KeepPercent = 50, MaxError = 6,
-                SoftenAngle = 50,
-            }),
-        new("Background object", "Strong: fewer triangles within 15 mm, no small parts, softer shading, one mesh per material.",
-            new SimplifyOptions
-            {
-                MinPieceSize = 50, SmoothIterations = 10, SmoothMaxMove = 10, KeepPercent = 20, MaxError = 15,
-                SoftenAngle = 60, MergeByMaterial = true,
-            }),
-    ];
+    public static IReadOnlyList<SimplifyPreset> AllPresets => SimplifyPreset.All;
 
     /// <summary>The presets, as the list of the window shows them.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Bound by the window")]

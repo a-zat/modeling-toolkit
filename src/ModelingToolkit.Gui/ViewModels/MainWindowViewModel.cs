@@ -302,6 +302,109 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ? string.Empty
         : string.Join(" › ", Context.Path.Select(reference => reference.Name ?? reference.Block.Name));
 
+    /// <summary>
+    /// The menu of a right click in the 3D view, for what is under the pointer: what is clicked in the block being
+    /// edited is selected first, as the select tool would, and the menu offers what can be done with it; over nothing,
+    /// what can be done with the view.
+    /// </summary>
+    public IReadOnlyList<ContextAction> ContextActions(ViewportPick pick)
+    {
+        ArgumentNullException.ThrowIfNull(pick);
+        var actions = new List<ContextAction>();
+        if (Session is null || IsBusy)
+        {
+            return actions;
+        }
+        bool editable = IsEditable;
+        if (pick.Path is { Count: > 0 } path && editable && Context is { } context)
+        {
+            IReadOnlyList<Entity> within = LeaveTo(path);
+            if (within.Count > 0)
+            {
+                IReadOnlyList<Entity> target = [.. path.Take(path.Count - within.Count + 1)];
+                _selectingInView = true;
+                try
+                {
+                    ModelTree.SelectCommand.Execute(target);
+                }
+                finally
+                {
+                    _selectingInView = false;
+                }
+                SelectedInView = ModelTree.SelectedNode is not null;
+                ShowOverlay();
+                Entity entity = target[^1];
+                if (entity is BlockReference && ModelTree.SelectedNode is { } node)
+                {
+                    actions.Add(new("Edit block", EnterNodeCommand, node));
+                }
+                if (Animations.CanToggleAt(path))
+                {
+                    actions.Add(new("Open or close", ToggleAtCommand, path));
+                }
+                actions.Add(ContextAction.Separator);
+                foreach (ToolItemViewModel tool in Tools.Where(item => item.Tool is MoveTool or RotateTool or ScaleTool))
+                {
+                    actions.Add(new(tool.Name, ActivateToolCommand, tool));
+                }
+                if (SimplifiedComponent.MeshesOf(entity).Count > 0)
+                {
+                    actions.Add(new("Simplify…", SimplifyAtCommand, target));
+                }
+                actions.Add(ContextAction.Separator);
+                actions.Add(new("Hide", ModelTree.ToggleVisibleCommand, ModelTree.SelectedNode));
+                actions.Add(new("Copy", CopyCommand, Gesture: "⌘C"));
+                actions.Add(new("Cut", CutCommand, Gesture: "⌘X"));
+                actions.Add(new("Delete", DeleteCommand, Gesture: "⌫"));
+                actions.Add(ContextAction.Separator);
+            }
+        }
+        else if (pick.Path is { Count: > 0 } walked && Animations.CanToggleAt(walked))
+        {
+            actions.Add(new("Open or close", ToggleAtCommand, walked));
+            actions.Add(ContextAction.Separator);
+        }
+        if (editable && CanPaste)
+        {
+            actions.Add(new("Paste", PasteCommand, Gesture: "⌘V"));
+        }
+        if (Context is { IsModel: false })
+        {
+            actions.Add(new("Leave block", LeaveContextCommand, Gesture: "Esc"));
+        }
+        actions.Add(new("Fit all", FitAllCommand));
+        if (editable)
+        {
+            actions.Add(new("Import…", ImportCommand, Gesture: "⇧⌘I"));
+        }
+        // No separator first, last, or twice.
+        var tidy = new List<ContextAction>();
+        foreach (ContextAction action in actions)
+        {
+            if (!action.IsSeparator || tidy.Count > 0 && !tidy[^1].IsSeparator)
+            {
+                tidy.Add(action);
+            }
+        }
+        if (tidy.Count > 0 && tidy[^1].IsSeparator)
+        {
+            tidy.RemoveAt(tidy.Count - 1);
+        }
+        return tidy;
+    }
+
+    [RelayCommand]
+    private void ToggleAt(IReadOnlyList<Entity>? path) => Animations.ToggleAt(path);
+
+    [RelayCommand]
+    private void SimplifyAt(IReadOnlyList<Entity>? path)
+    {
+        if (path is { Count: > 0 })
+        {
+            OpenSimplify(path);
+        }
+    }
+
     /// <summary>Shows the simplification of a component, in a window of its own; set by the main window.</summary>
     public Func<SimplifyViewModel, Task>? ShowSimplify { get; set; }
 
@@ -1492,6 +1595,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
         ViewOverlay overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
         Overlay = SelectionBox() is { } box ? overlay with { Lines = [.. overlay.Lines, .. box] } : overlay;
+        // The points to take the selection by, with the move and rotate tools, shown so as not to be looked for.
+        if (SelectedInView && IsEditable && ActiveTool is TransformTool { IsActive: true } transform)
+        {
+            Overlay = Overlay with
+            {
+                Markers = [.. transform.GripPoints.Select(grip => new OverlayMarker(grip.Point, SelectionBoxColor,
+                    grip.Kind == InferenceKind.Centre ? MarkerShape.Circle : MarkerShape.Dot)), .. Overlay.Markers],
+            };
+        }
         SelectionHandles? handles = ShownHandles();
         Handles = handles is null ? [] : [.. handles.Handles.Select(handle => handle.Point)];
         if (handles is not null)

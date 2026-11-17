@@ -44,6 +44,13 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
         _lockedKind = unlock ? InferenceKind.None : kind;
     }
 
+    /// <summary>Locks the direction on one of unit length, as across the face a point was taken on.</summary>
+    protected void LockTo(Vector3d direction)
+    {
+        Locked = direction.Normalized();
+        _lockedKind = InferenceKind.Centre;
+    }
+
     protected void Unlock()
     {
         Locked = null;
@@ -82,11 +89,111 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
         Transform placement = Host.Context.Placement;
         Inference.Guides = [.. Host.Context.Block.Entities.OfType<GuideEntity>()
             .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
-        return Inference.Infer(pick, placement, from, locked, SnapVertices(pick), [.. Grips()]);
+        Inference found = Inference.Infer(pick, placement, from, locked, SnapVertices(pick), [.. Grips()]);
+        if (locked is null && found.Kind is not (InferenceKind.Endpoint or InferenceKind.Midpoint or
+                InferenceKind.Intersection or InferenceKind.Origin or InferenceKind.Centre) &&
+            OnMeshEdge(pick) is { } onEdge)
+        {
+            return onEdge;
+        }
+        return found;
     }
 
-    /// <summary>Points to snap to besides the vertices of the geometry, of their kinds, in the model space.</summary>
-    protected virtual IEnumerable<(Point3d Point, InferenceKind Kind)> Grips() => [];
+    private readonly Dictionary<MeshEntity, Polylines> _meshEdges = [];
+
+    // A point of the mesh under the pointer that the pointer passes near: an end of its edges, the middle of one, or a
+    // point along one; the edges are those drawn, its sharp ones.
+    private Inference? OnMeshEdge(ToolPick pick)
+    {
+        if (pick is not { Path: [.., MeshEntity mesh], Element: null, Ray: { } ray } || pick.Normal.Length == 0)
+        {
+            return null;
+        }
+        if (!_meshEdges.TryGetValue(mesh, out Polylines? edges))
+        {
+            if (_meshEdges.Count > 64)
+            {
+                _meshEdges.Clear();
+            }
+            edges = _meshEdges[mesh] = SharpEdges.Of(mesh.Vertices, mesh.Triangles, mesh.Normals);
+        }
+        Transform placement = InferenceEngine.PlacementOf(pick.Path);
+        double unit = ray.UnitSizeAt(pick.Point);
+        double snap = Inference.SnapDistance;
+        double reach = 3 * snap * unit; // the edges near the point hit
+        Inference? best = null;
+        double bestUnits = snap;
+        int rank = int.MaxValue; // ends before middles before points along
+        for (int index = 0; index < edges.Count; index++)
+        {
+            ReadOnlySpan<Point3d> line = edges[index];
+            for (int i = 0; i + 1 < line.Length; i++)
+            {
+                Point3d a = placement.Apply(line[i]), b = placement.Apply(line[i + 1]);
+                Point3d onSegment = Closest(pick.Point, a, b);
+                if (onSegment.DistanceTo(pick.Point) > reach)
+                {
+                    continue;
+                }
+                Point3d middle = Point3d.Origin + ((a - Point3d.Origin) + (b - Point3d.Origin)) / 2;
+                foreach ((Point3d point, InferenceKind kind, int order) in
+                         (ReadOnlySpan<(Point3d, InferenceKind, int)>)
+                         [(a, InferenceKind.Endpoint, 0), (b, InferenceKind.Endpoint, 0), (middle, InferenceKind.Midpoint, 1)])
+                {
+                    double units = RayDistance(ray, point) / ray.UnitSizeAt(point);
+                    if (units < snap && (order < rank || order == rank && units < bestUnits))
+                    {
+                        best = new Inference(kind, point);
+                        bestUnits = units;
+                        rank = order;
+                    }
+                }
+                if (rank <= 1)
+                {
+                    continue;
+                }
+                Point3d along = ClosestToRay(ray, a, b);
+                double alongUnits = RayDistance(ray, along) / ray.UnitSizeAt(along);
+                if (alongUnits < bestUnits)
+                {
+                    best = new Inference(InferenceKind.OnEdge, along, null, (b - a).Normalized());
+                    bestUnits = alongUnits;
+                    rank = 2;
+                }
+            }
+        }
+        return best;
+    }
+
+    private static Point3d Closest(Point3d point, Point3d a, Point3d b)
+    {
+        Vector3d ab = b - a;
+        double length = ab.Dot(ab);
+        return length == 0 ? a : a + ab * Math.Clamp((point - a).Dot(ab) / length, 0, 1);
+    }
+
+    private static double RayDistance(PointerRay ray, Point3d point) =>
+        point.DistanceTo(ray.At(Math.Max((point - ray.Origin).Dot(ray.Direction), 0)));
+
+    // The point of a segment closest to a ray.
+    private static Point3d ClosestToRay(PointerRay ray, Point3d a, Point3d b)
+    {
+        Vector3d d = b - a;
+        double length = d.Length;
+        if (length == 0)
+        {
+            return a;
+        }
+        Vector3d u = d / length;
+        Vector3d w = a - ray.Origin;
+        double k = u.Dot(ray.Direction);
+        double denominator = 1 - k * k;
+        double s = denominator < 1e-12 ? 0 : (k * w.Dot(ray.Direction) - w.Dot(u)) / denominator;
+        return a + u * Math.Clamp(s, 0, length);
+    }
+
+    /// <summary>Points to snap to besides the vertices of the geometry, as inferred, in the model space.</summary>
+    protected virtual IEnumerable<Inference> Grips() => [];
 
     /// <summary>The plane to draw on from a point: that of the face it is on, otherwise the ground through it.</summary>
     protected Plane PlaneAt(Inference point)

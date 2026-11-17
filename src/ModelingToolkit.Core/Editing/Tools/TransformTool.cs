@@ -21,11 +21,17 @@ public abstract class TransformTool : DrawingTool
     }
 
     // The corners, the middles of the edges and of the faces of the box of the target, or else of the selection.
-    private IReadOnlyList<(Point3d Point, InferenceKind Kind)> _grips = [];
+    private IReadOnlyList<Inference> _grips = [];
     private Entity? _gripped;
     private Transform? _grippedAt;
 
-    protected override IEnumerable<(Point3d Point, InferenceKind Kind)> Grips()
+    /// <summary>
+    /// The points of the box of the target, or else of the selection, to take it by: its corners, the middles of its
+    /// edges and of its faces, these on the plane of the face, along its normal.
+    /// </summary>
+    public IReadOnlyList<Inference> GripPoints => IsActive ? [.. Grips()] : [];
+
+    protected override IEnumerable<Inference> Grips()
     {
         Entity? entity = Target ?? (Host.SelectedEntity is { } path && Host.Context.Within(path) is [{ } selected] ? selected : null);
         if (entity is null)
@@ -116,26 +122,35 @@ public abstract class TransformTool : DrawingTool
     /// The corners of the box of an entity of the block being edited, turned with it, the middles of its edges and of
     /// its faces, in the model space.
     /// </summary>
-    protected static List<(Point3d Point, InferenceKind Kind)> GripsOf(Entity entity, Transform placement)
+    protected static List<Inference> GripsOf(Entity entity, Transform placement)
     {
         ArgumentNullException.ThrowIfNull(entity);
         ArgumentNullException.ThrowIfNull(placement);
         var handles = new SelectionHandles(entity, placement);
-        var grips = new List<(Point3d, InferenceKind)>();
+        var grips = new List<Inference>();
         if (handles.IsEmpty)
         {
             return grips;
         }
         IReadOnlyList<Point3d> corners = handles.Corners;
-        grips.AddRange(corners.Select(corner => (corner, InferenceKind.Endpoint)));
+        grips.AddRange(corners.Select(corner => new Inference(InferenceKind.Endpoint, corner)));
         foreach (PreviewLine edge in handles.Box(Transform.Identity))
         {
-            grips.Add((Point3d.Origin + ((edge.Start - Point3d.Origin) + (edge.End - Point3d.Origin)) / 2, InferenceKind.Midpoint));
+            grips.Add(new Inference(InferenceKind.Midpoint,
+                Point3d.Origin + ((edge.Start - Point3d.Origin) + (edge.End - Point3d.Origin)) / 2));
         }
+        Point3d centre = Point3d.Origin + corners.Aggregate(default(Vector3d), (sum, c) => sum + (c - Point3d.Origin)) / 8;
         foreach (int[] face in (int[][])[[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 4, 5], [2, 3, 6, 7], [0, 2, 4, 6], [1, 3, 5, 7]])
         {
-            grips.Add((Point3d.Origin + face.Aggregate(default(Vector3d), (sum, i) => sum + (corners[i] - Point3d.Origin)) / 4,
-                InferenceKind.Centre));
+            Point3d middle = Point3d.Origin + face.Aggregate(default(Vector3d), (sum, i) => sum + (corners[i] - Point3d.Origin)) / 4;
+            Vector3d normal = middle - centre;
+            if (normal.Length < 1e-9)
+            {
+                continue; // a flat box has no thickness to move across
+            }
+            normal = normal.Normalized();
+            grips.Add(new Inference(InferenceKind.Centre, middle,
+                new Plane(normal, normal.Dot(middle - Point3d.Origin)), normal));
         }
         return grips;
     }

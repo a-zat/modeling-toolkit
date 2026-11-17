@@ -107,6 +107,13 @@ public sealed class ViewportView : Border, IViewCamera
     private const double HandleReach = 9;
 
     private int? _grabbed; // the handle being dragged
+    private Point? _rightFrom; // where the right button was pressed, until it drags
+
+    /// <summary>
+    /// Raised by a click of the right button, a press and a release without a drag (which pans): with what is under the
+    /// pointer, for a menu of what can be done with it.
+    /// </summary>
+    public event EventHandler<ViewportPick>? MenuRequested;
 
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
 
@@ -481,6 +488,7 @@ public sealed class ViewportView : Border, IViewCamera
             return;
         }
         _clickCount = e.ClickCount;
+        _rightFrom = e.GetCurrentPoint(this).Properties.IsRightButtonPressed ? e.GetPosition(_host) : null;
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && HandleAt(e.GetPosition(_host)) is { } handle)
         {
             // The viewer does not turn the view: the handle is dragged.
@@ -524,6 +532,15 @@ public sealed class ViewportView : Border, IViewCamera
         }
         _clickModifiers = e.KeyModifiers;
         SendButtons(e);
+        if (e.InitialPressMouseButton == MouseButton.Right && _rightFrom is { } from)
+        {
+            _rightFrom = null;
+            Point at = e.GetPosition(_host);
+            if (Math.Abs(at.X - from.X) + Math.Abs(at.Y - from.Y) < 4)
+            {
+                MenuRequested?.Invoke(this, _hovered with { Modifiers = e.KeyModifiers, Kind = ViewportInputKind.Click });
+            }
+        }
         if (e.InitialPressMouseButton == MouseButton.Left)
         {
             Raise(_hovered with { Modifiers = e.KeyModifiers, ClickCount = _clickCount, Kind = ViewportInputKind.Release });

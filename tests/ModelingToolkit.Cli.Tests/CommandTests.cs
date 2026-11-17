@@ -34,6 +34,36 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public void A_pipeline_of_edits_changes_the_model_as_the_application_would()
+    {
+        string edited = Path.Combine(_folder, "edited.mtk");
+
+        (int exitCode, string output, string error) = Run("edit", Asset("CesiumMilkTruck.glb"), edited,
+            "rename=Cesium_Milk_Truck@Truck", "move=Truck@0,1000,0", "hide=Node", "delete=Node.001",
+            "simplify=Truck/truck@clean-up");
+        Assert.True(exitCode == 0, error);
+        Assert.Contains("Wrote edited.mtk.", output, StringComparison.Ordinal);
+
+        (_, string tree, _) = Run("tree", edited, "--depth", "1");
+        string[] lines = tree.TrimEnd().ReplaceLineEndings("\n").Split('\n');
+        Assert.Equal(
+            ["Node  (component of Node, at 0, -1432.7, 427.7, hidden)", "Truck  (component of Cesium_Milk_Truck, at 0, 1000, 0)"],
+            lines);
+    }
+
+    [Fact]
+    public void An_edit_of_nothing_fails_and_writes_nothing()
+    {
+        string edited = Path.Combine(_folder, "edited.mtk");
+
+        (int exitCode, _, string error) = Run("edit", Asset("CesiumMilkTruck.glb"), edited, "delete=Nowhere");
+
+        Assert.NotEqual(0, exitCode);
+        Assert.Contains("Nothing is at \"Nowhere\"", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(edited));
+    }
+
+    [Fact]
     public void Statistics_describe_the_model()
     {
         (int exitCode, string output, _) = Run("stats", Asset("Box.glb"));

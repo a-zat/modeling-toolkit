@@ -74,7 +74,7 @@ public sealed class GltfReader : IDocumentReader
     }
 
     // What the toolkit writes in the extras of glTF, which OpenCASCADE ignores: the hidden nodes, found by name as the
-    // animated ones, and the size of the textures of materials. Extras that cannot be read are of no harm.
+    // animated ones, and the size of the textures of materials; and the metalness of materials with a texture of it. Extras that cannot be read are of no harm.
     private static void ReadExtras(string path, Document document)
     {
         try
@@ -95,6 +95,7 @@ public sealed class GltfReader : IDocumentReader
             var materials = document.Materials.ToLookup(material => material.Name);
             foreach (JsonElement entry in Items(root, "materials"))
             {
+                TextureMetalness(entry, materials);
                 if (Extra(entry, "textureSize") is { ValueKind: JsonValueKind.Number } size &&
                     entry.TryGetProperty("name", out JsonElement name) && name.ValueKind == JsonValueKind.String &&
                     size.GetDouble() > 0)
@@ -109,6 +110,22 @@ public sealed class GltfReader : IDocumentReader
         catch (Exception exception) when (exception is JsonException or InvalidDataException or IOException
                                               or InvalidOperationException)
         {
+        }
+
+        // With a texture of metalness and roughness, the factors only scale it, and glTF makes the metallic one 1 when
+        // the file leaves it out: the material would be all metal, white and shadowless. The texture is not read; most
+        // are of materials that are not metal, which the material then is.
+        static void TextureMetalness(JsonElement entry, ILookup<string, Material> materials)
+        {
+            if (entry.TryGetProperty("name", out JsonElement name) && name.ValueKind == JsonValueKind.String &&
+                entry.TryGetProperty("pbrMetallicRoughness", out JsonElement pbr) && pbr.ValueKind == JsonValueKind.Object &&
+                pbr.TryGetProperty("metallicRoughnessTexture", out _))
+            {
+                foreach (Material material in materials[name.GetString()!])
+                {
+                    material.Metallic = 0;
+                }
+            }
         }
 
         static IEnumerable<JsonElement> Items(JsonElement root, string property) =>

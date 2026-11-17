@@ -104,12 +104,12 @@ public sealed class InferenceEngine
     /// pointer is on are left out.
     /// </param>
     /// <param name="grips">
-    /// Points of the kinds given to snap to as to <paramref name="vertices"/>, such as the corners and the middles of
+    /// Points inferred already, to snap to as to <paramref name="vertices"/>, such as the corners and the middles of
     /// the edges and of the faces of the box of what is moved, in the model space; the vertices come first.
     /// </param>
     public Inference Infer(
         ToolPick pick, Transform placement, Point3d? from = null, Vector3d? locked = null,
-        IReadOnlyList<Point3d>? vertices = null, IReadOnlyList<(Point3d Point, InferenceKind Kind)>? grips = null)
+        IReadOnlyList<Point3d>? vertices = null, IReadOnlyList<Inference>? grips = null)
     {
         ArgumentNullException.ThrowIfNull(pick);
         ArgumentNullException.ThrowIfNull(placement);
@@ -137,7 +137,7 @@ public sealed class InferenceEngine
         if (found.Kind != InferenceKind.Endpoint && grips is { Count: > 0 } && pick.Ray is { } toGrip &&
             Nearest(toGrip, [.. grips.Select(grip => grip.Point)], found) is { } gripped)
         {
-            return new Inference(grips.First(grip => grip.Point == gripped).Kind, gripped);
+            return grips.First(grip => grip.Point == gripped);
         }
         if (found.Kind is InferenceKind.Endpoint or InferenceKind.Midpoint)
         {
@@ -179,7 +179,7 @@ public sealed class InferenceEngine
         Plane? face = found.Kind == InferenceKind.OnFace ? found.Plane : null;
         double eyeSide = face is { } plane ? plane.Normal.Dot(ray.Origin - Point3d.Origin) - plane.Offset : 0;
         Point3d? best = null;
-        double bestUnits = SnapDistance;
+        double bestUnits = SnapDistance, bestDepth = double.MaxValue;
         foreach (Point3d vertex in vertices)
         {
             double depth = (vertex - ray.Origin).Dot(ray.Direction);
@@ -196,10 +196,12 @@ public sealed class InferenceEngine
                 }
             }
             double units = vertex.DistanceTo(ray.At(depth)) / ray.UnitSizeAt(vertex);
-            if (units < bestUnits)
+            // The nearer to the eye of those as close to the pointer, as the one seen.
+            if (units < bestUnits - 1e-9 || Math.Abs(units - bestUnits) <= 1e-9 && depth < bestDepth)
             {
                 best = vertex;
                 bestUnits = units;
+                bestDepth = depth;
             }
         }
         return best;
