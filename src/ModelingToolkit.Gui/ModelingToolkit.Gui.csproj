@@ -9,7 +9,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- See native/Native.targets: the native viewer of the 3D view. -->
     <NativeLibrary>viewer</NativeLibrary>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\app-icon.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />

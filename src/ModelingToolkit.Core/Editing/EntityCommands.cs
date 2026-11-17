@@ -146,6 +146,49 @@ public sealed class AddEntityCommand(string name, Block block, Entity entity) : 
     public void Revert() => _block.Entities.Remove(_entity);
 }
 
+/// <summary>
+/// Adds an empty block to a document, placed in another block by a reference at its origin, to group what goes into it;
+/// undoing takes both away.
+/// </summary>
+public sealed class NewBlockCommand : IEditCommand
+{
+    private readonly Document _document;
+    private readonly Block _into;
+
+    public NewBlockCommand(Document document, Block into, string name)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(into);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        _document = document;
+        _into = into;
+        // A name of its own among the blocks: "Room", "Room 2"...
+        string unique = name;
+        for (int n = 2; document.Blocks.Any(block => block.Name == unique); n++)
+        {
+            unique = $"{name} {n}";
+        }
+        Reference = new BlockReference(new Block(unique), Geometry.Transform.Identity);
+    }
+
+    /// <summary>The reference that places the new block.</summary>
+    public BlockReference Reference { get; }
+
+    public string Name => "New block";
+
+    public void Apply()
+    {
+        _document.Blocks.Add(Reference.Block);
+        _into.Entities.Add(Reference);
+    }
+
+    public void Revert()
+    {
+        _into.Entities.Remove(Reference);
+        _document.Blocks.Remove(Reference.Block);
+    }
+}
+
 /// <summary>Removes an entity from its block; undoing puts it back where it was.</summary>
 public sealed class DeleteCommand : IEditCommand
 {

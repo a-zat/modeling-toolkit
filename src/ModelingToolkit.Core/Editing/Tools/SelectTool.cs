@@ -117,7 +117,7 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
                 return;
             }
             _mover.Activate(Host);
-            if (!_mover.Grab(handle.Grip))
+            if (!_mover.Grab(handle.Grip, constrained: true))
             {
                 _mover.Deactivate();
                 return;

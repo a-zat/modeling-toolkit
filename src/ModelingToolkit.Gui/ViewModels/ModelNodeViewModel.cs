@@ -50,7 +50,13 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     public string? Detail
     {
         get => _detail;
-        private set => SetProperty(ref _detail, value);
+        private set
+        {
+            if (SetProperty(ref _detail, value))
+            {
+                OnPropertyChanged(nameof(DetailSpaced));
+            }
+        }
     }
 
     private string _name;
@@ -82,6 +88,12 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     public partial bool IsContext { get; set; }
 
     public bool IsReference => Entity is BlockReference;
+
+    /// <summary>Whether a block can be added under the node: the model's, or a reference's.</summary>
+    public bool CanHoldBlocks => (IsModel || IsReference) && Block is not null;
+
+    /// <summary>The detail after the name, with the space between them; empty for none.</summary>
+    public string DetailSpaced => string.IsNullOrEmpty(Detail) ? string.Empty : "  " + Detail;
 
     public bool IsMesh => Entity is MeshEntity;
 

@@ -81,6 +81,27 @@ public sealed partial class ModelTreeViewModel : ObservableObject
             (placement, reference) => placement * reference.Transform);
 
     /// <summary>Starts editing the name of a node in the outline.</summary>
+    /// <summary>Adds an empty block into the block of a node, the model or a reference, selected and named at once.</summary>
+    [RelayCommand]
+    private void AddBlock(ModelNodeViewModel? node)
+    {
+        if (node is not { CanHoldBlocks: true, Block: { } into } || Model?.Document is not { } document)
+        {
+            return;
+        }
+        var command = new NewBlockCommand(document, into, "New block");
+        if (Edit?.Invoke(command) != true)
+        {
+            return;
+        }
+        Select([.. node.Path, command.Reference]);
+        if (SelectedNode is { } added)
+        {
+            node.IsExpanded = true;
+            StartRename(added);
+        }
+    }
+
     [RelayCommand]
     private void StartRename(ModelNodeViewModel? node)
     {

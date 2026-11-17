@@ -220,8 +220,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Whether an entity was cut or copied in the open document, which can be pasted.</summary>
     public bool CanPaste => Session is not null && !IsBusy && _clipboard.CanPaste(Session.Document);
 
+    /// <summary>Whether a text field has the keyboard: the keys that delete then delete text, from the menu too.</summary>
+    public bool IsTypingInField
+    {
+        get => _isTypingInField;
+        set
+        {
+            if (SetProperty(ref _isTypingInField, value))
+            {
+                OnPropertyChanged(nameof(CanDelete));
+                DeleteCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    private bool _isTypingInField;
+
     /// <summary>Whether faces or edges are selected, which can be erased, or else an entity, which can be deleted.</summary>
-    public bool CanDelete => Session is not null && !IsBusy &&
+    public bool CanDelete => Session is not null && !IsBusy && !IsTypingInField &&
         (SelectedElements.Any(element => element.Kind != ElementKind.Vertex) || ModelTree.SelectedNode?.Entity is not null);
 
     /// <summary>
@@ -1646,7 +1662,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ViewOverlay overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
         Overlay = SelectionBox() is { } box ? overlay with { Lines = [.. overlay.Lines, .. box] } : overlay;
         // The points to take the selection by, with the move and rotate tools, shown so as not to be looked for: those
-        // the box does not hide, by their kind, squares at the corners, diamonds at the middles of the edges.
+        // the box does not hide.
         IReadOnlyList<int>? seen = null;
         if (SelectedInView && IsEditable && ActiveTool is TransformTool { IsActive: true } transform &&
             transform.GripPoints is { Count: > 0 } grips && SelectedHandles() is { } selectedBox)
@@ -1654,8 +1670,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             seen = Seen(selectedBox);
             Overlay = Overlay with
             {
+                // Squares move, dots turn: all the points of the box alike.
                 Markers = [.. seen.Where(i => i < grips.Count).Select(i => new OverlayMarker(grips[i].Point,
-                    SelectionBoxColor, ShapeOf(grips[i].Kind))), .. Overlay.Markers],
+                    SelectionBoxColor, transform is RotateTool ? MarkerShape.Dot : MarkerShape.Square)), .. Overlay.Markers],
             };
         }
         if (FocusAxes() is { } axes)

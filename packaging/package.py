@@ -172,6 +172,8 @@ def make_app_bundle(application, bundle, version):
     contents = bundle / "Contents"
     contents.mkdir(parents=True)
     shutil.move(str(application), str(contents / "MacOS"))
+    (contents / "Resources").mkdir()
+    shutil.copy(ROOT / "packaging" / "app-icon.icns", contents / "Resources" / "app-icon.icns")
     with open(contents / "Info.plist", "wb") as plist:
         plistlib.dump({
             "CFBundleName": "Modeling Toolkit",
@@ -179,6 +181,7 @@ def make_app_bundle(application, bundle, version):
             "CFBundleIdentifier": "io.github.a-zat.modeling-toolkit",
             "CFBundleExecutable": "ModelingToolkit.Gui",
             "CFBundlePackageType": "APPL",
+            "CFBundleIconFile": "app-icon.icns",
             "CFBundleShortVersionString": version,
             "CFBundleVersion": version,
             "NSHighResolutionCapable": True,

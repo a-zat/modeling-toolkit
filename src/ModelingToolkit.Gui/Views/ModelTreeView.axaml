@@ -7,7 +7,9 @@
              x:DataType="vm:ModelTreeViewModel">
 
   <Panel>
-    <TreeView x:Name="Tree" ItemsSource="{Binding TopNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+    <!-- No scrolling sideways: a long name is cut short, and the eyes stay in view at the right. -->
+    <TreeView x:Name="Tree" ItemsSource="{Binding TopNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
       <TreeView.Styles>
         <Style Selector="TreeViewItem" x:DataType="vm:ModelNodeViewModel">
           <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
@@ -33,11 +35,14 @@
       </TreeView.Styles>
       <TreeView.ItemTemplate>
         <TreeDataTemplate DataType="vm:ModelNodeViewModel" ItemsSource="{Binding Children}">
-          <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Background="Transparent">
+          <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
             <Grid.ContextMenu>
               <ContextMenu IsVisible="{Binding HasEntity}">
                 <MenuItem Header="Rename" InputGesture="F2"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).StartRenameCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem Header="New block inside" IsVisible="{Binding CanHoldBlocks}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).AddBlockCommand}"
                           CommandParameter="{Binding}" />
                 <MenuItem Header="Edit block" IsVisible="{Binding IsReference}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).EnterCommand}"
@@ -54,14 +59,16 @@
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsBrep}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsGeometry}" />
             </Panel>
-            <TextBlock Grid.Column="1" x:Name="NodeName" Text="{Binding Name}" VerticalAlignment="Center"
+            <TextBlock Grid.Column="1" x:Name="NodeName" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Classes.context="{Binding IsContext}" IsVisible="{Binding !IsRenaming}"
-                       Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}" />
+                       Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}"
+                       ToolTip.Tip="{Binding Name}">
+              <Run Text="{Binding Name}" />
+              <Run Text="{Binding DetailSpaced}" Foreground="{DynamicResource Mtk.ForegroundSecondary}" FontWeight="Normal" />
+            </TextBlock>
             <TextBox Grid.Column="1" Classes="rename" Text="{Binding EditedName}" IsVisible="{Binding IsRenaming}"
-                     MinWidth="140" Padding="4,1" MinHeight="0" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="2" Text="{Binding Detail}" Classes="secondary" VerticalAlignment="Center"
-                       Margin="6,0,0,0" IsVisible="{Binding !IsRenaming}" />
-            <Button Grid.Column="4" Classes="tool eye" Classes.hidden="{Binding !IsVisible}" Width="22" Height="22"
+                     MinWidth="0" Padding="4,1" MinHeight="0" VerticalAlignment="Center" />
+            <Button Grid.Column="2" Classes="tool eye" Classes.hidden="{Binding !IsVisible}" Width="22" Height="22"
                     Margin="6,0,4,0" IsVisible="{Binding HasEntity}"
                     Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).ToggleVisibleCommand}"
                     CommandParameter="{Binding}" ToolTip.Tip="Show or hide">

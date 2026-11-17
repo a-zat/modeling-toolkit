@@ -14,11 +14,30 @@ public partial class MainWindow : Window
         // Digits typed outside the fields go to the measurement field, as the value of the active tool.
         AddHandler(TextInputEvent, OnTextTyped, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnKeyPressed, RoutingStrategies.Tunnel);
+        AddHandler(GotFocusEvent, (_, e) => Typing(e.Source is TextBox), RoutingStrategies.Bubble);
+        AddHandler(LostFocusEvent, (_, _) => Typing(false), RoutingStrategies.Bubble);
+    }
+
+    private void Typing(bool typing)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.IsTypingInField = typing;
+        }
     }
 
     // Tab, outside the fields, passes between the move and rotate tools, keeping the point taken.
     private void OnKeyPressed(object? sender, KeyEventArgs e)
     {
+        // In a field, they delete text, never the selection.
+        if (e.Key is Key.Delete or Key.Back && e.Source is not TextBox &&
+            e.KeyModifiers is KeyModifiers.None or KeyModifiers.Meta or KeyModifiers.Control &&
+            DataContext is MainWindowViewModel deleting && deleting.DeleteCommand.CanExecute(null))
+        {
+            deleting.DeleteCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.Tab && e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox &&
             DataContext is MainWindowViewModel viewModel && viewModel.SwitchMoveRotate())
         {

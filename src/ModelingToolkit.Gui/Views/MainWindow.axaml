@@ -7,6 +7,7 @@
         x:Class="ModelingToolkit.Gui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
+        Icon="/Assets/app-icon.png"
         Width="1280" Height="800" MinWidth="900" MinHeight="560"
         Background="{DynamicResource Mtk.Chrome}" FontSize="13"
         WindowStartupLocation="CenterScreen">
@@ -25,9 +26,7 @@
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+X, macOS=Cmd+X}" Command="{Binding CutCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+C, macOS=Cmd+C}" Command="{Binding CopyCommand}" />
     <KeyBinding Gesture="{OnPlatform Default=Ctrl+V, macOS=Cmd+V}" Command="{Binding PasteCommand}" />
-    <KeyBinding Gesture="Delete" Command="{Binding DeleteCommand}" />
-    <KeyBinding Gesture="{OnPlatform Default=Delete, macOS=Cmd+Back}" Command="{Binding DeleteCommand}" />
-    <KeyBinding Gesture="Back" Command="{Binding DeleteCommand}" />
+    <!-- Delete, Backspace and ⌘Backspace delete the selection from the code-behind, unless typed in a field. -->
     <KeyBinding Gesture="Escape" Command="{Binding EscapeCommand}" />
     <!-- The arrows lock the direction of the drawing tools on an axis. -->
     <KeyBinding Gesture="Right" Command="{Binding PressToolKeyCommand}" CommandParameter="{x:Static tools:ToolKey.Right}" />
