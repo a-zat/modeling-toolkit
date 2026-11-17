@@ -31,9 +31,14 @@ public abstract class TransformTool : DrawingTool
     /// </summary>
     public IReadOnlyList<Inference> GripPoints => IsActive && Target is null ? [.. Grips()] : [];
 
-    protected override IEnumerable<Inference> Grips()
+    // Once taken, what is moved has no points to snap to: they would be where it was.
+    protected override IEnumerable<Inference> Grips() => Target is null ? GripsFor(Selected) : [];
+
+    private Entity? Selected =>
+        Host.SelectedEntity is { } path && Host.Context.Within(path) is [{ } selected] ? selected : null;
+
+    private IReadOnlyList<Inference> GripsFor(Entity? entity)
     {
-        Entity? entity = Target ?? (Host.SelectedEntity is { } path && Host.Context.Within(path) is [{ } selected] ? selected : null);
         if (entity is null)
         {
             return [];
@@ -52,8 +57,8 @@ public abstract class TransformTool : DrawingTool
     protected bool IsEdgeGrip(Inference point)
     {
         ArgumentNullException.ThrowIfNull(point);
-        return point.Kind == InferenceKind.Midpoint &&
-               Grips().Any(grip => grip.Kind == InferenceKind.Midpoint && grip.Point.DistanceTo(point.Point) < 1e-9);
+        return point.Kind == InferenceKind.Midpoint && GripsFor(Target ?? Selected).Any(grip =>
+            grip.Kind == InferenceKind.Midpoint && grip.Point.DistanceTo(point.Point) < 1e-9);
     }
 
     /// <summary>

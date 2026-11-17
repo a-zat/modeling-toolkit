@@ -50,13 +50,61 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
     private SelectionHandles? _handles;
     private (Transform, int)? _handlesFor; // the placement of the block and the revision of the document they were made at
 
-    /// <summary>Whether a handle is being dragged.</summary>
-    public bool IsDraggingHandle => _grab is not null;
+    /// <summary>Whether a handle is being dragged, or the selection placed.</summary>
+    public bool IsDraggingHandle => _grab is not null || _placing is not null;
+
+    // The selection being placed, as a model imported, and what to do if it is not.
+    private Action? _placing;
+
+    /// <summary>Whether the selection follows the pointer, until a click places it.</summary>
+    public bool IsPlacing => _placing is not null;
+
+    /// <summary>
+    /// Makes the selection follow the pointer from a point of it, snapping as the move tool does, until a click places
+    /// it there, as one command; Escape leaves it where it is and calls back. Whether it follows.
+    /// </summary>
+    public bool Place(Point3d from, Action? cancelled = null)
+    {
+        if (_mover is null || _grab is not null)
+        {
+            return false;
+        }
+        StopPlacing();
+        _mover.Activate(Host);
+        if (!_mover.Grab(new Inference(InferenceKind.Endpoint, from)))
+        {
+            _mover.Deactivate();
+            return false;
+        }
+        _placing = cancelled ?? (() => { });
+        Hint = "Click where it goes · Esc stops";
+        return true;
+    }
+
+    private void StopPlacing()
+    {
+        if (_placing is null)
+        {
+            return;
+        }
+        _placing = null;
+        if (_mover is { IsActive: true })
+        {
+            _mover.Deactivate();
+        }
+        Measurement = null;
+        Host.ShowPreview(ToolPreview.Empty);
+        Hint = HintFor(ToolPick.Nothing);
+    }
 
     public override void Press(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
         _grab = null;
+        if (_placing is not null)
+        {
+            return;
+        }
         if (input.Handle is not { } index || Handles is not { } handles || index < 0 || index >= handles.Handles.Count)
         {
             return;
@@ -185,6 +233,7 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
         {
             StopDrag();
         }
+        StopPlacing();
     }
 
     protected override void OnActivated() => Hint = HintFor(ToolPick.Nothing);
@@ -192,12 +241,30 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
     public override void Hover(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
+        if (_placing is not null)
+        {
+            _mover!.Hover(input);
+            MeasurementName = _mover.MeasurementName;
+            Measurement = _mover.Measurement;
+            return;
+        }
         Hint = HintFor(input.Pick);
     }
 
     public override void Click(ToolInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
+        if (_placing is not null)
+        {
+            IReadOnlyList<Entity>? selected = Host.SelectedEntity;
+            _mover!.Click(input);
+            StopPlacing();
+            if (selected is not null)
+            {
+                Host.SelectEntity(selected); // still selected, to take it by its handles
+            }
+            return;
+        }
         IToolHost host = Host;
         if (input.Pick.Path is not { Count: > 0 } path)
         {
@@ -255,6 +322,12 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
         if (_grab is not null)
         {
             StopDrag();
+            return true;
+        }
+        if (_placing is { } cancelled)
+        {
+            StopPlacing();
+            cancelled();
             return true;
         }
         if (host.Elements.Count > 0 || host.SelectedEntity is not null)

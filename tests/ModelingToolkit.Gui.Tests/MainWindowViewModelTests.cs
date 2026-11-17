@@ -1,3 +1,4 @@
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Editing.Tools;
 using Avalonia.Input;
 using ModelingToolkit.Gui.ViewModels;
@@ -466,34 +467,72 @@ public sealed class MainWindowViewModelTests
         viewModel.ModelTree.SelectedNode = reference;
         Assert.False(viewModel.SelectedInView);
         Assert.Equal(reference.Path, viewModel.EmphasizedPath);
-        Assert.Empty(viewModel.Overlay.Lines);
+        Assert.Equal(3, viewModel.Overlay.Lines.Count); // no box, its axes
     }
 
     [Fact]
-    public async Task AModelImportedIsSelectedInTheViewWithTheMoveToolAndEscapeBringsTheOutlineSelectionAmongTheRest()
+    public async Task AModelImportedFollowsThePointerByItsOriginUntilAClickPlacesItSelected()
     {
-        var kernel = new OcctKernel();
-        var viewModel = new MainWindowViewModel(
-            new DocumentFormats([new GltfReader(), new NativeDocumentReader(kernel)], [new NativeDocumentWriter()]),
-            new RecordingAppearance(), kernel);
+        MainWindowViewModel viewModel = CreateWithKernel();
         await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
 
         await viewModel.ImportAsync(Paths.Asset("gltf", "BoxTextured.glb"));
 
-        Assert.IsType<MoveTool>(viewModel.ActiveTool);
+        SelectTool select = Assert.IsType<SelectTool>(viewModel.ActiveTool);
+        Assert.True(select.IsPlacing);
         Assert.True(viewModel.SelectedInView);
         Assert.Null(viewModel.EmphasizedPath);
-        Assert.NotEmpty(((MoveTool)viewModel.ActiveTool).GripPoints);
+        BlockReference imported = Assert.IsType<BlockReference>(viewModel.ModelTree.SelectedNode!.Entity);
+        var down = new PointerRay(new Point3d(500, 300, 1000), new Vector3d(0, 0, -1), 1, 0);
+        viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None, 1,
+            ViewportInputKind.Hover, down));
+        viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None, 1,
+            ViewportInputKind.Click, down));
 
-        // Picked in the outline, it is shown in front of the rest; Escape puts it back among it, still selected.
-        ModelNodeViewModel imported = viewModel.ModelTree.SelectedNode!;
-        viewModel.ModelTree.SelectedNode = null;
-        viewModel.ModelTree.SelectedNode = imported;
-        Assert.NotNull(viewModel.EmphasizedPath);
+        Assert.False(select.IsPlacing);
+        Assert.Equal(new Point3d(500, 300, 0), imported.Transform.Apply(Point3d.Origin));
+        Assert.Same(imported, viewModel.ModelTree.SelectedNode?.Entity);
+        Assert.NotNull(select.Handles);
+    }
+
+    [Fact]
+    public async Task EscapeWhileAModelImportedFollowsThePointerTakesItOut()
+    {
+        MainWindowViewModel viewModel = CreateWithKernel();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        int before = viewModel.Document!.Root.Entities.Count;
+
+        await viewModel.ImportAsync(Paths.Asset("gltf", "BoxTextured.glb"));
         viewModel.EscapeCommand.Execute(null);
+
+        Assert.False(((SelectTool)viewModel.ActiveTool).IsPlacing);
+        Assert.Equal(before, viewModel.Document.Root.Entities.Count);
+    }
+
+    [Fact]
+    public async Task EscapeBringsWhatTheOutlineShowsInFrontOfTheRestBackAmongIt()
+    {
+        MainWindowViewModel viewModel = CreateWithKernel();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "CesiumMilkTruck.glb"));
+        ModelNodeViewModel reference = Flatten(viewModel.ModelTree.Model!).First(node => node.IsReference);
+        viewModel.ActivateToolCommand.Execute(viewModel.Tools.First(item => item.Tool is MoveTool));
+
+        viewModel.ModelTree.SelectedNode = reference;
+        Assert.NotNull(viewModel.EmphasizedPath);
+        Assert.Equal(3, viewModel.Overlay.Lines.Count); // its axes
+        viewModel.EscapeCommand.Execute(null);
+
         Assert.True(viewModel.SelectedInView);
         Assert.Null(viewModel.EmphasizedPath);
-        Assert.Same(imported, viewModel.ModelTree.SelectedNode);
+        Assert.Same(reference, viewModel.ModelTree.SelectedNode);
+    }
+
+    private static MainWindowViewModel CreateWithKernel()
+    {
+        var kernel = new OcctKernel();
+        return new MainWindowViewModel(
+            new DocumentFormats([new GltfReader(), new NativeDocumentReader(kernel)], [new NativeDocumentWriter()]),
+            new RecordingAppearance(), kernel);
     }
 
     [Fact]

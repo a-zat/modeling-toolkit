@@ -1400,12 +1400,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 // Selected as in the 3D view, framed by its box, the rest as it is; placed at the origin, it is then
                 // moved where it goes.
                 _toolHost.SelectEntity([.. Context.Path, command.Reference]);
-                bool placing = IsEditable && Tools.Any(item => item.Tool is MoveTool);
-                if (placing)
+                // It follows the pointer by its origin until a click places it, selected to take it by its handles;
+                // Escape takes it out again.
+                bool placing = false;
+                if (IsEditable && Tools.FirstOrDefault(item => item.Tool is SelectTool) is { } select)
                 {
-                    ActivateTool(Tools.First(item => item.Tool is MoveTool));
+                    ActivateTool(select);
+                    BlockReference reference = command.Reference;
+                    Point3d origin = Context.Placement.Apply(reference.Transform.Apply(Point3d.Origin));
+                    placing = ((SelectTool)select.Tool).Place(origin, () =>
+                    {
+                        if (Session is { CanUndo: true } session && session.UndoName == command.Name &&
+                            reference.Owner is not null)
+                        {
+                            UndoCommand.Execute(null);
+                        }
+                    });
                 }
-                string place = placing ? " Click a point of it, then where it goes; drag it in the outline into a block." : "";
+                string place = placing ? " Click where it goes, or press Esc to leave it out." : "";
                 StatusMessage = warnings.Count switch
                 {
                     0 => $"Imported {name} ({reader.FormatName}).{place}",
@@ -1620,6 +1632,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     transform is RotateTool ? MarkerShape.Circle : MarkerShape.Dot)), .. Overlay.Markers],
             };
         }
+        if (FocusAxes() is { } axes)
+        {
+            Overlay = Overlay with { Lines = [.. Overlay.Lines, .. axes] };
+        }
         SelectionHandles? handles = ShownHandles();
         Handles = handles is null ? [] : [.. handles.Handles.Select(handle => handle.Point)];
         if (handles is not null)
@@ -1641,6 +1657,27 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SelectedInView && IsEditable && ActiveTool is SelectTool { IsActive: true, IsDraggingHandle: false } select
             ? select.Handles
             : null;
+
+    // The axes of the reference shown in front of the rest, from its origin, their positive halves only: red X, green
+    // Y, blue Z, a quarter of the diagonal of its box long.
+    private List<OverlayLine>? FocusAxes()
+    {
+        if (EmphasizedPath is not [.., BlockReference focused] path)
+        {
+            return null;
+        }
+        Transform placement = path.OfType<BlockReference>().Aggregate(Transform.Identity,
+            (current, reference) => current * reference.Transform);
+        BoundingBox box = focused.Block.GetBoundingBox();
+        double length = box.IsEmpty ? 100 : Math.Max(100, 0.25 * box.Min.DistanceTo(box.Max));
+        Point3d origin = placement.Apply(Point3d.Origin);
+        return
+        [
+            new OverlayLine([origin, placement.Apply(new Point3d(length, 0, 0))], Avalonia.Media.Color.FromRgb(0xD8, 0x32, 0x2A), 2),
+            new OverlayLine([origin, placement.Apply(new Point3d(0, length, 0))], Avalonia.Media.Color.FromRgb(0x2E, 0x9E, 0x44), 2),
+            new OverlayLine([origin, placement.Apply(new Point3d(0, 0, length))], Avalonia.Media.Color.FromRgb(0x2F, 0x6F, 0xDE), 2),
+        ];
+    }
 
     private static readonly Avalonia.Media.Color SelectionBoxColor = Avalonia.Media.Color.FromRgb(0x2F, 0x7B, 0xF5);
 
