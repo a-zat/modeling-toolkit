@@ -22,6 +22,14 @@ public interface IToolHost
     /// <summary>Shows what the tool is doing over the 3D view, in place of what it showed; empty for nothing.</summary>
     void ShowPreview(ToolPreview preview);
 
+    /// <summary>
+    /// Shows a reference placed otherwise than it is, by a transform in the coordinates of its block, as a tool would
+    /// place it; null shows it as it is again.
+    /// </summary>
+    void PreviewPlacement(BlockReference reference, Geometry.Transform? transform)
+    {
+    }
+
     /// <summary>Tells the user that an edit was refused, and why.</summary>
     void Report(string message);
 }

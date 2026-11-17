@@ -71,6 +71,18 @@ public sealed class InferenceEngine
     /// <summary>How close the pointer must come to snap, in units of the screen.</summary>
     public double SnapDistance { get; init; } = 8;
 
+    /// <summary>
+    /// How far, in degrees, the pointer may be off an axis, seen from the point drawn from, and still snap to it; 0 to
+    /// snap by <see cref="SnapDistance"/> only.
+    /// </summary>
+    public double AxisAngle { get; set; }
+
+    /// <summary>
+    /// Whether the axes, parallels and perpendiculars are taken whatever face the pointer is on, as when moving an
+    /// object, rather than only along the face drawn on, as when drawing on it.
+    /// </summary>
+    public bool AnyDirection { get; set; }
+
     /// <summary>The guide lines to snap to, in the model space.</summary>
     public IReadOnlyList<GuideLine> Guides { get; set; } = [];
 
@@ -133,7 +145,7 @@ public sealed class InferenceEngine
         if (from is { } drawnFrom && pick.Ray is { } pointer && found.Kind != InferenceKind.OnEdge)
         {
             // On a flat face, only along it: a line that leaves the face would not split it.
-            bool onFace = found.Kind == InferenceKind.OnFace && found.Plane is not null;
+            bool onFace = !AnyDirection && found.Kind == InferenceKind.OnFace && found.Plane is not null;
             Plane plane = found.Plane ?? ground;
             if ((!onFace || Math.Abs(plane.Normal.Dot(drawnFrom - Point3d.Origin) - plane.Offset) < 1e-6) &&
                 Along(pointer, drawnFrom, axes, plane, onFace) is { } aligned)
@@ -265,7 +277,10 @@ public sealed class InferenceEngine
                 continue;
             }
             double units = distance / ray.UnitSizeAt(point);
-            if (units < SnapDistance && units < bestDistance)
+            // Off the axis by an angle, seen from the point drawn from, within the angle that snaps to the axes.
+            bool aligned = AxisAngle > 0 && kind is InferenceKind.AxisX or InferenceKind.AxisY or InferenceKind.AxisZ &&
+                distance < Math.Tan(AxisAngle * Math.PI / 180) * point.DistanceTo(from);
+            if ((units < SnapDistance || aligned) && units < bestDistance)
             {
                 best = new Inference(kind, point, null, direction);
                 bestDistance = units;
@@ -278,7 +293,10 @@ public sealed class InferenceEngine
     {
         if (pick.Element is not { } element)
         {
-            return null;
+            // On a mesh, the point hit, on no plane to draw on.
+            return pick.Path is { Count: > 0 } && pick.Normal.Length > 0
+                ? new Inference(InferenceKind.OnFace, pick.Point)
+                : null;
         }
 
         BrepEntity entity = element.Entity;

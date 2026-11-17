@@ -6,8 +6,8 @@ namespace ModelingToolkit.Core.Editing.Tools;
 /// <summary>
 /// Rotates an entity of the block being edited, the one selected or else the one clicked, with a protractor: it lies on
 /// the face under the pointer or on the ground, or across the axis an arrow key chooses; a click sets the centre, a
-/// second the direction the angle starts from, and a third the angle, which snaps to steps of 15°, or an angle typed in
-/// degrees towards the pointer. With Option (Alt) held, a copy is rotated and the entity stays.
+/// second the direction the angle starts from, and a third the angle, which snaps to right angles, and more closely to
+/// steps of 15°, or an angle typed in degrees towards the pointer. With Option (Alt) held, a copy is rotated and the entity stays.
 /// </summary>
 public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
 {
@@ -15,6 +15,10 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
     private const string FromHint = "Click where the angle starts";
     private const string AngleHint = "Click the angle or type it in degrees · ⌥ copies · Esc stops";
     private const double Step = 15;
+    private const double RightAngle = 90;
+
+    /// <summary>How far, in degrees, an angle may be off a right angle and still snap to it.</summary>
+    public const double RightAngleSnap = 7;
 
     private Point3d? _centre;
     private Plane _plane;
@@ -29,14 +33,14 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
     public override void Hover(ToolInput input)
     {
         Follow(input);
-        Track(input.Pick);
+        Track(_centre is null ? input.Pick : Clear(input.Pick));
         Show();
     }
 
     public override void Click(ToolInput input)
     {
         Follow(input);
-        Track(input.Pick);
+        Track(_centre is null ? input.Pick : Clear(input.Pick));
         if (Last is not { Kind: not InferenceKind.None } point)
         {
             return;
@@ -120,9 +124,19 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
         {
             return;
         }
-        double degrees = Math.Atan2(from.Cross(to).Dot(_plane.Normal), from.Dot(to)) * 180 / Math.PI;
-        double snapped = Math.Round(degrees / Step) * Step;
-        _angle = (Math.Abs(degrees - snapped) < 2 ? snapped : degrees) * Math.PI / 180;
+        _angle = Snap(Math.Atan2(from.Cross(to).Dot(_plane.Normal), from.Dot(to)) * 180 / Math.PI) * Math.PI / 180;
+    }
+
+    /// <summary>An angle in degrees snapped to a right angle near it, or else to a step of 15° close to it.</summary>
+    public static double Snap(double degrees)
+    {
+        double right = Math.Round(degrees / RightAngle) * RightAngle;
+        if (Math.Abs(degrees - right) < RightAngleSnap)
+        {
+            return right;
+        }
+        double step = Math.Round(degrees / Step) * Step;
+        return Math.Abs(degrees - step) < 2 ? step : degrees;
     }
 
     private Plane PlaneThrough(Inference point)
@@ -174,6 +188,7 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
         if (_from is { } from)
         {
             Transform rotation = Transform.Rotation(centre, _plane.Normal, _angle);
+            ShowTransformed(Copy ? null : rotation);
             Vector3d to = rotation.ApplyVector(from);
             lines.Add(new PreviewLine(centre, centre + from * _radius * 1.5));
             lines.Add(new PreviewLine(centre, centre + to * _radius * 1.5));

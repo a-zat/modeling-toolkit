@@ -28,6 +28,10 @@ public enum ViewportInputKind
 /// <param name="ClickCount">1 for a click, 2 for the second click of a double click, and so on.</param>
 /// <param name="Kind">The input.</param>
 /// <param name="Ray">The ray of the pointer, in the model space; null when the view has none.</param>
+/// <param name="Handle">
+/// For a press, a drag and a release, the index of the handle pressed in <see cref="ViewportView.Handles"/>; null for
+/// none.
+/// </param>
 public sealed record ViewportPick(
     IReadOnlyList<Entity>? Path, ElementReference? Element, Point3d Point, Vector3 Normal, KeyModifiers Modifiers,
-    int ClickCount = 1, ViewportInputKind Kind = ViewportInputKind.Click, PointerRay? Ray = null);
+    int ClickCount = 1, ViewportInputKind Kind = ViewportInputKind.Click, PointerRay? Ray = null, int? Handle = null);

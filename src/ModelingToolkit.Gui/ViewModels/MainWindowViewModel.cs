@@ -47,16 +47,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         Properties.Edit = Edit;
         ModelTree.Edit = Edit;
+        Pose = Animations.Pose;
+        Animations.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AnimationsViewModel.Pose))
+            {
+                UpdatePose();
+            }
+        };
         Properties.Picker.ChooseImage = () => FileDialogs?.OpenAsync(
             "Choose an image for the material", [new FileType("Images", [".png", ".jpg", ".jpeg", ".webp"])])
             ?? Task.FromResult<string?>(null);
         ModelTree.EnterCommand = EnterNodeCommand;
         _toolHost = new ToolHost(this);
         Tools = kernel is null
-            ? [new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true }]
+            ? [new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true }, Interact()]
             :
             [
                 new ToolItemViewModel(new SelectTool(), "Icon.Select") { IsActive = true },
+                Interact(),
                 new ToolItemViewModel(new LineTool(kernel), "Icon.Line"),
                 new ToolItemViewModel(new RectangleTool(kernel), "Icon.Rectangle"),
                 new ToolItemViewModel(new CircleTool(kernel), "Icon.Circle"),
@@ -291,6 +300,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ? string.Empty
         : string.Join(" › ", Context.Path.Select(reference => reference.Name ?? reference.Block.Name));
 
+    // The tool that opens and closes what is clicked, as the rendered view and the walk do.
+    private ToolItemViewModel Interact() =>
+        new(new InteractTool(Animations.CanToggleAt, Animations.ToggleAt), "Icon.Interact");
+
     /// <summary>The tools of the tool column.</summary>
     public IReadOnlyList<ToolItemViewModel> Tools { get; }
 
@@ -327,6 +340,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSelecting));
         OnPropertyChanged(nameof(ToolHint));
         OnToolMeasurementChanged(this, EventArgs.Empty);
+        ShowOverlay();
     }
 
     private void OnToolHintChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(ToolHint));
@@ -398,7 +412,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var toolInput = new ToolInput(
             new ToolPick(input.Path, input.Element, input.Point, new Vector3d(input.Normal.X, input.Normal.Y, input.Normal.Z),
                 input.Ray),
-            ToToolModifiers(input.Modifiers), input.ClickCount);
+            ToToolModifiers(input.Modifiers), input.ClickCount, input.Handle);
         switch (input.Kind)
         {
             case ViewportInputKind.Hover:
@@ -484,7 +498,36 @@ public sealed partial class MainWindowViewModel : ObservableObject
             owner.ShowOverlay();
         }
 
+        public void PreviewPlacement(BlockReference reference, Transform? transform)
+        {
+            owner._toolPose = transform is null ? null : (reference, transform);
+            owner.UpdatePose();
+        }
+
         public void Report(string message) => owner.StatusMessage = message;
+    }
+
+    private (BlockReference Reference, Transform Transform)? _toolPose; // as a tool shows it while moving it
+
+    /// <summary>
+    /// The block references the 3D view shows placed otherwise than by their transformation: as the animations play,
+    /// and as a tool moves them.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyDictionary<BlockReference, Transform>? Pose { get; private set; }
+
+    private void UpdatePose()
+    {
+        if (_toolPose is not { } moved)
+        {
+            Pose = Animations.Pose;
+            return;
+        }
+        var pose = new Dictionary<BlockReference, Transform>(Animations.Pose, ReferenceEqualityComparer.Instance)
+        {
+            [moved.Reference] = moved.Transform,
+        };
+        Pose = pose;
     }
 
     // Leaves the context until it holds the path of entities, and gives the path from the block being edited.
@@ -1427,14 +1470,35 @@ public sealed partial class MainWindowViewModel : ObservableObject
             .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
         ViewOverlay overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
         Overlay = SelectionBox() is { } box ? overlay with { Lines = [.. overlay.Lines, .. box] } : overlay;
+        SelectionHandles? handles = ShownHandles();
+        Handles = handles is null ? [] : [.. handles.Handles.Select(handle => handle.Point)];
+        if (handles is not null)
+        {
+            Overlay = Overlay with
+            {
+                Markers = [.. Overlay.Markers, .. handles.Handles.Select(handle => new OverlayMarker(handle.Point,
+                    SelectionBoxColor, handle.Kind == HandleKind.Rotate ? MarkerShape.Circle : MarkerShape.Dot))],
+            };
+        }
     }
+
+    /// <summary>The points of the handles of the selection, which the 3D view lets drag.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<Point3d> Handles { get; private set; } = [];
+
+    // The handles of the entity selected in the 3D view, when the select tool can drag them.
+    private SelectionHandles? ShownHandles() =>
+        SelectedInView && IsEditable && ActiveTool is SelectTool { IsActive: true, IsDraggingHandle: false } select
+            ? select.Handles
+            : null;
 
     private static readonly Avalonia.Media.Color SelectionBoxColor = Avalonia.Media.Color.FromRgb(0x2F, 0x7B, 0xF5);
 
     // The box of the entity selected in the 3D view, turned with it: its twelve edges.
     private List<OverlayLine>? SelectionBox()
     {
-        if (!SelectedInView || IsRendered || ModelTree.SelectedNode is not { Entity: { } entity, Path: { } path })
+        if (!SelectedInView || IsRendered || ActiveTool is SelectTool { IsDraggingHandle: true } ||
+            ModelTree.SelectedNode is not { Entity: { } entity, Path: { } path })
         {
             return null;
         }

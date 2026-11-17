@@ -49,6 +49,25 @@ public sealed class MoveToolTests
     }
 
     [Fact]
+    public void A_move_nearly_along_an_axis_snaps_to_it()
+    {
+        var block = new Block("Part");
+        block.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10)));
+        _document.Blocks.Add(block);
+        var reference = new BlockReference(block, Transform.Identity);
+        _document.Root.Entities.Add(reference);
+        _host.SelectedPath = [reference];
+
+        _tool.Click(Ground(0, 0));
+        // 60 mm off the X axis 1 m along it: further than the pointer snaps by, but within the angle of the axes.
+        _tool.Hover(Ground(1000, 60));
+        Assert.Equal(InferenceKind.AxisX, _host.Preview.Lines[0].Along);
+        _tool.Click(Ground(1000, 60));
+
+        Assert.Equal(new Point3d(1000, 0, 0), reference.Transform.Apply(Point3d.Origin));
+    }
+
+    [Fact]
     public void With_Option_a_copy_of_the_selection_moves_by_the_distance_typed()
     {
         var block = new Block("Part");

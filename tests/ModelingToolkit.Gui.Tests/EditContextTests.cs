@@ -147,7 +147,8 @@ public sealed class EditContextTests : IDisposable
     public async Task TheSelectToolIsActiveAndItsHintFollowsThePointer()
     {
         await OpenParts();
-        ToolItemViewModel select = Assert.Single(_viewModel.Tools);
+        ToolItemViewModel select = _viewModel.Tools[0];
+        Assert.Equal(["Select", "Interact"], _viewModel.Tools.Select(tool => tool.Name));
         Assert.True(select.IsActive);
         Assert.Equal("Select", select.Name);
         Assert.Equal("Click an object to select it", _viewModel.ToolHint);

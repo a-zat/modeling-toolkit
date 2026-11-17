@@ -108,6 +108,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     }
 
     [RelayCommand]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "A command of the view model")]
     private void CancelRename(ModelNodeViewModel? node)
     {
         if (node is not null)

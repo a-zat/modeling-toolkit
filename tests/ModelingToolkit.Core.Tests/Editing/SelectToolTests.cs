@@ -122,7 +122,7 @@ public sealed class SelectToolTests
         Assert.Throws<InvalidOperationException>(() => _tool.Click(On(Face(_left))));
     }
 
-    private sealed class Host(Document document) : IToolHost
+    internal sealed class Host(Document document) : IToolHost
     {
         public EditSession Session { get; } = new(document);
 
@@ -138,8 +138,8 @@ public sealed class SelectToolTests
         {
         }
 
-        public void Report(string message)
-        {
-        }
+        public List<string> Reports { get; } = [];
+
+        public void Report(string message) => Reports.Add(message);
     }
 }

@@ -20,14 +20,14 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
     public override void Hover(ToolInput input)
     {
         Follow(input);
-        Last = Infer(input.Pick, _start, Locked);
+        Last = Track(input.Pick);
         Show();
     }
 
     public override void Click(ToolInput input)
     {
         Follow(input);
-        Inference point = Infer(input.Pick, _start, Locked);
+        Inference point = Track(input.Pick);
         Last = point;
         if (point.Kind == InferenceKind.None)
         {
@@ -44,6 +44,28 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
             return;
         }
         MoveTo(start, point.Point);
+    }
+
+    // The point under the pointer: once moving, what is under the target is not taken, and off everything else the
+    // target stays at the height it was taken at.
+    private Inference Track(ToolPick pick)
+    {
+        if (_start is not { } start)
+        {
+            return Infer(pick);
+        }
+        ToolPick clear = Clear(pick);
+        Inference point = Infer(clear, start, Locked);
+        if (point.Kind is InferenceKind.Ground or InferenceKind.None && clear.Ray is { } ray)
+        {
+            Vector3d up = Host.Context.Placement.ApplyVector(Vector3d.UnitZ).Normalized();
+            var level = new Plane(up, up.Dot(start - Point3d.Origin));
+            if (InferenceEngine.Intersect(ray, level) is { } hit)
+            {
+                return new Inference(InferenceKind.Ground, hit, level);
+            }
+        }
+        return point;
     }
 
     public override bool Key(ToolKey key, ToolModifiers modifiers)
@@ -111,8 +133,10 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
             Measurement = Measurements.Format(start.DistanceTo(last.Point));
             Vector3d offset = last.Point - start;
             InferenceKind along = last.Direction is null ? InferenceKind.None : last.Kind;
+            Transform moved = Transform.Translation(offset.X, offset.Y, offset.Z);
+            ShowTransformed(Copy ? null : moved);
             Host.ShowPreview(new ToolPreview(
-                [new PreviewLine(start, last.Point, along), .. Transformed(Box, Transform.Translation(offset.X, offset.Y, offset.Z))],
+                [new PreviewLine(start, last.Point, along), .. Transformed(Box, moved)],
                 last));
             return;
         }

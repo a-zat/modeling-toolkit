@@ -260,9 +260,22 @@ public sealed partial class AnimationsViewModel : ObservableObject
     /// </summary>
     public bool ToggleAt(IReadOnlyList<Entity>? path)
     {
-        if (path is null)
+        if (At(path) is not { } item)
         {
             return false;
+        }
+        item.Toggle();
+        return true;
+    }
+
+    /// <summary>Whether something at the path of a mesh opens or closes: see <see cref="ToggleAt"/>.</summary>
+    public bool CanToggleAt(IReadOnlyList<Entity>? path) => At(path) is not null;
+
+    private AnimationItemViewModel? At(IReadOnlyList<Entity>? path)
+    {
+        if (path is null)
+        {
+            return null;
         }
         foreach (BlockReference reference in path.OfType<BlockReference>().Reverse())
         {
@@ -272,11 +285,10 @@ public sealed partial class AnimationsViewModel : ObservableObject
                 .FirstOrDefault();
             if (item is not null)
             {
-                item.Toggle();
-                return true;
+                return item;
             }
         }
-        return false;
+        return null;
     }
 
     /// <summary>Moves the animations that play by the time passed, in seconds.</summary>

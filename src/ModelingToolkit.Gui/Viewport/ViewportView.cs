@@ -90,6 +90,56 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<ViewEnvironment> EnvironmentProperty =
         AvaloniaProperty.Register<ViewportView, ViewEnvironment>(nameof(Environment), ViewEnvironment.Noon);
 
+    /// <summary>
+    /// Points of the model that a press of the left button takes, to drag them in place of turning the view, such as
+    /// the handles of the selection: the press, the drags and the release carry the index of the one pressed.
+    /// </summary>
+    public static readonly StyledProperty<IReadOnlyList<Point3d>> HandlesProperty =
+        AvaloniaProperty.Register<ViewportView, IReadOnlyList<Point3d>>(nameof(Handles), []);
+
+    public IReadOnlyList<Point3d> Handles
+    {
+        get => GetValue(HandlesProperty);
+        set => SetValue(HandlesProperty, value);
+    }
+
+    // How close to a handle a press takes it, in points.
+    private const double HandleReach = 9;
+
+    private int? _grabbed; // the handle being dragged
+
+    private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
+
+    // The handle under a point of the view, the closest within reach; null for none.
+    private int? HandleAt(Point at)
+    {
+        if (Handles is not { Count: > 0 } handles || Viewer is not { } viewer)
+        {
+            return null;
+        }
+        (double X, double Y)[] projected;
+        try
+        {
+            projected = viewer.Project([.. handles]);
+        }
+        catch (ViewerException)
+        {
+            return null;
+        }
+        int? best = null;
+        double bestDistance = HandleReach;
+        for (int i = 0; i < projected.Length; i++)
+        {
+            double distance = Math.Sqrt(Math.Pow(projected[i].X - at.X, 2) + Math.Pow(projected[i].Y - at.Y, 2));
+            if (distance < bestDistance)
+            {
+                best = i;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
     public static readonly StyledProperty<ViewOverlay> OverlayProperty =
         AvaloniaProperty.Register<ViewportView, ViewOverlay>(nameof(Overlay), ViewOverlay.Empty);
 
@@ -431,6 +481,14 @@ public sealed class ViewportView : Border, IViewCamera
             return;
         }
         _clickCount = e.ClickCount;
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && HandleAt(e.GetPosition(_host)) is { } handle)
+        {
+            // The viewer does not turn the view: the handle is dragged.
+            _grabbed = handle;
+            e.Pointer.Capture(this);
+            Raise(_hovered with { Modifiers = e.KeyModifiers, ClickCount = 1, Kind = ViewportInputKind.Press, Handle = handle });
+            return;
+        }
         SendButtons(e);
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -457,6 +515,13 @@ public sealed class ViewportView : Border, IViewCamera
             SelectInWindow(start, e.GetPosition(_host), e.KeyModifiers.HasFlag(KeyModifiers.Shift));
             return;
         }
+        if (_grabbed is { } grabbed)
+        {
+            _grabbed = null;
+            e.Pointer.Capture(null);
+            Raise(_hovered with { Modifiers = e.KeyModifiers, Kind = ViewportInputKind.Release, Handle = grabbed });
+            return;
+        }
         _clickModifiers = e.KeyModifiers;
         SendButtons(e);
         if (e.InitialPressMouseButton == MouseButton.Left)
@@ -480,9 +545,9 @@ public sealed class ViewportView : Border, IViewCamera
             }
             return;
         }
-        if (_walk is not null)
+        if (_walk is not null || _grabbed is not null)
         {
-            // Without buttons, the viewer only finds what is under the pointer.
+            // Without buttons, the viewer only finds what is under the pointer; for a handle, the frame drags it.
             Send(viewer => viewer.MouseMove(Position(e), NativeMouseButtons.None, OcctViewer.ToNative(e.KeyModifiers)));
             _hoverMoved = true;
             _hoverModifiers = e.KeyModifiers;
@@ -507,6 +572,7 @@ public sealed class ViewportView : Border, IViewCamera
         }
         else if (!buttons.IsRightButtonPressed && !buttons.IsMiddleButtonPressed)
         {
+            Cursor = HandleAt(e.GetPosition(_host)) is null ? null : HandCursor;
             // What is under the pointer is known once the next frame has detected it.
             _hoverMoved = true;
             _hoverModifiers = e.KeyModifiers;
@@ -746,7 +812,7 @@ public sealed class ViewportView : Border, IViewCamera
             if (hovered is { } hover)
             {
                 _hovered = ToInput(hover, _hoverModifiers, 1, ViewportInputKind.Hover);
-                Raise(_hovered);
+                Raise(_grabbed is { } grabbed ? _hovered with { Kind = ViewportInputKind.Drag, Handle = grabbed } : _hovered);
             }
             if (picked is { } pick)
             {

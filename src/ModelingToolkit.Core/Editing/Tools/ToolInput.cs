@@ -29,7 +29,12 @@ public enum ToolModifiers
 
 /// <summary>An input of the pointer, with what it picks and the modifier keys held.</summary>
 /// <param name="ClickCount">For a click: 1, or 2 for the second click of a double click, and so on.</param>
-public sealed record ToolInput(ToolPick Pick, ToolModifiers Modifiers = ToolModifiers.None, int ClickCount = 1);
+/// <param name="Handle">
+/// For a press, a drag and a release, the index of the handle of the selection pressed, in
+/// <see cref="SelectTool.Handles"/>; null for none.
+/// </param>
+public sealed record ToolInput(
+    ToolPick Pick, ToolModifiers Modifiers = ToolModifiers.None, int ClickCount = 1, int? Handle = null);
 
 /// <summary>The keys that tools can take.</summary>
 public enum ToolKey

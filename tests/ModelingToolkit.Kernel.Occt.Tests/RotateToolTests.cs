@@ -73,4 +73,13 @@ public sealed class RotateToolTests
         Assert.Equal(-2200, copy.Min.Y, precision: 6);
         Assert.Equal(-2000, copy.Max.Y, precision: 6);
     }
+
+    [Theory]
+    [InlineData(85, 90)]
+    [InlineData(-94, -90)]
+    [InlineData(176, 180)]
+    [InlineData(46, 45)]
+    [InlineData(80, 80)]
+    public void Angles_snap_to_right_angles_and_closely_to_steps(double degrees, double snapped) =>
+        Assert.Equal(snapped, RotateTool.Snap(degrees));
 }
