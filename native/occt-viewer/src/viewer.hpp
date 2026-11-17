@@ -96,6 +96,7 @@ public:
     mtk_viewer_camera camera() const;
     void set_camera(const mtk_viewer_camera& camera);
     void set_grid_visible(bool visible);
+    void set_hover_highlight(bool highlight);
     void set_line_widths(double edge, double outline);
     int mesh_count() const { return static_cast<int>(meshes_.size()); }
     int texture_count() const { return static_cast<int>(textures_.size()); }
@@ -174,6 +175,7 @@ private:
     occ::handle<AIS_Line> vertical_axis_;
     Aspect_GridParams grid_;
     bool grid_visible_ = true;
+    bool hover_highlight_ = false;
     double edge_width_ = 1.0;    // of the edges drawn over the faces, in points
     double outline_width_ = 1.5; // of the outlines of the CAD render style, in points
     // The rendered display mode: its environment, the ground shown under the model, the colours of the background of

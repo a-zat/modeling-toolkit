@@ -250,6 +250,10 @@ MTK_VIEWER_API mtk_status mtk_viewer_set_line_widths(mtk_viewer* viewer, double 
 /* Shows (1), as initially, or hides (0) the grid on the ground and the axes through the origin. */
 MTK_VIEWER_API mtk_status mtk_viewer_set_grid_visible(mtk_viewer* viewer, int32_t visible);
 
+/* Tints (1) or not (0), as initially, what is under the pointer; it is found either way, as hovered. Never in the
+   rendered display mode. */
+MTK_VIEWER_API mtk_status mtk_viewer_set_hover_highlight(mtk_viewer* viewer, int32_t highlight);
+
 /*
  * Mouse input, with the buttons pressed after the event and the modifier keys held. Each function sets out_redraw
  * when the view changes: mtk_viewer_redraw should then be called, once, on the next frame of the user interface.

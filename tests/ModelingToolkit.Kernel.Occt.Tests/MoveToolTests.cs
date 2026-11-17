@@ -75,11 +75,13 @@ public sealed class MoveToolTests
         _document.Root.Entities.Add(floor);
 
         _tool.Hover(On(floor, new Point3d(996, 300, 0)));
-        Assert.Equal(new Inference(InferenceKind.OnEdge, new Point3d(1000, 300, 0), null, Vector3d.UnitY),
-            _host.Preview.Inference);
+        Assert.Equal(new Inference(InferenceKind.OnEdge, new Point3d(1000, 300, 0), null, Vector3d.UnitY,
+            (new Point3d(1000, 0, 0), new Point3d(1000, 1000, 0))), _host.Preview.Inference);
 
         _tool.Hover(On(floor, new Point3d(997, 996, 0)));
-        Assert.Equal(new Inference(InferenceKind.Endpoint, new Point3d(1000, 1000, 0)), _host.Preview.Inference);
+        Inference corner = _host.Preview.Inference!;
+        Assert.Equal((InferenceKind.Endpoint, new Point3d(1000, 1000, 0)), (corner.Kind, corner.Point));
+        Assert.NotNull(corner.Edge); // the edge it is an end of is shown
     }
 
     [Fact]

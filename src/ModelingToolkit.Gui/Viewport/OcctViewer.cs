@@ -314,6 +314,9 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
 
     public void SetGridVisible(bool visible) => NativeMethods.SetGridVisible(_handle, visible ? 1 : 0).ThrowIfFailed();
 
+    public void SetHoverHighlight(bool highlight) =>
+        NativeMethods.SetHoverHighlight(_handle, highlight ? 1 : 0).ThrowIfFailed();
+
     // Each input method returns whether the view changed: Redraw should then be called on the next frame.
 
     public bool MouseButtons(Point position, NativeMouseButtons buttons, NativeModifierKeys modifiers)

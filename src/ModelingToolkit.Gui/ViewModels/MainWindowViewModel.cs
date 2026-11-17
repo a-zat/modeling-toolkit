@@ -1032,6 +1032,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsGridVisible { get; set; }
 
+    /// <summary>Whether the 3D view tints what is under the pointer; what is found there is used either way.</summary>
+    [ObservableProperty]
+    public partial bool HighlightsHover { get; set; }
+
     /// <summary>Applies the variant of the theme chosen here.</summary>
     public void ApplyAppearance() => _appearance.Apply(IsDark);
 
@@ -1176,6 +1180,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             DisplayMode = settings.DisplayMode;
             IsPerspective = settings.Perspective;
             IsGridVisible = settings.Grid;
+            HighlightsHover = settings.HoverHighlight;
             TimeOfDay = Math.Clamp(settings.TimeOfDay, 0, 24);
             Latitude = Math.Clamp(settings.Latitude, -90, 90);
             NorthAngle = settings.NorthAngle;
@@ -1205,6 +1210,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         base.OnPropertyChanged(e);
         if (_applyingSettings || _settingsStore is null || e.PropertyName is not (nameof(UseGlb) or nameof(IsDark)
                 or nameof(RenderStyle) or nameof(DisplayMode) or nameof(IsPerspective) or nameof(IsGridVisible)
+                or nameof(HighlightsHover)
                 or nameof(TimeOfDay) or nameof(Latitude) or nameof(NorthAngle) or nameof(Collisions)
                 or nameof(SunDate) or nameof(Cloudiness) or nameof(GroundColor) or nameof(EdgeWidth) or nameof(OutlineWidth)
                 or nameof(CollisionRadius) or nameof(EyeHeight) or nameof(WalkSpeed) or nameof(RunFactor)
@@ -1215,7 +1221,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _settings = _settings with
         {
             UseGlb = UseGlb, DarkTheme = IsDark, RenderStyle = RenderStyle, DisplayMode = DisplayMode,
-            Perspective = IsPerspective, Grid = IsGridVisible, TimeOfDay = TimeOfDay, Latitude = Latitude,
+            Perspective = IsPerspective, Grid = IsGridVisible, HoverHighlight = HighlightsHover, TimeOfDay = TimeOfDay, Latitude = Latitude,
             NorthAngle = NorthAngle, Collisions = Collisions, SunDate = SunDate is { } day ? DateOnly.FromDateTime(day) : null,
             Cloudiness = Cloudiness, GroundColor = $"#{GroundColor.R:X2}{GroundColor.G:X2}{GroundColor.B:X2}",
             EdgeWidth = EdgeWidth, OutlineWidth = OutlineWidth, CollisionRadius = CollisionRadius,

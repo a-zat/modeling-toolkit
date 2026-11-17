@@ -85,6 +85,9 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_grid_visible")]
     public static partial NativeStatus SetGridVisible(ViewerHandle viewer, int visible);
 
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_hover_highlight")]
+    public static partial NativeStatus SetHoverHighlight(ViewerHandle viewer, int highlight);
+
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_mouse_buttons")]
     public static partial NativeStatus MouseButtons(
         ViewerHandle viewer, double x, double y, NativeMouseButtons buttons, NativeModifierKeys modifiers,

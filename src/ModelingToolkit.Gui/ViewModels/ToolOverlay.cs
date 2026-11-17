@@ -45,6 +45,11 @@ internal static class ToolOverlay
         List<OverlayLabel> labels = [];
         if (preview.Inference is { } inference && MarkerOf(inference.Kind) is { } marker)
         {
+            // The edge snapped to, in place of the face under it that the view may tint.
+            if (inference.Edge is { } edge)
+            {
+                lines.Add(new OverlayLine([edge.Start, edge.End], marker.Color, 3));
+            }
             markers.Add(new OverlayMarker(inference.Point, marker.Color, marker.Shape));
             labels.Add(new OverlayLabel(inference.Point, $"  {NameOf(inference.Kind)}", Color.FromRgb(0x1C, 0x1F, 0x24),
                 Color.FromRgb(0xFF, 0xFF, 0xFF)));

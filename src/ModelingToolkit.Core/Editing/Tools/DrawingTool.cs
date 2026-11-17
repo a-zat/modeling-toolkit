@@ -143,7 +143,7 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
                     double units = RayDistance(ray, point) / ray.UnitSizeAt(point);
                     if (units < snap && (order < rank || order == rank && units < bestUnits))
                     {
-                        best = new Inference(kind, point);
+                        best = new Inference(kind, point, Edge: (a, b));
                         bestUnits = units;
                         rank = order;
                     }
@@ -156,7 +156,7 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
                 double alongUnits = RayDistance(ray, along) / ray.UnitSizeAt(along);
                 if (alongUnits < bestUnits)
                 {
-                    best = new Inference(InferenceKind.OnEdge, along, null, (b - a).Normalized());
+                    best = new Inference(InferenceKind.OnEdge, along, null, (b - a).Normalized(), (a, b));
                     bestUnits = alongUnits;
                     rank = 2;
                 }

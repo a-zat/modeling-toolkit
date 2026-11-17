@@ -196,6 +196,14 @@
                   </Grid></Border>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Highlight what the pointer is on" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="Tints the face or the part under the pointer, in the modes other than rendered. What it points at is used by the tools either way." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding HighlightsHover}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
                       <TextBlock Text="Perspective" />
                       <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
                                  Text="Perspective projection; off, parallel (orthographic)." />

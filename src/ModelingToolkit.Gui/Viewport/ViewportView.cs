@@ -58,6 +58,9 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<bool> IsGridVisibleProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsGridVisible), defaultValue: true);
 
+    public static readonly StyledProperty<bool> HighlightsHoverProperty =
+        AvaloniaProperty.Register<ViewportView, bool>(nameof(HighlightsHover));
+
     /// <summary>The block references placed otherwise than by their transformation, as by animations.</summary>
     public static readonly StyledProperty<IReadOnlyDictionary<BlockReference, Transform>?> PoseProperty =
         AvaloniaProperty.Register<ViewportView, IReadOnlyDictionary<BlockReference, Transform>?>(nameof(Pose));
@@ -366,6 +369,13 @@ public sealed class ViewportView : Border, IViewCamera
         set => SetValue(IsGridVisibleProperty, value);
     }
 
+    /// <summary>Whether what is under the pointer is tinted; it is found either way.</summary>
+    public bool HighlightsHover
+    {
+        get => GetValue(HighlightsHoverProperty);
+        set => SetValue(HighlightsHoverProperty, value);
+    }
+
     private OcctViewer? Viewer => _host.Viewer;
 
     public void FitAll() => Send(viewer =>
@@ -462,7 +472,7 @@ public sealed class ViewportView : Border, IViewCamera
             Send(ApplySettings);
         }
         else if (change.Property == DisplayModeProperty || change.Property == IsPerspectiveProperty
-                 || change.Property == IsGridVisibleProperty)
+                 || change.Property == IsGridVisibleProperty || change.Property == HighlightsHoverProperty)
         {
             Send(ApplySettings);
         }
@@ -989,6 +999,7 @@ public sealed class ViewportView : Border, IViewCamera
         viewer.SetRenderStyle(RenderStyle);
         viewer.SetPerspective(IsPerspective || _walk is not null);
         viewer.SetGridVisible(IsGridVisible);
+        viewer.SetHoverHighlight(HighlightsHover);
         viewer.SetLineWidths(EdgeWidth, OutlineWidth);
         viewer.SetOverlay(Overlay);
         return true;

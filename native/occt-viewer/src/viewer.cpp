@@ -694,9 +694,10 @@ void mtk::Viewer::set_environment(const mtk_viewer_environment& environment) {
 void mtk::Viewer::apply_environment() {
     // Rendered, the view is only looked at: what is under the pointer is found, not highlighted.
     const bool rendered = display_mode_ == MTK_VIEWER_DISPLAY_RENDERED;
-    if (context_->AutomaticHilight() == rendered) {
+    const bool highlight = hover_highlight_ && !rendered;
+    if (context_->AutomaticHilight() != highlight) {
         context_->ClearDetected(false);
-        context_->SetAutomaticHilight(!rendered);
+        context_->SetAutomaticHilight(highlight);
     }
     if (!ground_.IsNull()) {
         context_->Remove(ground_, false);
@@ -763,6 +764,11 @@ void mtk::Viewer::set_line_widths(double edge, double outline) {
     edge_width_ = edge;
     outline_width_ = outline;
     set_display_mode(display_mode_); // the edges are drawn again, with the new widths
+}
+
+void mtk::Viewer::set_hover_highlight(bool highlight) {
+    hover_highlight_ = highlight;
+    apply_environment();
 }
 
 void mtk::Viewer::set_grid_visible(bool visible) {
@@ -1551,6 +1557,16 @@ mtk_status mtk_viewer_set_grid_visible(mtk_viewer* viewer, int32_t visible) {
             return mtk::invalid_argument("viewer must not be null.");
         }
         viewer->set_grid_visible(visible != 0);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_hover_highlight(mtk_viewer* viewer, int32_t highlight) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr) {
+            return mtk::invalid_argument("viewer must not be null.");
+        }
+        viewer->set_hover_highlight(highlight != 0);
         return MTK_STATUS_OK;
     });
 }

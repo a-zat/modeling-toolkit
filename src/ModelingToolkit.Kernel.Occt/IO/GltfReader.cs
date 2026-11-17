@@ -112,14 +112,19 @@ public sealed class GltfReader : IDocumentReader
         {
         }
 
-        // With a texture of metalness and roughness, the factors only scale it, and glTF makes the metallic one 1 when
-        // the file leaves it out: the material would be all metal, white and shadowless. The texture is not read; most
-        // are of materials that are not metal, which the material then is.
+        // glTF makes the metallic factor 1 when a file leaves it out, and with a texture of metalness and roughness the
+        // factors only scale it: the material would be all metal, white and shadowless, where the files that leave it
+        // out are of materials that are not. So it is 0 then; a factor that the file states is kept, unless a texture
+        // of it comes with it, which is not read.
         static void TextureMetalness(JsonElement entry, ILookup<string, Material> materials)
         {
-            if (entry.TryGetProperty("name", out JsonElement name) && name.ValueKind == JsonValueKind.String &&
-                entry.TryGetProperty("pbrMetallicRoughness", out JsonElement pbr) && pbr.ValueKind == JsonValueKind.Object &&
-                pbr.TryGetProperty("metallicRoughnessTexture", out _))
+            if (!entry.TryGetProperty("name", out JsonElement name) || name.ValueKind != JsonValueKind.String)
+            {
+                return;
+            }
+            bool stated = entry.TryGetProperty("pbrMetallicRoughness", out JsonElement pbr) &&
+                pbr.ValueKind == JsonValueKind.Object;
+            if (!stated || !pbr.TryGetProperty("metallicFactor", out _) || pbr.TryGetProperty("metallicRoughnessTexture", out _))
             {
                 foreach (Material material in materials[name.GetString()!])
                 {

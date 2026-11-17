@@ -154,6 +154,7 @@
                              DisplayMode="{Binding DisplayMode}" RenderStyle="{Binding RenderStyle}"
                              IsPerspective="{Binding IsPerspective}"
                              IsGridVisible="{Binding IsGridVisible}"
+                             HighlightsHover="{Binding HighlightsHover}"
                              Pose="{Binding Pose}"
                              Handles="{Binding Handles}"
                              IsWalking="{Binding IsWalking}"

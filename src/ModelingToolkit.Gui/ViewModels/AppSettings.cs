@@ -24,6 +24,9 @@ public sealed record AppSettings
 
     public bool Grid { get; init; } = true;
 
+    /// <summary>Whether the 3D view tints what is under the pointer.</summary>
+    public bool HoverHighlight { get; init; }
+
     /// <summary>The hour of the day the rendered display mode shows, from 0 to 24.</summary>
     public double TimeOfDay { get; init; } = 12;
 

@@ -52,7 +52,9 @@ public readonly record struct GuideLine(Point3d Point, Vector3d Direction);
 /// <summary>A point inferred from the pointer, in the model space.</summary>
 /// <param name="Plane">The plane drawn on: of the face, or the ground; null elsewhere.</param>
 /// <param name="Direction">For the kinds along a direction (axes, parallel, perpendicular), of unit length.</param>
-public sealed record Inference(InferenceKind Kind, Point3d Point, Plane? Plane = null, Vector3d? Direction = null)
+/// <param name="Edge">The edge of a mesh that the point is on or an end or the middle of, to show it; null elsewhere.</param>
+public sealed record Inference(InferenceKind Kind, Point3d Point, Plane? Plane = null, Vector3d? Direction = null,
+    (Point3d Start, Point3d End)? Edge = null)
 {
     public static Inference Nothing { get; } = new(InferenceKind.None, default);
 
