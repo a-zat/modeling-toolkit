@@ -6,6 +6,7 @@ using ModelingToolkit.Core.Editing.Tools;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Kernel;
+using ModelingToolkit.Core.Meshes;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.Viewport;
 
@@ -77,6 +78,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 new ToolItemViewModel(new ScaleTool(kernel), "Icon.Scale"),
                 new ToolItemViewModel(new PaintTool(), "Icon.Paint"),
                 new ToolItemViewModel(new TapeTool(kernel), "Icon.Tape"),
+                new ToolItemViewModel(new SimplifyTool(OpenSimplify), "Icon.Simplify"),
             ];
         ActiveTool.HintChanged += OnToolHintChanged;
         ActiveTool.MeasurementChanged += OnToolMeasurementChanged;
@@ -299,6 +301,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string ContextName => Context is null
         ? string.Empty
         : string.Join(" › ", Context.Path.Select(reference => reference.Name ?? reference.Block.Name));
+
+    /// <summary>Shows the simplification of a component, in a window of its own; set by the main window.</summary>
+    public Func<SimplifyViewModel, Task>? ShowSimplify { get; set; }
+
+    // Opens the simplification of the component or the mesh at the end of a path.
+    private void OpenSimplify(IReadOnlyList<Entity> path)
+    {
+        if (ShowSimplify is not { } show || path.Count == 0 || IsBusy)
+        {
+            return;
+        }
+        Entity entity = path[^1];
+        if (SimplifiedComponent.MeshesOf(entity).Count == 0)
+        {
+            StatusMessage = "It has no meshes to simplify.";
+            return;
+        }
+        string name = entity.Name ?? (entity as BlockReference)?.Block.Name ?? (entity as MeshEntity)?.Material?.Name ?? "the mesh";
+        _ = show(new SimplifyViewModel(entity, name, Edit));
+    }
 
     // The tool that opens and closes what is clicked, as the rendered view and the walk do.
     private ToolItemViewModel Interact() =>

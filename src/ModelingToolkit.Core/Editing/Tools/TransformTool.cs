@@ -20,10 +20,27 @@ public abstract class TransformTool : DrawingTool
         Inference.AnyDirection = true;
     }
 
-    /// <summary>The corners of the box of the target and the middle of its bottom, to take it by.</summary>
-    protected IReadOnlyList<Point3d> Grips { get; private set; } = [];
+    // The corners, the middles of the edges and of the faces of the box of the target, or else of the selection.
+    private IReadOnlyList<(Point3d Point, InferenceKind Kind)> _grips = [];
+    private Entity? _gripped;
+    private Transform? _grippedAt;
 
-    protected override IEnumerable<Point3d> MoreSnapPoints => Grips;
+    protected override IEnumerable<(Point3d Point, InferenceKind Kind)> Grips()
+    {
+        Entity? entity = Target ?? (Host.SelectedEntity is { } path && Host.Context.Within(path) is [{ } selected] ? selected : null);
+        if (entity is null)
+        {
+            return [];
+        }
+        Transform placement = Host.Context.Placement;
+        if (!ReferenceEquals(entity, _gripped) || placement != _grippedAt)
+        {
+            _grips = GripsOf(entity, placement);
+            _gripped = entity;
+            _grippedAt = placement;
+        }
+        return _grips;
+    }
 
     /// <summary>
     /// What is under the pointer, but nothing where the target is, which moves with the pointer: the pointer would
@@ -76,7 +93,6 @@ public abstract class TransformTool : DrawingTool
             return false;
         }
         Box = BoxOf(Target);
-        Grips = GripsOf(Target);
         return true;
     }
 
@@ -88,7 +104,6 @@ public abstract class TransformTool : DrawingTool
         }
         Target = null;
         Box = [];
-        Grips = [];
     }
 
     protected override void OnDeactivated()
@@ -97,23 +112,31 @@ public abstract class TransformTool : DrawingTool
         base.OnDeactivated();
     }
 
-    /// <summary>The corners of the box of an entity of the block being edited and the middle of its bottom.</summary>
-    protected List<Point3d> GripsOf(Entity entity)
+    /// <summary>
+    /// The corners of the box of an entity of the block being edited, turned with it, the middles of its edges and of
+    /// its faces, in the model space.
+    /// </summary>
+    protected static List<(Point3d Point, InferenceKind Kind)> GripsOf(Entity entity, Transform placement)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        BoundingBox box = entity.GetBoundingBox();
-        if (box.IsEmpty)
+        ArgumentNullException.ThrowIfNull(placement);
+        var handles = new SelectionHandles(entity, placement);
+        var grips = new List<(Point3d, InferenceKind)>();
+        if (handles.IsEmpty)
         {
-            return [];
+            return grips;
         }
-        Transform placement = Host.Context.Placement;
-        var grips = new List<Point3d>();
-        for (int i = 0; i < 8; i++)
+        IReadOnlyList<Point3d> corners = handles.Corners;
+        grips.AddRange(corners.Select(corner => (corner, InferenceKind.Endpoint)));
+        foreach (PreviewLine edge in handles.Box(Transform.Identity))
         {
-            grips.Add(placement.Apply(new Point3d(
-                (i & 1) == 0 ? box.Min.X : box.Max.X, (i & 2) == 0 ? box.Min.Y : box.Max.Y, (i & 4) == 0 ? box.Min.Z : box.Max.Z)));
+            grips.Add((Point3d.Origin + ((edge.Start - Point3d.Origin) + (edge.End - Point3d.Origin)) / 2, InferenceKind.Midpoint));
         }
-        grips.Add(placement.Apply(new Point3d((box.Min.X + box.Max.X) / 2, (box.Min.Y + box.Max.Y) / 2, box.Min.Z)));
+        foreach (int[] face in (int[][])[[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 4, 5], [2, 3, 6, 7], [0, 2, 4, 6], [1, 3, 5, 7]])
+        {
+            grips.Add((Point3d.Origin + face.Aggregate(default(Vector3d), (sum, i) => sum + (corners[i] - Point3d.Origin)) / 4,
+                InferenceKind.Centre));
+        }
         return grips;
     }
 

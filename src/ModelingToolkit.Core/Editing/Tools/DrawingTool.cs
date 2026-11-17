@@ -82,13 +82,11 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
         Transform placement = Host.Context.Placement;
         Inference.Guides = [.. Host.Context.Block.Entities.OfType<GuideEntity>()
             .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
-        List<Point3d> vertices = SnapVertices(pick);
-        vertices.AddRange(MoreSnapPoints);
-        return Inference.Infer(pick, placement, from, locked, vertices);
+        return Inference.Infer(pick, placement, from, locked, SnapVertices(pick), [.. Grips()]);
     }
 
-    /// <summary>Points to snap to besides the vertices of the geometry, in the model space.</summary>
-    protected virtual IEnumerable<Point3d> MoreSnapPoints => [];
+    /// <summary>Points to snap to besides the vertices of the geometry, of their kinds, in the model space.</summary>
+    protected virtual IEnumerable<(Point3d Point, InferenceKind Kind)> Grips() => [];
 
     /// <summary>The plane to draw on from a point: that of the face it is on, otherwise the ground through it.</summary>
     protected Plane PlaneAt(Inference point)

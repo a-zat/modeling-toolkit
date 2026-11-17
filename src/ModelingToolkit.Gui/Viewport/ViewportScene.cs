@@ -682,7 +682,7 @@ internal sealed class ViewportScene
             _meshKeys.Add(key);
             _meshes.Add(shape is not null && faceMaterials is not null ? Textured(mesh, shape, faceMaterials) : mesh);
             // A mesh read from a file has no edges but those of its triangles: the sharp ones outline it.
-            _meshEdges.Add(shape?.Edges ?? SharpEdges.Of(mesh.Vertices, mesh.Triangles));
+            _meshEdges.Add(shape?.Edges ?? SharpEdges.Of(mesh.Vertices, mesh.Triangles, mesh.Normals));
             _meshShapes.Add(shape);
             _meshFaceMaterials.Add(faceMaterials);
         }

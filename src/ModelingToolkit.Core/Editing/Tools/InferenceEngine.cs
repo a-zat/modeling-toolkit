@@ -39,6 +39,9 @@ public enum InferenceKind
     /// <summary>On a guide line.</summary>
     OnGuide,
 
+    /// <summary>The middle of a face of the box of what is moved or turned.</summary>
+    Centre,
+
     /// <summary>Where two guide lines cross.</summary>
     Intersection,
 }
@@ -100,9 +103,13 @@ public sealed class InferenceEngine
     /// pick them, such as the vertices of the geometry being edited, in the model space; those hidden behind what the
     /// pointer is on are left out.
     /// </param>
+    /// <param name="grips">
+    /// Points of the kinds given to snap to as to <paramref name="vertices"/>, such as the corners and the middles of
+    /// the edges and of the faces of the box of what is moved, in the model space; the vertices come first.
+    /// </param>
     public Inference Infer(
         ToolPick pick, Transform placement, Point3d? from = null, Vector3d? locked = null,
-        IReadOnlyList<Point3d>? vertices = null)
+        IReadOnlyList<Point3d>? vertices = null, IReadOnlyList<(Point3d Point, InferenceKind Kind)>? grips = null)
     {
         ArgumentNullException.ThrowIfNull(pick);
         ArgumentNullException.ThrowIfNull(placement);
@@ -126,6 +133,11 @@ public sealed class InferenceEngine
         if (found.Kind != InferenceKind.Endpoint && pick.Ray is { } near && Nearest(near, vertices, found) is { } vertex)
         {
             return new Inference(InferenceKind.Endpoint, vertex);
+        }
+        if (found.Kind != InferenceKind.Endpoint && grips is { Count: > 0 } && pick.Ray is { } toGrip &&
+            Nearest(toGrip, [.. grips.Select(grip => grip.Point)], found) is { } gripped)
+        {
+            return new Inference(grips.First(grip => grip.Point == gripped).Kind, gripped);
         }
         if (found.Kind is InferenceKind.Endpoint or InferenceKind.Midpoint)
         {

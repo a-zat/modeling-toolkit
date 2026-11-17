@@ -1,0 +1,251 @@
+<!-- The simplification of a component: the settings on the left, the component as it would be on the right, with its
+     measures before and after; Apply changes the project, as one change that can be undone. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
+        xmlns:viewport="using:ModelingToolkit.Gui.Viewport"
+        x:Class="ModelingToolkit.Gui.Views.SimplifyWindow"
+        x:DataType="vm:SimplifyViewModel"
+        Title="{Binding Name, StringFormat='Simplify {0}'}"
+        Width="1180" Height="760" MinWidth="900" MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Mtk.Chrome}">
+
+  <Window.Styles>
+    <Style Selector="StackPanel.page">
+      <Setter Property="Margin" Value="16,14,16,16" />
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+    <Style Selector="StackPanel.group">
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+    <Style Selector="Border.rows">
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
+    </Style>
+    <Style Selector="Border.row">
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Separator}" />
+    </Style>
+    <Style Selector="Border.row:nth-last-child(1)">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.row NumericUpDown">
+      <Setter Property="Width" Value="116" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.row ToggleSwitch">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Grid.measures > TextBlock">
+      <Setter Property="Margin" Value="0,3" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel>
+    <!-- Apply or cancel. -->
+    <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Mtk.Separator}" Padding="16,10">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" MinWidth="88" />
+          <Button Content="Apply" Command="{Binding ApplyCommand}" IsDefault="True" MinWidth="88"
+                  Classes="accent" />
+        </StackPanel>
+        <TextBlock Classes="secondary" VerticalAlignment="Center" TextWrapping="Wrap"
+                   Text="{Binding Scope}" />
+      </DockPanel>
+    </Border>
+
+    <!-- The settings. -->
+    <Border DockPanel.Dock="Left" Width="400" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource Mtk.Separator}">
+      <ScrollViewer>
+        <StackPanel Classes="page">
+          <StackPanel Classes="group">
+            <TextBlock Classes="label" Text="PRESET" />
+            <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"
+                      PlaceholderText="Custom" HorizontalAlignment="Stretch" />
+            <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                       Text="{Binding SelectedPreset.Description, FallbackValue='Settings of your own.'}" />
+          </StackPanel>
+            <StackPanel Classes="group">
+              <TextBlock Classes="label" Text="CLEAN UP" />
+              <Border Classes="rows"><StackPanel>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Weld vertices" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Closer than this, in mm, they become one." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding WeldTolerance}" Minimum="0" Maximum="10" Increment="0.01" FormatString="0.###" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Remove broken triangles" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Those without area, and those repeated." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding RemoveDegenerate}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid></Border>
+              </StackPanel></Border>
+            </StackPanel>
+            <StackPanel Classes="group">
+              <TextBlock Classes="label" Text="SMALL PARTS" />
+              <Border Classes="rows"><StackPanel>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Remove parts smaller than" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Pieces not joined to the rest, across their box, in mm; 0 keeps them." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding MinPieceSize}" Minimum="0" Maximum="5000" Increment="5" FormatString="0" />
+                </Grid></Border>
+              </StackPanel></Border>
+            </StackPanel>
+            <StackPanel Classes="group">
+              <TextBlock Classes="label" Text="SMOOTHING" />
+              <Border Classes="rows"><StackPanel>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Passes" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Evens out crumpled surfaces, keeping their volume; 0 for none." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding SmoothIterations}" Minimum="0" Maximum="100" Increment="1" FormatString="0" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Move vertices at most" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="How far smoothing may move a vertex, in mm." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding SmoothMaxMove}" Minimum="0" Maximum="500" Increment="1" FormatString="0.#" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Keep edges sharper than" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="In degrees; 0 smooths them too." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding SmoothKeepAngle}" Minimum="0" Maximum="180" Increment="5" FormatString="0" />
+                </Grid></Border>
+              </StackPanel></Border>
+            </StackPanel>
+            <StackPanel Classes="group">
+              <TextBlock Classes="label" Text="TRIANGLES" />
+              <Border Classes="rows"><StackPanel>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Keep" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="The share of the triangles to keep, in percent." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding KeepPercent}" Minimum="1" Maximum="100" Increment="5" FormatString="0" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Within" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="The surface moves no more than this, in mm; 0 for no limit." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding MaxError}" Minimum="0" Maximum="1000" Increment="0.5" FormatString="0.#" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Keep the borders" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Open edges of the surface stay where they are." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding KeepBorders}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Keep the texture seams" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Off reduces more, but parts that touch may pierce each other, and the texture may stretch." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding KeepTextureSeams}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid></Border>
+              </StackPanel></Border>
+            </StackPanel>
+            <StackPanel Classes="group">
+              <TextBlock Classes="label" Text="SHADING AND EDGES" />
+              <Border Classes="rows"><StackPanel>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Recompute the normals" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Off: the shading of the file is kept." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding RecomputeNormals}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Soften creases under" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="With the shading of the file: its normals closer than this, in degrees, become smooth, and those edges are not drawn." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding SoftenAngle}" Minimum="0" Maximum="180" Increment="5" FormatString="0" />
+                </Grid></Border>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Crease angle" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Edges sharper than this stay sharp and are drawn; the rest is smooth." />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" Value="{Binding CreaseAngle}" Minimum="0" Maximum="180" Increment="5" FormatString="0" />
+                </Grid></Border>
+              </StackPanel></Border>
+            </StackPanel>
+            <StackPanel Classes="group">
+              <TextBlock Classes="label" Text="STRUCTURE" />
+              <Border Classes="rows"><StackPanel>
+                <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="One mesh per material" />
+                    <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap" Text="Puts the meshes of a block with the same material together." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" IsChecked="{Binding MergeByMaterial}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid></Border>
+              </StackPanel></Border>
+            </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+    <!-- The preview and the measures. -->
+    <DockPanel>
+      <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Mtk.Separator}" Padding="16,10">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="6">
+            <ItemsControl ItemsSource="{Binding Measures}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SimplifyMeasure">
+                  <StackPanel Spacing="1" Margin="0,0,12,0">
+                    <TextBlock Classes="label" Text="{Binding Name}" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Classes="secondary" Text="{Binding Before}" />
+                      <TextBlock Classes="secondary" Text="→" />
+                      <TextBlock Text="{Binding After}" FontWeight="SemiBold" />
+                    </StackPanel>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="{Binding Deviation}" />
+              <TextBlock Classes="secondary" Text="{Binding Status}" />
+            </StackPanel>
+          </StackPanel>
+          <TextBlock Grid.Column="1" Classes="secondary" Text="Simplifying…" VerticalAlignment="Center"
+                     IsVisible="{Binding IsComputing}" />
+        </Grid>
+      </Border>
+      <Border DockPanel.Dock="Top" Padding="12,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Mtk.Separator}">
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <RadioButton GroupName="Shown" Content="As it is" Command="{Binding ShowBeforeCommand}"
+                       IsChecked="{Binding !ShowsResult, Mode=OneWay}" />
+          <RadioButton GroupName="Shown" Content="Simplified" Command="{Binding ShowAfterCommand}"
+                       IsChecked="{Binding ShowsResult, Mode=OneWay}" />
+        </StackPanel>
+      </Border>
+      <Grid>
+        <viewport:ViewportView x:Name="Viewport" Document="{Binding Preview}" DisplayMode="ShadedWithEdges" IsGridVisible="False" />
+      </Grid>
+    </DockPanel>
+  </DockPanel>
+</Window>

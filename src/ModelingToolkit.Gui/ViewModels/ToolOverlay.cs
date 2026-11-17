@@ -57,6 +57,7 @@ internal static class ToolOverlay
     {
         InferenceKind.Endpoint => "Endpoint",
         InferenceKind.Midpoint => "Midpoint",
+        InferenceKind.Centre => "Centre of face",
         InferenceKind.OnEdge => "On edge",
         InferenceKind.OnFace => "On face",
         InferenceKind.Origin => "Origin",
@@ -83,6 +84,7 @@ internal static class ToolOverlay
     {
         InferenceKind.Endpoint => (Green, MarkerShape.Dot),
         InferenceKind.Midpoint => (Cyan, MarkerShape.Dot),
+        InferenceKind.Centre => (Blue, MarkerShape.Dot),
         InferenceKind.OnEdge => (Red, MarkerShape.Dot),
         InferenceKind.OnFace => (Blue, MarkerShape.Circle),
         InferenceKind.Origin => (Gold, MarkerShape.Dot),

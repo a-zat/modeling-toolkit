@@ -78,6 +78,9 @@ public sealed class SelectionHandles
 
     public IReadOnlyList<SelectionHandle> Handles { get; }
 
+    /// <summary>The corners of the box, in the model space: bit 1 of the index for X, 2 for Y, 4 for Z.</summary>
+    public IReadOnlyList<Point3d> Corners => _corners;
+
     /// <summary>The twelve edges of the box, transformed in the model space.</summary>
     public IEnumerable<PreviewLine> Box(Transform transform)
     {

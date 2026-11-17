@@ -236,13 +236,13 @@ mtk::Viewer::Viewer(void* parent) {
     context_->Display(view_cube_, false);
 
     // The camera turns as on a turntable, around the point under the pointer where the drag starts, the vertical up;
-    // either button drags it round, the middle one, or Shift with the left one, pans; the wheel and the pinch of a
-    // trackpad zoom.
+    // the left button drags it round; the right one, a press of two fingers on a trackpad, the middle one, or Shift with
+    // the left one, pans; the wheel and the pinch of a trackpad zoom.
     SetRotationMode(AIS_RotationMode_PickLast);
     SetLockOrbitZUp(true);
     NCollection_DataMap<unsigned int, AIS_MouseGesture>& gestures = ChangeMouseGestureMap();
     const auto keys = [](unsigned int button, unsigned int modifiers) { return button | modifiers; };
-    gestures.Bind(Aspect_VKeyMouse_RightButton, AIS_MouseGesture_RotateOrbit);
+    gestures.Bind(Aspect_VKeyMouse_RightButton, AIS_MouseGesture_Pan);
     gestures.Bind(keys(Aspect_VKeyMouse_RightButton, Aspect_VKeyFlags_SHIFT), AIS_MouseGesture_Pan);
     gestures.UnBind(keys(Aspect_VKeyMouse_RightButton, Aspect_VKeyFlags_CTRL));
     gestures.UnBind(keys(Aspect_VKeyMouse_LeftButton, Aspect_VKeyFlags_CTRL)); // a right click on macOS

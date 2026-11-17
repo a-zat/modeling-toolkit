@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel viewModel)
         {
             viewModel.FileDialogs = new StorageProviderFileDialogs(this);
+            viewModel.ShowSimplify = simplify => new SimplifyWindow { DataContext = simplify }.ShowDialog(this);
         }
     }
 
