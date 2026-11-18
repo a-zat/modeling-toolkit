@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Data;
+using Avalonia.Input.Platform;
 using Avalonia.VisualTree;
 using ModelingToolkit.Gui.ViewModels;
 
@@ -15,7 +17,31 @@ public partial class StatusBarView : UserControl
         InitializeComponent();
         MeasurementField.KeyDown += OnMeasurementKeyDown;
         MeasurementField.LostFocus += (_, _) => ShowMeasurement();
+        StatusText.PointerPressed += OnStatusPressed;
+        StatusText.PointerExited += (_, _) =>
+        {
+            _copied?.Dispose();
+            _copied = null;
+        };
     }
+
+    private async void OnStatusPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_viewModel is not { StatusMessage: { Length: > 0 } message } ||
+            TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+        e.Handled = true;
+        string text = _viewModel.StatusDetails is { } details ? $"{message}{Environment.NewLine}{details}" : message;
+        await clipboard.SetTextAsync(text);
+        // Over the tip bound, until the pointer leaves.
+        _copied?.Dispose();
+        _copied = StatusText.SetValue(ToolTip.TipProperty, "Copied", BindingPriority.Animation);
+        ToolTip.SetIsOpen(StatusText, true);
+    }
+
+    private IDisposable? _copied;
 
     /// <summary>
     /// Starts typing a value in the measurement field with text typed elsewhere, such as in the 3D view; false when the

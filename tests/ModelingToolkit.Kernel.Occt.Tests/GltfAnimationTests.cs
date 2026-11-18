@@ -81,6 +81,23 @@ public sealed class GltfAnimationTests : IDisposable
         Assert.Empty(document.Animations);
     }
 
+    [Fact]
+    public void A_node_scaled_to_nothing_at_rest_is_read_and_grown_by_its_animation()
+    {
+        Document document = _reader.Read(Leaf(), _warnings);
+
+        Animation open = Assert.Single(document.Animations);
+        Point3d[] closed = PlacedVertices(document, open.PoseAt(0));
+        Assert.All(closed, p => Assert.Equal(1000, p.DistanceTo(Point3d.Origin), 1e-2)); // a point, 1 m along X
+        Point3d[] opened = PlacedVertices(document, open.PoseAt(1));
+        Point3d[] expected = [.. Triangle.Select(p => Converted(new Vector3d(1 + p.X, p.Y, p.Z)))];
+        for (int index = 0; index < expected.Length; index++)
+        {
+            Assert.Equal(0, expected[index].DistanceTo(opened[index]), 1e-3);
+        }
+        Assert.Equal(["leaf.gltf"], Directory.GetFiles(_folder, "*", SearchOption.AllDirectories).Select(Path.GetFileName));
+    }
+
     private static string Invariant(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 
     private static Point3d Converted(Vector3d gltf) => new(gltf.X * 1000, -gltf.Z * 1000, gltf.Y * 1000);
@@ -185,6 +202,66 @@ public sealed class GltfAnimationTests : IDisposable
         """;
         _ = JsonNode.Parse(json); // a mistake in the test file fails here, not in the reader
         string path = Path.Combine(_folder, "hinged.gltf");
+        File.WriteAllText(path, json);
+        return path;
+    }
+
+    // A leaf of a table, a triangle 1 m along X, scaled to nothing at rest; "Open" grows it to its size in a second.
+    private string Leaf()
+    {
+        var buffer = new MemoryStream();
+        var writer = new BinaryWriter(buffer);
+        foreach (Point3d p in Triangle)
+        {
+            writer.Write((float)p.X);
+            writer.Write((float)p.Y);
+            writer.Write((float)p.Z);
+        }
+        writer.Write((ushort)0);
+        writer.Write((ushort)1);
+        writer.Write((ushort)2);
+        writer.Write((ushort)0); // padding
+        writer.Write(0f); // times, at 44
+        writer.Write(1f);
+        foreach (float s in (float[])[0, 0, 0, 1, 1, 1]) // scales, at 52
+        {
+            writer.Write(s);
+        }
+        byte[] data = buffer.ToArray();
+
+        string json = $$"""
+        {
+          "asset": { "version": "2.0" },
+          "scene": 0,
+          "scenes": [ { "nodes": [0] } ],
+          "nodes": [
+            { "name": "Leaf", "translation": [1, 0, 0], "scale": [0, 0, 0], "children": [1] },
+            { "name": "Board", "mesh": 0 }
+          ],
+          "meshes": [ { "primitives": [ { "attributes": { "POSITION": 0 }, "indices": 1 } ] } ],
+          "buffers": [ { "byteLength": {{data.Length}},
+                         "uri": "data:application/octet-stream;base64,{{Convert.ToBase64String(data)}}" } ],
+          "bufferViews": [
+            { "buffer": 0, "byteOffset": 0, "byteLength": 36 },
+            { "buffer": 0, "byteOffset": 36, "byteLength": 6 },
+            { "buffer": 0, "byteOffset": 44, "byteLength": 32 }
+          ],
+          "accessors": [
+            { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [0.1, 1, 0] },
+            { "bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR" },
+            { "bufferView": 2, "byteOffset": 0, "componentType": 5126, "count": 2, "type": "SCALAR",
+              "min": [0], "max": [1] },
+            { "bufferView": 2, "byteOffset": 8, "componentType": 5126, "count": 2, "type": "VEC3" }
+          ],
+          "animations": [
+            { "name": "Open",
+              "samplers": [ { "input": 2, "output": 3 } ],
+              "channels": [ { "sampler": 0, "target": { "node": 0, "path": "scale" } } ] }
+          ]
+        }
+        """;
+        _ = JsonNode.Parse(json);
+        string path = Path.Combine(_folder, "leaf.gltf");
         File.WriteAllText(path, json);
         return path;
     }

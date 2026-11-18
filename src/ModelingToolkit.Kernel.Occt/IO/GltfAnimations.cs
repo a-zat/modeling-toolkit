@@ -180,7 +180,7 @@ internal static class GltfAnimations
                 ? [.. r.EnumerateArray().Select(value => value.GetDouble())]
                 : [0, 0, 0, 1];
             double[] s = node.TryGetProperty("scale", out JsonElement scale)
-                ? [.. scale.EnumerateArray().Select(value => value.GetDouble())]
+                ? [.. scale.EnumerateArray().Select(value => GltfScales.AtLeastMinimum(value.GetDouble()))]
                 : [1, 1, 1];
             return new Rest(Quaternions.Normalized(ConvertRotation(q)), ConvertScale(s));
         }

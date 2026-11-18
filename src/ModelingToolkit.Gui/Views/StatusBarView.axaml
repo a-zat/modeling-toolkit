@@ -99,8 +99,9 @@
         </StackPanel>
         <!-- What the active tool expects next. -->
         <TextBlock Text="{Binding ToolHint}" />
-        <TextBlock Text="{Binding StatusMessage}" Classes="secondary" TextTrimming="CharacterEllipsis"
-                   ToolTip.Tip="{Binding StatusDetails}" />
+        <!-- A click copies it, with its details, to paste it elsewhere. -->
+        <TextBlock x:Name="StatusText" Text="{Binding StatusMessage}" Classes="secondary" TextTrimming="CharacterEllipsis"
+                   Cursor="Hand" ToolTip.Tip="{Binding StatusDetails, TargetNullValue='Click to copy'}" />
         <!-- The file being opened or saved. -->
         <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsBusy}">
           <ProgressBar Width="120" MinWidth="0" Height="4" MinHeight="4" VerticalAlignment="Center"

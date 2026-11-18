@@ -29,15 +29,24 @@ public sealed class GltfReader : IDocumentReader
         GltfExtensions.Check(path, warnings);
 
         SceneHandle scene;
-        using (var bridge = new ProgressBridge(progress, cancellationToken))
+        string? raised = GltfScales.RaisedCopy(fullPath);
+        try
         {
+            using var bridge = new ProgressBridge(progress, cancellationToken);
             NativeProgress native = bridge.Native;
-            NativeStatus status = NativeMethods.SceneReadGltf(fullPath, bridge.IsUsed ? &native : null, out scene);
+            NativeStatus status = NativeMethods.SceneReadGltf(raised ?? fullPath, bridge.IsUsed ? &native : null, out scene);
             if (status == NativeStatus.KernelError)
             {
                 throw new InvalidDataException(NativeMethods.LastErrorMessage());
             }
             bridge.ThrowIfFailed(status);
+        }
+        finally
+        {
+            if (raised is not null)
+            {
+                File.Delete(raised);
+            }
         }
 
         using (scene)
