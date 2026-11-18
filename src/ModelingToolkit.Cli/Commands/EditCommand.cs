@@ -123,7 +123,7 @@ internal static class EditCommand
                 return $"Rotated {target}.";
             }
             case "rename":
-                session.Execute(new RenameCommand(entity, value ?? throw new ArgumentException("rename needs @NAME.")));
+                session.Execute(new RenameCommand(entity, value ?? throw new ArgumentException("rename needs @NAME."), document));
                 return $"Renamed {target} to {value}.";
             case "hide" or "show":
                 session.Execute(new SetHiddenCommand([entity], verb == "hide"));

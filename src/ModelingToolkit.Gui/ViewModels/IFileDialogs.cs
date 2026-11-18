@@ -13,3 +13,11 @@ public interface IFileDialogs
     /// <returns>The chosen file, or null if the dialog was cancelled.</returns>
     Task<string?> SaveAsync(string title, FileType type, string suggestedName);
 }
+
+/// <summary>What to do with the changes of a project being closed.</summary>
+public enum SaveChoice
+{
+    Cancel,
+    Save,
+    DontSave,
+}

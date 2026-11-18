@@ -16,7 +16,7 @@
           <Border Classes="appMark">
             <PathIcon Data="{StaticResource Icon.Cube}" />
           </Border>
-          <TextBlock Text="{Binding DocumentName}" FontWeight="SemiBold" VerticalAlignment="Center"
+          <TextBlock Text="{Binding DocumentLabel}" FontWeight="SemiBold" VerticalAlignment="Center"
                      TextTrimming="CharacterEllipsis" />
         </StackPanel>
 

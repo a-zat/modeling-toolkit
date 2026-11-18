@@ -183,4 +183,45 @@ public sealed class SelectionHandlesTests
         Assert.All(arrow[0], point => Assert.Equal(20, point.DistanceTo(top.Point), Tolerance)); // 0.4 of half of 100
         Assert.Empty(handles.TurnArrow(handles.Handles[0]));
     }
+
+    [Fact]
+    public void From_inside_the_box_no_handle_shows()
+    {
+        var handles = new SelectionHandles(_reference, Transform.Identity);
+
+        Assert.Empty(handles.VisibleFrom(new Point3d(1050, 50, 50)));
+    }
+
+    [Fact]
+    public void Seen_from_near_the_arrow_to_turn_is_no_larger_than_a_part_of_its_distance()
+    {
+        var handles = new SelectionHandles(_reference, Transform.Identity);
+        SelectionHandle top = handles.Handles[TopFace];
+
+        // 256 mm above the top: at most 0.05 of it, 12.8 mm, under the 20 mm the face gives.
+        IReadOnlyList<IReadOnlyList<Point3d>> near = handles.TurnArrow(top, top.Point + new Vector3d(0, 0, 256));
+        Assert.All(near[0], point => Assert.Equal(12.8, point.DistanceTo(top.Point), Tolerance));
+        // From far, as the face gives.
+        IReadOnlyList<IReadOnlyList<Point3d>> far = handles.TurnArrow(top, top.Point + new Vector3d(0, 0, 4096));
+        Assert.All(far[0], point => Assert.Equal(20, point.DistanceTo(top.Point), Tolerance));
+    }
+
+    [Fact]
+    public void A_face_turns_a_selection_turned_by_any_angle_square_with_the_axes_again()
+    {
+        _reference.Transform = Transform.Rotation(new Point3d(1000, 0, 0), Vector3d.UnitZ, 32 * Math.PI / 180) *
+            _reference.Transform;
+        var handles = new SelectionHandles(_reference, Transform.Identity);
+        SelectionHandle top = handles.Handles[TopFace];
+        double? heading = RotateTool.Heading(_reference, Transform.Identity, Vector3d.UnitZ);
+        Assert.Equal(32, heading!.Value, Tolerance);
+
+        // Dragged 145° round: 148° leaves it at 180°, nearer than 150°, a step of 15°.
+        Vector3d? from = null;
+        Vector3d start = new(1, 0, 0), end = new(Math.Cos(145 * Math.PI / 180), Math.Sin(145 * Math.PI / 180), 0);
+        SelectionHandles.Turn(top, Down(top.Point.X + 50 * start.X, top.Point.Y + 50 * start.Y, top.Point.Z), ref from, heading);
+        HandleDrag? turn = SelectionHandles.Turn(top,
+            Down(top.Point.X + 50 * end.X, top.Point.Y + 50 * end.Y, top.Point.Z), ref from, heading);
+        Assert.Equal(148, turn!.Measure, Tolerance);
+    }
 }

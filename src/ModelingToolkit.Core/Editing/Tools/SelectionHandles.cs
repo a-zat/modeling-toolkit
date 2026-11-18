@@ -40,6 +40,16 @@ public sealed class SelectionHandles
     /// <summary>How far from edge-on, as the cosine of the angle to the line of sight, a face shows its handle to turn.</summary>
     public const double EdgeOn = 0.15;
 
+    /// <summary>The largest radius of the arrows to turn, as a fraction of their distance from the eye.</summary>
+    public const double ArrowSight = 0.05;
+
+    /// <summary>
+    /// The distance of a point from the eye in half steps of a power of two, by which the arrows to turn are sized:
+    /// they change size, and are drawn again, only when it changes.
+    /// </summary>
+    public static int SightStep(Point3d point, Point3d eye) =>
+        (int)Math.Round(2 * Math.Log2(Math.Max(point.DistanceTo(eye), 1)));
+
     /// <param name="placement">The placement in the model of the block that has the entity.</param>
     public SelectionHandles(Entity entity, Transform placement)
     {
@@ -142,7 +152,8 @@ public sealed class SelectionHandles
 
     /// <summary>
     /// The indices of the handles not hidden by the box itself, seen from an eye: those on a face turned to it, and of
-    /// the handles to turn, only on faces not seen nearly edge-on. A flat box, or an eye inside the box, shows them all.
+    /// the handles to turn, only on faces not seen nearly edge-on. A flat box shows them all, an eye inside the box none,
+    /// as from inside a room the handles of the room would only be in the way.
     /// </summary>
     public IReadOnlyList<int> VisibleFrom(Point3d eye)
     {
@@ -158,8 +169,12 @@ public sealed class SelectionHandles
             front |= cosine > 0 ? 1 << f : 0;
             open |= cosine > EdgeOn ? 1 << f : 0;
         }
-        bool all = front == 0 || _faces.Any(face => face is null);
+        bool all = _faces.Any(face => face is null);
         var visible = new List<int>();
+        if (front == 0 && !all)
+        {
+            return visible;
+        }
         for (int i = 0; i < Handles.Count; i++)
         {
             int mask = _faceMasks[i];
@@ -173,9 +188,11 @@ public sealed class SelectionHandles
 
     /// <summary>
     /// The arc that shows a handle to turn, lying on its face around its middle: three quarters of a circle a fifth as
-    /// wide as the face is narrow, and the two strokes of its arrowhead; empty for the other handles.
+    /// wide as the face is narrow, and the two strokes of its arrowhead; empty for the other handles. Seen from an eye,
+    /// the arc is no larger than <see cref="ArrowSight"/> of its distance, by steps (<see cref="SightStep"/>), so
+    /// that the face of a large box seen from near does not fill the view with it.
     /// </summary>
-    public IReadOnlyList<IReadOnlyList<Point3d>> TurnArrow(SelectionHandle handle)
+    public IReadOnlyList<IReadOnlyList<Point3d>> TurnArrow(SelectionHandle handle, Point3d? eye = null)
     {
         if (handle.Kind != HandleKind.Rotate || handle.Grip.Direction is not { } normal)
         {
@@ -209,6 +226,10 @@ public sealed class SelectionHandles
             return [];
         }
         double radius = 0.4 * Math.Min(a.Length, b.Length);
+        if (eye is { } from)
+        {
+            radius = Math.Min(radius, ArrowSight * Math.Pow(2, SightStep(handle.Point, from) / 2.0));
+        }
         Vector3d x = a.Normalized(), y = normal.Cross(x).Normalized();
         Point3d At(double angle) => handle.Point + (x * Math.Cos(angle) + y * Math.Sin(angle)) * radius;
         const int Pieces = 24;
@@ -231,7 +252,8 @@ public sealed class SelectionHandles
     /// when the ray does not meet the plane of the face, or is still at its middle.
     /// </summary>
     /// <param name="from">The direction the turn starts from, set by the first drag far enough from the middle.</param>
-    public static HandleDrag? Turn(SelectionHandle handle, PointerRay ray, ref Vector3d? from)
+    /// <param name="heading">How far the selection is turned from the axes of the model, to snap square with them too.</param>
+    public static HandleDrag? Turn(SelectionHandle handle, PointerRay ray, ref Vector3d? from, double? heading = null)
     {
         ArgumentNullException.ThrowIfNull(ray);
         if (handle.Grip is not { Plane: { } plane, Direction: { } axis } ||
@@ -245,7 +267,8 @@ public sealed class SelectionHandles
             return from is null ? null : new HandleDrag(Transform.Identity, InferenceKind.None, [], 0, true);
         }
         from ??= to.Normalized();
-        double degrees = RotateTool.Snap(Math.Atan2(from.Value.Cross(to).Dot(axis), from.Value.Dot(to)) * 180 / Math.PI);
+        double degrees = RotateTool.Snap(Math.Atan2(from.Value.Cross(to).Dot(axis), from.Value.Dot(to)) * 180 / Math.PI,
+            heading);
         Transform rotation = Transform.Rotation(handle.Point, axis, degrees * Math.PI / 180);
         double radius = to.Length;
         return new HandleDrag(rotation, InferenceKind.None,

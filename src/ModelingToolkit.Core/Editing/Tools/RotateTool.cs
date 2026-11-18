@@ -1,5 +1,6 @@
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Kernel;
+using ModelingToolkit.Core.Model;
 
 namespace ModelingToolkit.Core.Editing.Tools;
 
@@ -146,19 +147,64 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
         {
             return;
         }
-        _angle = Snap(Math.Atan2(from.Cross(to).Dot(_plane.Normal), from.Dot(to)) * 180 / Math.PI) * Math.PI / 180;
+        double? heading = Target is { } target ? Heading(target, Host.Context.Placement, _plane.Normal) : null;
+        _angle = Snap(Math.Atan2(from.Cross(to).Dot(_plane.Normal), from.Dot(to)) * 180 / Math.PI, heading) * Math.PI / 180;
     }
 
-    /// <summary>An angle in degrees snapped to a right angle near it, or else to a step of 15° close to it.</summary>
-    public static double Snap(double degrees)
+    /// <summary>
+    /// An angle in degrees snapped to a right angle near it, or else to a step of 15° close to it. Given the heading of
+    /// the entity (<see cref="Heading"/>), it also snaps to the angles that leave the entity square with the axes, the
+    /// nearer of the two right angles winning: an entity turned by 32° turns by 148° to stand square again.
+    /// </summary>
+    public static double Snap(double degrees, double? heading = null)
     {
         double right = Math.Round(degrees / RightAngle) * RightAngle;
-        if (Math.Abs(degrees - right) < RightAngleSnap)
+        double best = Math.Abs(degrees - right) < RightAngleSnap ? right : double.NaN;
+        if (heading is { } h)
         {
-            return right;
+            double square = Math.Round((h + degrees) / RightAngle) * RightAngle - h;
+            if (Math.Abs(degrees - square) < RightAngleSnap &&
+                (double.IsNaN(best) || Math.Abs(degrees - square) < Math.Abs(degrees - best)))
+            {
+                best = square;
+            }
+        }
+        if (!double.IsNaN(best))
+        {
+            return best;
         }
         double step = Math.Round(degrees / Step) * Step;
         return Math.Abs(degrees - step) < 2 ? step : degrees;
+    }
+
+    /// <summary>
+    /// How far, in degrees around an axis, a component is turned from the axes of the model: the angle from the axis of
+    /// the model to that of the component nearest the plane across the axis, both laid on it; null for other entities,
+    /// which have no axes of their own, or when either lies along the axis.
+    /// </summary>
+    public static double? Heading(Entity entity, Transform placement, Vector3d axis)
+    {
+        if (entity is not BlockReference reference || axis.Length < 1e-12)
+        {
+            return null;
+        }
+        Vector3d normal = axis.Normalized();
+        Transform transform = placement * reference.Transform;
+        Vector3d? own = Across(normal, [.. new[] { Vector3d.UnitX, Vector3d.UnitY, Vector3d.UnitZ }.Select(transform.ApplyVector)]);
+        Vector3d? model = Across(normal, [Vector3d.UnitX, Vector3d.UnitY, Vector3d.UnitZ]);
+        if (own is not { } a || model is not { } b)
+        {
+            return null;
+        }
+        return Math.Atan2(b.Cross(a).Dot(normal), b.Dot(a)) * 180 / Math.PI;
+
+        // Of directions, the one that lies the most across the axis, laid on the plane across it.
+        static Vector3d? Across(Vector3d normal, Vector3d[] directions)
+        {
+            Vector3d best = directions.Select(d => d.Normalized()).MinBy(d => Math.Abs(d.Dot(normal)));
+            Vector3d laid = best - normal * best.Dot(normal);
+            return laid.Length < 1e-6 ? null : laid.Normalized();
+        }
     }
 
     private Plane PlaneThrough(Inference point)

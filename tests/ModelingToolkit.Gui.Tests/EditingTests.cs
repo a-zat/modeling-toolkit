@@ -21,6 +21,32 @@ public sealed class EditingTests
     }
 
     [Fact]
+    public async Task ClosingAsksToSaveOnlyChangesNotSaved()
+    {
+        MainWindowViewModel viewModel = await OpenBox();
+        var asked = new List<string>();
+        SaveChoice answer = SaveChoice.Cancel;
+        viewModel.AskToSave = name =>
+        {
+            asked.Add(name);
+            return Task.FromResult(answer);
+        };
+        viewModel.AsksToSaveOnClose = true;
+        Assert.True(await viewModel.ConfirmCloseAsync()); // nothing changed
+
+        SelectMesh(viewModel);
+        viewModel.Properties.EditedName = "Crate";
+        Assert.False(await viewModel.ConfirmCloseAsync());
+        answer = SaveChoice.DontSave;
+        Assert.True(await viewModel.ConfirmCloseAsync());
+        Assert.Equal(["Box.glb", "Box.glb"], asked);
+
+        viewModel.AsksToSaveOnClose = false; // as in debug builds
+        Assert.True(await viewModel.ConfirmCloseAsync());
+        Assert.Equal(2, asked.Count);
+    }
+
+    [Fact]
     public async Task RenamingInThePropertiesUndoesAndRedoes()
     {
         MainWindowViewModel viewModel = await OpenBox();
@@ -32,7 +58,8 @@ public sealed class EditingTests
         Assert.Equal("Crate", mesh.Name);
         Assert.Equal("Crate", viewModel.Properties.EditedName);
         Assert.StartsWith("Undo Rename (", viewModel.UndoTip, StringComparison.Ordinal);
-        Assert.StartsWith("• Box.glb", viewModel.Title, StringComparison.Ordinal);
+        Assert.StartsWith("Box.glb*", viewModel.Title, StringComparison.Ordinal);
+        Assert.Equal("Box.glb*", viewModel.DocumentLabel);
 
         viewModel.UndoCommand.Execute(null);
         Assert.Null(mesh.Entity.Name);

@@ -78,24 +78,35 @@ public partial class MainWindow : Window
         {
             viewModel.FileDialogs = new StorageProviderFileDialogs(this);
             viewModel.ShowSimplify = simplify => new SimplifyWindow { DataContext = simplify }.ShowDialog(this);
+            viewModel.AskToSave = name => new SaveChangesWindow(name).ShowDialog<SaveChoice>(this);
         }
     }
 
-    // Closing while a file is opened or saved waits for it (see WhenIdleAsync), then closes.
+    private bool _closeConfirmed;
+
+    // Closing while a file is opened or saved waits for it (see WhenIdleAsync), then asks to save the changes.
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
-        if (!e.Cancel && DataContext is MainWindowViewModel { IsBusy: true } viewModel)
+        if (!e.Cancel && !_closeConfirmed && DataContext is MainWindowViewModel viewModel &&
+            (viewModel.IsBusy || viewModel is { AsksToSaveOnClose: true, IsModified: true }))
         {
             e.Cancel = true;
-            _ = CloseWhenIdleAsync(viewModel);
+            _ = ConfirmCloseAsync(viewModel);
         }
     }
 
-    private async Task CloseWhenIdleAsync(MainWindowViewModel viewModel)
+    private async Task ConfirmCloseAsync(MainWindowViewModel viewModel)
     {
-        await viewModel.WhenIdleAsync();
-        Close();
+        if (viewModel.IsBusy)
+        {
+            await viewModel.WhenIdleAsync();
+        }
+        if (await viewModel.ConfirmCloseAsync())
+        {
+            _closeConfirmed = true;
+            Close();
+        }
     }
 
     private void OnPaletteOpened(object? sender, EventArgs e) => Palette.TakeKeyboard();

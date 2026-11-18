@@ -25,6 +25,9 @@ public partial class App : Application
     {
         var viewModel = _services.GetRequiredService<MainWindowViewModel>();
         viewModel.ApplyAppearance();
+#if !DEBUG
+        viewModel.AsksToSaveOnClose = true;
+#endif
         viewModel.NewCommand.Execute(null); // an empty model to draw in, which opening a file replaces
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

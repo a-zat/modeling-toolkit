@@ -4,16 +4,52 @@ using ModelingToolkit.Core.Model;
 namespace ModelingToolkit.Core.Editing;
 
 /// <summary>Gives an entity a name, or takes its name away with null.</summary>
-public sealed class RenameCommand(Entity entity, string? name) : IEditCommand
+public sealed class RenameCommand : IEditCommand
 {
-    private readonly Entity _entity = entity ?? throw new ArgumentNullException(nameof(entity));
-    private readonly string? _before = entity.Name;
+    private readonly Entity _entity;
+    private readonly string? _name;
+    private readonly string? _before;
+    private readonly Block? _block;
+    private readonly string? _blockBefore;
+
+    /// <summary>
+    /// Renames an entity; given the document, a reference renames its block too when it is the only one placing it and
+    /// no other block has the name, so that a block made for one place is not shown by its old name beside it.
+    /// </summary>
+    public RenameCommand(Entity entity, string? name, Document? document = null)
+    {
+        _entity = entity ?? throw new ArgumentNullException(nameof(entity));
+        _name = name;
+        _before = entity.Name;
+        if (document is not null && entity is BlockReference { Block: var block } && !string.IsNullOrWhiteSpace(name) &&
+            document.Blocks.Prepend(document.Root).SelectMany(b => b.Entities).OfType<BlockReference>()
+                .Count(reference => reference.Block == block) == 1 &&
+            !document.Blocks.Any(other => other != block && other.Name == name))
+        {
+            _block = block;
+            _blockBefore = block.Name;
+        }
+    }
 
     public string Name => "Rename";
 
-    public void Apply() => _entity.Name = name;
+    public void Apply()
+    {
+        _entity.Name = _name;
+        if (_block is not null)
+        {
+            _block.Name = _name!;
+        }
+    }
 
-    public void Revert() => _entity.Name = _before;
+    public void Revert()
+    {
+        _entity.Name = _before;
+        if (_block is not null)
+        {
+            _block.Name = _blockBefore!;
+        }
+    }
 }
 
 /// <summary>Shows or hides entities, as layers are switched on or off, as one command.</summary>

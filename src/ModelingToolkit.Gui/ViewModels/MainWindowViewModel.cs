@@ -806,7 +806,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnEditingChanged();
     }
 
-    /// <summary>Pastes what was cut or copied where it was, in the block being edited, selected for the move tool.</summary>
+    /// <summary>
+    /// Pastes what was cut or copied in the block being edited, as an imported model: it follows the pointer until a
+    /// click places it, selected as in the 3D view; Escape takes it out again.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanPaste))]
     private void Paste()
     {
@@ -819,11 +822,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             return;
         }
-        ModelTree.SelectCommand.Execute((IReadOnlyList<Entity>)[.. Context!.Path, paste.Pasted]);
-        if (Tools.FirstOrDefault(item => item.Tool is MoveTool) is { } move)
+        StatusMessage = PlaceAdded(paste.Pasted, paste.Command)
+            ? "Pasted. Click where it goes, or press Esc to leave it out."
+            : "Pasted.";
+    }
+
+    // An entity just added by a command, selected as in the 3D view, follows the pointer by its origin, or the corner of
+    // its box, until a click places it; Escape undoes the command. False when it cannot be placed so.
+    private bool PlaceAdded(Entity added, IEditCommand command)
+    {
+        _toolHost.SelectEntity([.. Context!.Path, added]);
+        if (!IsEditable || Tools.FirstOrDefault(item => item.Tool is SelectTool) is not { } select)
         {
-            ActivateTool(move);
+            return false;
         }
+        ActivateTool(select);
+        Point3d anchor = added is BlockReference reference
+            ? reference.Transform.Apply(Point3d.Origin)
+            : added.GetBoundingBox().Min;
+        return ((SelectTool)select.Tool).Place(Context.Placement.Apply(anchor), () =>
+        {
+            if (Session is { CanUndo: true } session && session.UndoName == command.Name && added.Owner is not null)
+            {
+                UndoCommand.Execute(null);
+            }
+        });
     }
 
     /// <summary>Deletes the guides of the block being edited, as one command.</summary>
@@ -875,7 +898,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DeleteCommand.NotifyCanExecuteChanged();
         if (Session is not null)
         {
-            Title = $"{(Session.IsModified ? "• " : "")}{DocumentName} — {ApplicationName}";
+            IsModified = Session.IsModified;
+            ShowTitle();
         }
     }
 
@@ -920,6 +944,45 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string DocumentName { get; private set; }
+
+    /// <summary>Whether the project has changes not saved, which a "*" after its name shows.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DocumentLabel))]
+    public partial bool IsModified { get; private set; }
+
+    public string DocumentLabel => IsModified ? $"{DocumentName}*" : DocumentName;
+
+    partial void OnDocumentNameChanged(string value) => OnPropertyChanged(nameof(DocumentLabel));
+
+    private void ShowTitle() => Title = $"{DocumentLabel} — {ApplicationName}";
+
+    /// <summary>Whether closing asks to save the changes; not in debug builds, quit and run again while developing.</summary>
+    public bool AsksToSaveOnClose { get; set; }
+
+    /// <summary>Asks whether to save the changes of the project named, before it is closed.</summary>
+    public Func<string, Task<SaveChoice>>? AskToSave { get; set; }
+
+    /// <summary>
+    /// Whether the project can be closed: it has no changes, or they are saved or dropped as asked; false when the
+    /// question is cancelled, or the project is not saved after all.
+    /// </summary>
+    public async Task<bool> ConfirmCloseAsync()
+    {
+        if (!AsksToSaveOnClose || !IsModified || AskToSave is not { } ask)
+        {
+            return true;
+        }
+        switch (await ask(DocumentName))
+        {
+            case SaveChoice.DontSave:
+                return true;
+            case SaveChoice.Save:
+                await Save();
+                return !IsModified;
+            default:
+                return false;
+        }
+    }
 
     /// <summary>What the document contains, for the status bar.</summary>
     [ObservableProperty]
@@ -1436,26 +1499,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             EndOperation(); // the edit is refused while busy
             if (Edit(command))
             {
-                // Selected as in the 3D view, framed by its box, the rest as it is; placed at the origin, it is then
-                // moved where it goes.
-                _toolHost.SelectEntity([.. Context.Path, command.Reference]);
-                // It follows the pointer by its origin until a click places it, selected to take it by its handles;
-                // Escape takes it out again.
-                bool placing = false;
-                if (IsEditable && Tools.FirstOrDefault(item => item.Tool is SelectTool) is { } select)
-                {
-                    ActivateTool(select);
-                    BlockReference reference = command.Reference;
-                    Point3d origin = Context.Placement.Apply(reference.Transform.Apply(Point3d.Origin));
-                    placing = ((SelectTool)select.Tool).Place(origin, () =>
-                    {
-                        if (Session is { CanUndo: true } session && session.UndoName == command.Name &&
-                            reference.Owner is not null)
-                        {
-                            UndoCommand.Execute(null);
-                        }
-                    });
-                }
+                // Placed at the origin, it is then moved where it goes.
+                bool placing = PlaceAdded(command.Reference, command);
                 string place = placing ? " Click where it goes, or press Esc to leave it out." : "";
                 StatusMessage = warnings.Count switch
                 {
@@ -1600,7 +1645,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         _path = path;
         DocumentName = path is null ? "Untitled" : Path.GetFileName(path);
-        Title = $"{DocumentName} — {ApplicationName}";
+        IsModified = false;
+        ShowTitle();
 
         ShowSummary(statistics);
 
@@ -1698,7 +1744,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     markers.Add(new OverlayMarker(handle.Point, SelectionBoxColor, ShapeOf(handle.Grip.Kind)));
                     continue;
                 }
-                IReadOnlyList<IReadOnlyList<Point3d>> arrow = handles.TurnArrow(handle);
+                IReadOnlyList<IReadOnlyList<Point3d>> arrow = handles.TurnArrow(handle, ViewEye);
                 lines.AddRange(arrow.Select(stroke => new OverlayLine(stroke, SelectionBoxColor, 2.5)));
                 // The arrow is taken anywhere along it.
                 foreach (Point3d along in arrow.Count > 0 ? arrow[0] : [])
@@ -1711,8 +1757,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         Handles = points;
         _handleIndices = [.. indices];
-        _seenHandles = seen is null ? null : string.Join(",", seen);
+        _seenHandles = handles is null || ViewEye is not { } eye ? null : SeenKey(handles, eye);
     }
+
+    // What is seen of the handles: which ones, and the size of the arrows to turn.
+    private static string SeenKey(SelectionHandles handles, Point3d eye) => string.Join(",", handles.VisibleFrom(eye)
+        .Select(i => handles.Handles[i] is { Kind: HandleKind.Rotate } turn
+            ? $"{i}:{SelectionHandles.SightStep(turn.Point, eye)}"
+            : $"{i}"));
 
     private static MarkerShape ShapeOf(InferenceKind kind) => kind switch
     {
@@ -1758,9 +1810,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 return;
             }
             _viewEye = value;
-            // Turning the view shows other handles only when it shows other faces of the box.
+            // Turning the view shows other handles only when it shows other faces of the box, or nears the arrows.
             SelectionHandles? handles = ShownHandles() ?? (ActiveTool is TransformTool ? SelectedHandles() : null);
-            if (handles is not null && value is { } eye && string.Join(",", handles.VisibleFrom(eye)) != _seenHandles)
+            if (handles is not null && value is { } eye && SeenKey(handles, eye) != _seenHandles)
             {
                 ShowOverlay();
             }
@@ -1856,8 +1908,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }, cancellation.Token);
             _path = path;
             DocumentName = name;
-            Title = $"{name} — {ApplicationName}";
             Session?.MarkSaved();
+            IsModified = false;
+            ShowTitle();
             StatusMessage = warnings.Count == 0
                 ? $"Saved {name} ({writer.FormatName})."
                 : $"Saved {name} ({writer.FormatName}), with {warnings.Count} warning(s): {warnings[0]}";

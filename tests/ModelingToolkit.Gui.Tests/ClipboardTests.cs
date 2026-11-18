@@ -16,7 +16,7 @@ public sealed class ClipboardTests : IDisposable
     public void Dispose() => File.Delete(_path);
 
     [Fact]
-    public async Task A_copy_is_pasted_where_it_was_selected_for_the_move_tool()
+    public async Task A_copy_pasted_follows_the_pointer_selected_as_in_the_3D_view_and_Escape_takes_it_out()
     {
         MainWindowViewModel viewModel = await Open();
         Entity box = viewModel.Document!.Root.Entities[0];
@@ -32,8 +32,13 @@ public sealed class ClipboardTests : IDisposable
         Assert.Equal("Box", pasted.Name);
         Assert.Equal(box.GetBoundingBox(), pasted.GetBoundingBox());
         Assert.Same(pasted, viewModel.ModelTree.SelectedNode?.Entity);
-        Assert.IsType<MoveTool>(viewModel.ActiveTool);
+        Assert.True(Assert.IsType<SelectTool>(viewModel.ActiveTool).IsPlacing);
+        Assert.True(viewModel.SelectedInView); // not shown in front of the rest, as from the outline
+        Assert.Null(viewModel.EmphasizedPath);
         Assert.Contains("Paste", viewModel.UndoTip, StringComparison.Ordinal);
+
+        viewModel.EscapeCommand.Execute(null);
+        Assert.Same(box, Assert.Single(viewModel.Document.Root.Entities));
     }
 
     [Fact]

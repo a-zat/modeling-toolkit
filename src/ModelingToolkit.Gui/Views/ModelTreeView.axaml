@@ -67,6 +67,7 @@
               <Run Text="{Binding DetailSpaced}" Foreground="{DynamicResource Mtk.ForegroundSecondary}" FontWeight="Normal" />
             </TextBlock>
             <TextBox Grid.Column="1" Classes="rename" Text="{Binding EditedName}" IsVisible="{Binding IsRenaming}"
+                     AttachedToVisualTree="OnRenameBoxAttached" PropertyChanged="OnRenameBoxChanged"
                      MinWidth="0" Padding="4,1" MinHeight="0" VerticalAlignment="Center" />
             <Button Grid.Column="2" Classes="tool eye" Classes.hidden="{Binding !IsVisible}" Width="22" Height="22"
                     Margin="6,0,4,0" IsVisible="{Binding HasEntity}"

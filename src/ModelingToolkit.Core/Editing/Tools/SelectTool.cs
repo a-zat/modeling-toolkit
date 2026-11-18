@@ -143,7 +143,9 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
             return;
         }
         Vector3d? from = grab.From;
-        if (input.Pick.Ray is not { } ray || SelectionHandles.Turn(grab.Handle, ray, ref from) is not { } turn)
+        if (input.Pick.Ray is not { } ray || SelectionHandles.Turn(grab.Handle, ray, ref from,
+                grab.Handle.Grip.Direction is { } axis ? RotateTool.Heading(grab.Handles.Entity, grab.Handles.Placement, axis) : null)
+            is not { } turn)
         {
             return;
         }

@@ -73,7 +73,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
             string? name = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
             if (_node?.Entity is { } entity && name != entity.Name)
             {
-                Edit?.Invoke(new RenameCommand(entity, name));
+                Edit?.Invoke(new RenameCommand(entity, name, _document));
             }
             OnPropertyChanged(); // the name the entity has, if the edit was refused or trimmed
         }

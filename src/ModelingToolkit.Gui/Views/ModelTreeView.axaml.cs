@@ -144,15 +144,33 @@ public partial class ModelTreeView : UserControl
 
     private void StartRename(ModelNodeViewModel node, TreeViewItem item)
     {
-        if (Model is not { } model || !model.StartRenameCommand.CanExecute(node))
+        if (Model is { } model && model.StartRenameCommand.CanExecute(node))
+        {
+            model.StartRenameCommand.Execute(node);
+        }
+    }
+
+    // The box of a name being edited takes the keys as it is shown, however the renaming started: from the menu, or
+    // for a block just added, whose item is made with the box shown.
+    private void OnRenameBoxAttached(object? sender, VisualTreeAttachmentEventArgs e) => FocusWhenShown(sender as TextBox);
+
+    private void OnRenameBoxChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsVisibleProperty)
+        {
+            FocusWhenShown(sender as TextBox);
+        }
+    }
+
+    private static void FocusWhenShown(TextBox? box)
+    {
+        if (box is not { IsVisible: true })
         {
             return;
         }
-        model.StartRenameCommand.Execute(node);
-        // Once the box is shown.
         Dispatcher.UIThread.Post(() =>
         {
-            if (item.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(box => box.IsVisible) is { } box)
+            if (box.IsEffectivelyVisible)
             {
                 box.Focus();
                 box.SelectAll();

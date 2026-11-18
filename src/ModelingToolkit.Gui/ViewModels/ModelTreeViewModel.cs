@@ -124,7 +124,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         string name = node.EditedName.Trim();
         if (name.Length > 0 && name != node.Name)
         {
-            Edit?.Invoke(new RenameCommand(entity, name));
+            Edit?.Invoke(new RenameCommand(entity, name, _document));
         }
     }
 

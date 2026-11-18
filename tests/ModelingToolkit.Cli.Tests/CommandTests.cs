@@ -47,7 +47,7 @@ public sealed class CommandTests : IDisposable
         (_, string tree, _) = Run("tree", edited, "--depth", "1");
         string[] lines = tree.TrimEnd().ReplaceLineEndings("\n").Split('\n');
         Assert.Equal(
-            ["Node  (component of Node, at 0, -1432.7, 427.7, hidden)", "Truck  (component of Cesium_Milk_Truck, at 0, 1000, 0)"],
+            ["Node  (component of Node, at 0, -1432.7, 427.7, hidden)", "Truck  (component of Truck, at 0, 1000, 0)"],
             lines);
     }
 
