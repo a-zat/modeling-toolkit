@@ -44,6 +44,9 @@ public enum InferenceKind
 
     /// <summary>Where two guide lines cross.</summary>
     Intersection,
+
+    /// <summary>The centre of a circle or an arc pointed at lately, or of one around a face pointed at.</summary>
+    CircleCentre,
 }
 
 /// <summary>A guide line in the model space: through a point, along a direction of unit length.</summary>
@@ -72,6 +75,8 @@ public sealed record Inference(InferenceKind Kind, Point3d Point, Plane? Plane =
 public sealed class InferenceEngine
 {
     private Vector3d? _reference; // the direction of the line last pointed at
+    private readonly List<Point3d> _centres = []; // of the circles and arcs pointed at lately, the latest first
+    private const int CentresKept = 6;
 
     /// <summary>How close the pointer must come to snap, in units of the screen.</summary>
     public double SnapDistance { get; init; } = 8;
@@ -144,6 +149,10 @@ public sealed class InferenceEngine
         if (found.Kind is InferenceKind.Endpoint or InferenceKind.Midpoint)
         {
             return found;
+        }
+        if (pick.Ray is { } toCentre && Nearest(toCentre, _centres, found) is { } centre)
+        {
+            return new Inference(InferenceKind.CircleCentre, centre, found.Plane);
         }
         if (pick.Ray is { } guideRay && OnGuide(guideRay) is { } guided)
         {
@@ -333,6 +342,10 @@ public sealed class InferenceEngine
                 {
                     _reference = (end - start).Normalized();
                 }
+                if (edge.Circle is { } arc)
+                {
+                    Wake(placement.Apply(arc.Centre));
+                }
                 if (!edge.IsClosed && pick.Point.DistanceTo(middle) < SnapDistance * unit)
                 {
                     return new Inference(InferenceKind.Midpoint, middle);
@@ -365,6 +378,7 @@ public sealed class InferenceEngine
 
             default:
             {
+                WakeCentresAround(entity, element.Index, placement);
                 FaceInfo face = entity.Kernel.GetFaceInfo(entity.Shape, element.Index);
                 if (face.Plane is not { } local)
                 {
@@ -376,6 +390,35 @@ public sealed class InferenceEngine
                 var plane = new Plane(normal, normal.Dot(placed - Point3d.Origin));
                 Point3d point = pick.Ray is { } ray && Intersect(ray, plane) is { } hit ? hit : pick.Point;
                 return new Inference(InferenceKind.OnFace, point, plane);
+            }
+        }
+    }
+
+    // The centre of a circle pointed at is snapped to afterwards, as the pointer goes to it: it is inside the circle,
+    // where nothing else marks it.
+    private void Wake(Point3d centre)
+    {
+        _centres.RemoveAll(known => known.DistanceTo(centre) < 1e-6);
+        _centres.Insert(0, centre);
+        if (_centres.Count > CentresKept)
+        {
+            _centres.RemoveAt(_centres.Count - 1);
+        }
+    }
+
+    // The circles and arcs that bound a face, such as a disc, as if pointed at; not on faces of many edges.
+    private void WakeCentresAround(BrepEntity entity, int face, Transform placement)
+    {
+        IReadOnlyList<int> edges = entity.Kernel.GetFaceEdges(entity.Shape, face);
+        if (edges.Count > 32)
+        {
+            return;
+        }
+        foreach (int index in edges)
+        {
+            if (entity.Kernel.GetEdgeInfo(entity.Shape, index).Circle is { } circle)
+            {
+                Wake(placement.Apply(circle.Centre));
             }
         }
     }

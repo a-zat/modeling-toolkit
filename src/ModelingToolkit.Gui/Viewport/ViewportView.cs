@@ -679,6 +679,13 @@ public sealed class ViewportView : Border, IViewCamera
             e.Handled = true; // not to the tools, which take the arrows
             RequestWalkFrame();
         }
+        // Out of the walk, the letters glide the orbit camera over the ground; the arrows stay with the tools.
+        else if (_walk is null && IsGlideKey(e.Key) && (e.KeyModifiers & ~KeyModifiers.Shift) == KeyModifiers.None)
+        {
+            _walkKeys.Add(e.Key);
+            e.Handled = true;
+            RequestWalkFrame();
+        }
     }
 
     protected override void OnKeyUp(KeyEventArgs e)
@@ -693,6 +700,45 @@ public sealed class ViewportView : Border, IViewCamera
 
     private static bool IsWalkKey(Key key) =>
         key is Key.W or Key.A or Key.S or Key.D or Key.Up or Key.Down or Key.Left or Key.Right;
+
+    private static bool IsGlideKey(Key key) => key is Key.W or Key.A or Key.S or Key.D or Key.Q or Key.E;
+
+    /// <summary>How far the orbit camera glides in a second, as a part of its distance to what it looks at.</summary>
+    private const double GlideSpeed = 0.6;
+
+    /// <summary>How fast Q and E turn the orbit camera around the vertical, in degrees a second.</summary>
+    private const double GlideTurn = 60;
+
+    // W and S glide the camera forward and back across the ground, A and D sideways, keeping its height; Q and E turn it
+    // around the vertical through what it looks at; Shift goes three times faster.
+    private void Glide(double forward, double right, double turn, double seconds)
+    {
+        Send(viewer =>
+        {
+            ViewCamera camera = viewer.GetCamera();
+            Vector3d view = camera.Target - camera.Eye;
+            // Looking straight down, forward is up on the screen.
+            Vector3d ahead = Math.Abs(view.Normalized().Z) > 0.999 ? camera.Up : view;
+            ahead = new Vector3d(ahead.X, ahead.Y, 0);
+            if (ahead.Length < 1e-9 || view.Length < 1e-9)
+            {
+                return false;
+            }
+            ahead = ahead.Normalized();
+            Vector3d side = ahead.Cross(Vector3d.UnitZ);
+            double step = view.Length * GlideSpeed * (_running ? 3 : 1) * seconds;
+            Vector3d move = (ahead * forward + side * right) * step;
+            Transform spin = Transform.Rotation(camera.Target, Vector3d.UnitZ,
+                turn * GlideTurn * (_running ? 3 : 1) * seconds * Math.PI / 180);
+            viewer.SetCamera(camera with
+            {
+                Eye = spin.Apply(camera.Eye) + move,
+                Target = camera.Target + move,
+                Up = spin.ApplyVector(camera.Up),
+            });
+            return true;
+        });
+    }
 
     // Entering the walk stands at the middle of what the camera looked at, on the floor of the model; leaving it goes
     // back to the camera as it was.
@@ -772,7 +818,7 @@ public sealed class ViewportView : Border, IViewCamera
             _walkFrameRequested = false;
             double seconds = Math.Min(_walkClock.Elapsed.TotalSeconds, 0.1); // a stall does not leap
             _walkClock.Restart();
-            if (_walk is not { } walk || _walkKeys.Count == 0)
+            if (_walkKeys.Count == 0)
             {
                 _walkClock.Reset();
                 return;
@@ -780,8 +826,15 @@ public sealed class ViewportView : Border, IViewCamera
 
             double forward = (Held(Key.W) || Held(Key.Up) ? 1 : 0) - (Held(Key.S) || Held(Key.Down) ? 1 : 0);
             double right = (Held(Key.D) || Held(Key.Right) ? 1 : 0) - (Held(Key.A) || Held(Key.Left) ? 1 : 0);
-            walk.Walk(forward, right, seconds, _running);
-            PlaceWalkCamera();
+            if (_walk is { } walk)
+            {
+                walk.Walk(forward, right, seconds, _running);
+                PlaceWalkCamera();
+            }
+            else
+            {
+                Glide(forward, right, (Held(Key.Q) ? 1 : 0) - (Held(Key.E) ? 1 : 0), seconds);
+            }
             _hoverMoved = true; // what is under the pointer has changed
             RequestWalkFrame();
         });

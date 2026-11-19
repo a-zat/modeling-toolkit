@@ -183,5 +183,35 @@ public sealed class InferenceEngineTests
         Assert.Equal(InferenceKind.Ground, _engine.Infer(Nothing(Down(300, 80)), Transform.Identity).Kind);
     }
 
+    [Fact]
+    public void After_pointing_at_a_circle_or_a_face_bounded_by_one_its_centre_is_snapped_to()
+    {
+        // A cylinder 50 mm in radius and 100 mm high, at the origin.
+        var cylinder = new BrepEntity(_kernel, _kernel.MakeCylinder(50, 100));
+        IReadOnlyList<Entity> path = [cylinder];
+        ShapeTopology topology = _kernel.CountElements(cylinder.Shape);
+        int rim = Enumerable.Range(0, topology.Edges).First(edge =>
+            _kernel.GetEdgeInfo(cylinder.Shape, edge) is { Circle: not null, Start.Z: > 99 });
+        int bottom = Enumerable.Range(0, topology.Faces).First(face =>
+            _kernel.GetFaceInfo(cylinder.Shape, face).Plane is { Normal.Z: < -0.5 });
+
+        // Near the centre at first, nothing marks it.
+        Assert.NotEqual(InferenceKind.CircleCentre, _engine.Infer(Nothing(Down(3, 2, 100)), Transform.Identity).Kind);
+
+        _engine.Infer(new ToolPick(path, new ElementReference(path, ElementKind.Edge, rim), new(50, 0, 100), default,
+            Down(50, 0, 100)), Transform.Identity);
+        Inference top = _engine.Infer(Nothing(Down(3, 2, 100)), Transform.Identity);
+        Assert.Equal((InferenceKind.CircleCentre, new Point3d(0, 0, 100)), (top.Kind, Round(top.Point)));
+
+        // A face woken by pointing at it, from below.
+        var engine = new InferenceEngine();
+        var up = new PointerRay(new Point3d(20, 0, -1000), new Vector3d(0, 0, 1), 1, 0);
+        engine.Infer(new ToolPick(path, new ElementReference(path, ElementKind.Face, bottom), new(20, 0, 0), default, up),
+            Transform.Identity);
+        Inference low = engine.Infer(Nothing(new PointerRay(new Point3d(2, 1, -1000), new Vector3d(0, 0, 1), 1, 0)),
+            Transform.Identity);
+        Assert.Equal((InferenceKind.CircleCentre, new Point3d(0, 0, 0)), (low.Kind, Round(low.Point)));
+    }
+
     private static Point3d Round(Point3d point) => new(Math.Round(point.X, 6), Math.Round(point.Y, 6), Math.Round(point.Z, 6));
 }

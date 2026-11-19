@@ -73,6 +73,7 @@ internal static class ToolOverlay
         InferenceKind.Perpendicular => "Perpendicular to edge",
         InferenceKind.OnGuide => "On guide",
         InferenceKind.Intersection => "Intersection",
+        InferenceKind.CircleCentre => "Centre",
         _ => string.Empty,
     };
 
@@ -95,6 +96,7 @@ internal static class ToolOverlay
         InferenceKind.Origin => (Gold, MarkerShape.Dot),
         InferenceKind.OnGuide => (Gold, MarkerShape.Dot),
         InferenceKind.Intersection => (Green, MarkerShape.Dot),
+        InferenceKind.CircleCentre => (Magenta, MarkerShape.Plus),
         InferenceKind.AxisX or InferenceKind.AxisY or InferenceKind.AxisZ or InferenceKind.Parallel
             or InferenceKind.Perpendicular => (ColorOf(kind)!.Value, MarkerShape.Circle),
         _ => null, // on the ground, nothing to point out
