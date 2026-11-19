@@ -216,26 +216,10 @@
         <views:ModelTreeView Grid.Row="1" DataContext="{Binding ModelTree}" />
         <GridSplitter Grid.Row="2" Classes="horizontal" ResizeDirection="Rows"
                       IsVisible="{Binding IsOutlineExpanded}" />
-        <!-- The properties of the selection, or its animations, in tabs. -->
+        <!-- The properties of the selection, with the movements of what it holds. -->
         <DockPanel Grid.Row="3">
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="14,0">
-            <Button Classes="tab" Classes.active="{Binding IsPropertiesTab}" Command="{Binding ShowInspectorTabCommand}"
-                    CommandParameter="Properties">
-              <TextBlock Classes="label" Text="PROPERTIES" />
-            </Button>
-            <Button Classes="tab" Classes.active="{Binding IsAnimationsTab}" Command="{Binding ShowInspectorTabCommand}"
-                    CommandParameter="Animations">
-              <TextBlock Classes="label" Text="ANIMATIONS" />
-            </Button>
-          </StackPanel>
-          <Panel>
-            <Panel IsVisible="{Binding IsPropertiesTab}">
-              <views:PropertiesView DataContext="{Binding Properties}" />
-            </Panel>
-            <Panel IsVisible="{Binding IsAnimationsTab}">
-              <views:AnimationsView DataContext="{Binding Animations}" />
-            </Panel>
-          </Panel>
+          <TextBlock DockPanel.Dock="Top" Classes="label" Text="PROPERTIES" Margin="14,10,14,6" />
+          <views:PropertiesView DataContext="{Binding Properties}" />
         </DockPanel>
       </Grid>
     </Grid>

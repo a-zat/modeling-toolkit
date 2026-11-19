@@ -46,6 +46,9 @@ public sealed partial class PropertiesViewModel : ObservableObject
     /// <summary>Runs the commands that the panel makes, as the edits of its fields; null when nothing can be edited.</summary>
     public Func<IEditCommand, bool>? Edit { get; set; }
 
+    /// <summary>The movements of the selection, shown in a section of its properties.</summary>
+    public AnimationsViewModel? Animations { get; set; }
+
     /// <summary>Whether the selection is an entity, whose name can be changed.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFields))]

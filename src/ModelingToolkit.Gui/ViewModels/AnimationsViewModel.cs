@@ -20,13 +20,19 @@ public sealed partial class AnimationItemViewModel : ObservableObject
     {
         Animation = animation;
         _owner = owner;
-        Name = animation.Name.Replace('_', ' ');
         Targets = new HashSet<BlockReference>(animation.Targets, ReferenceEqualityComparer.Instance);
     }
 
     public Animation Animation { get; }
 
-    public string Name { get; }
+    /// <summary>
+    /// The name of the component it moves, when it moves one; of the animation, which a file names as it likes, when it
+    /// moves several parts.
+    /// </summary>
+    public string Name =>
+        (Targets.Count == 1 ? Targets.First().Name ?? Targets.First().Block.Name : null) is { Length: > 0 } component
+            ? component.Replace('_', ' ')
+            : Animation.Name.Replace('_', ' ');
 
     internal HashSet<BlockReference> Targets { get; }
 
@@ -81,6 +87,23 @@ public sealed partial class AnimationItemViewModel : ObservableObject
         {
             Goal = value ? 1 : 0;
             _owner.OnPlayed(this);
+        }
+    }
+
+    /// <summary>Back at its start, stopped: another animation took a part of it.</summary>
+    internal void Reset()
+    {
+        _following = true;
+        try
+        {
+            Position = 0;
+            IsOpen = false;
+            Goal = null;
+            Moved = 0;
+        }
+        finally
+        {
+            _following = false;
         }
     }
 
@@ -164,12 +187,6 @@ public sealed partial class AnimationsViewModel : ObservableObject
     /// <summary>The animations of the selection: those that move it, a part of it or a part holding it.</summary>
     public ObservableCollection<AnimationItemViewModel> Items { get; } = [];
 
-    /// <summary>
-    /// <see cref="Items"/> by layer, the entity of the model space holding the parts they move; those moving parts of
-    /// several layers come first, in a group of their own.
-    /// </summary>
-    public ObservableCollection<AnimationGroupViewModel> Groups { get; } = [];
-
     /// <summary>All the animations shown together, as one.</summary>
     public AnimationGroupViewModel All { get; }
 
@@ -179,17 +196,15 @@ public sealed partial class AnimationsViewModel : ObservableObject
 
     /// <summary>Whether the document has animations at all.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Placeholder))]
     public partial bool HasAnimations { get; private set; }
 
+    /// <summary>Whether something in the selection moves.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Placeholder))]
+    [NotifyPropertyChangedFor(nameof(HasSeveral))]
     public partial bool HasItems { get; private set; }
 
-    /// <summary>What the panel says when it shows no animation.</summary>
-    public string Placeholder => HasAnimations
-        ? "Nothing in the selection moves. Select the model to see all its animations."
-        : "The model has no animations. Those of glTF files come with them when they are opened or imported.";
+    /// <summary>Whether several animations are shown, so that one switch and slider move them all.</summary>
+    public bool HasSeveral => Items.Count > 1;
 
     /// <summary>Whether an animation is playing, so that the view asks for frames.</summary>
     public bool IsPlaying => _all.Any(item => item.Goal is not null);
@@ -239,18 +254,8 @@ public sealed partial class AnimationsViewModel : ObservableObject
             Items.Add(item);
         }
         HasItems = Items.Count > 0;
+        OnPropertyChanged(nameof(HasSeveral));
 
-        // The groups keep whether they are expanded while the selection changes.
-        var expanded = Groups.ToDictionary(group => group.Name, group => group.IsExpanded);
-        Groups.Clear();
-        Dictionary<Block, Entity> layers = LayersOf(_document);
-        foreach (IGrouping<string, AnimationItemViewModel> group in shown
-                     .GroupBy(item => LayerName(item, layers))
-                     .OrderBy(group => group.Key == SeveralLayers ? 0 : 1))
-        {
-            Groups.Add(new AnimationGroupViewModel(group.Key, [.. group],
-                expanded.GetValueOrDefault(group.Key, false)));
-        }
         All.Set([.. shown]);
     }
 
@@ -310,6 +315,7 @@ public sealed partial class AnimationsViewModel : ObservableObject
     {
         item.Moved = ++_moves;
         item.Goal = null;
+        StopOthers(item);
         Lead(item);
         UpdatePose();
     }
@@ -317,10 +323,26 @@ public sealed partial class AnimationsViewModel : ObservableObject
     internal void OnPlayed(AnimationItemViewModel item)
     {
         item.Moved = ++_moves;
+        StopOthers(item);
         Lead(item);
         if (item.Goal is not null && _useTimer)
         {
             StartTimer();
+        }
+    }
+
+    // A part has one movement at a time: those that share parts with the animation moved, but neither hold all of the
+    // parts of the other nor are held by it, go back to their start. An animation of one door, in one of every door, stays
+    // over it, as the last moved places a part.
+    private void StopOthers(AnimationItemViewModel item)
+    {
+        foreach (AnimationItemViewModel other in _all)
+        {
+            if (other != item && other.IsMoved && other.Targets.Overlaps(item.Targets) &&
+                !other.Targets.IsSubsetOf(item.Targets) && !item.Targets.IsSubsetOf(other.Targets))
+            {
+                other.Reset();
+            }
         }
     }
 
@@ -377,45 +399,6 @@ public sealed partial class AnimationsViewModel : ObservableObject
     {
         _timer?.Stop();
         _clock.Reset();
-    }
-
-    private const string SeveralLayers = "Several groups";
-
-    // For each block, the entity of the model space through which it is placed, when there is one.
-    private static Dictionary<Block, Entity> LayersOf(Document? document)
-    {
-        var layers = new Dictionary<Block, Entity>(ReferenceEqualityComparer.Instance);
-        if (document is null)
-        {
-            return layers;
-        }
-        foreach (BlockReference layer in document.Root.Entities.OfType<BlockReference>())
-        {
-            var pending = new Stack<Block>([layer.Block]);
-            while (pending.TryPop(out Block? block))
-            {
-                if (layers.TryAdd(block, layer))
-                {
-                    foreach (BlockReference reference in block.Entities.OfType<BlockReference>())
-                    {
-                        pending.Push(reference.Block);
-                    }
-                }
-            }
-        }
-        return layers;
-    }
-
-    private string LayerName(AnimationItemViewModel item, Dictionary<Block, Entity> layers)
-    {
-        var names = new HashSet<string>();
-        foreach (BlockReference target in item.Targets)
-        {
-            Entity? layer = target.Owner == _document?.Root ? target
-                : target.Owner is { } owner ? layers.GetValueOrDefault(owner) : null;
-            names.Add(layer is BlockReference reference ? reference.Name ?? reference.Block.Name : layer?.Name ?? "Project");
-        }
-        return names.Count == 1 ? names.First() : SeveralLayers;
     }
 
     // The parts erased from the document move nothing; their animation comes back with them, by an undo.

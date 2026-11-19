@@ -54,6 +54,8 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            <!-- What the selection holds that moves, with a switch and a slider each. -->
+            <views:AnimationsView DataContext="{Binding Animations}" IsVisible="{Binding HasItems}" />
           </StackPanel>
         </Border>
       </ScrollViewer>

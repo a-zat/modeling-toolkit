@@ -38,7 +38,8 @@ public sealed class AnimationsViewModelTests
         var animations = new AnimationsViewModel(useTimer: false);
         animations.Show(_document);
 
-        Assert.Equal(["Open all", "Open door", "Open drawer"], animations.Items.Select(item => item.Name));
+        // Named after the component moved, or after the animation when it moves several.
+        Assert.Equal(["Open all", "Door", "Drawer"], animations.Items.Select(item => item.Name));
 
         animations.Filter([_document.Root.Entities[0], _door]);
         Assert.Equal([_openAll, _openDoor], animations.Items.Select(item => item.Animation));
@@ -106,27 +107,47 @@ public sealed class AnimationsViewModelTests
     }
 
     [Fact]
-    public void Animations_are_grouped_by_layer_and_a_group_or_all_move_together()
+    public void All_the_movements_of_the_selection_move_together()
     {
-        // The cabinet is the layer holding the door and the drawer; the table is a layer of its own.
         var table = (BlockReference)_document.Root.Entities[1];
-        var moveTable = new Animation("Move_table", [Slide(table)]);
-        _document.Animations.Add(moveTable);
+        _document.Animations.Add(new Animation("Move_table", [Slide(table)]));
         var animations = new AnimationsViewModel(useTimer: false);
         animations.Show(_document);
+        animations.Filter([_document.Root.Entities[0]]);
+        Assert.True(animations.HasSeveral);
 
-        Assert.Equal(["Cabinet", "Table"], animations.Groups.Select(group => group.Name));
-        AnimationGroupViewModel cabinet = animations.Groups[0];
-        Assert.Equal([_openAll, _openDoor, _openDrawer], cabinet.Items.Select(item => item.Animation));
-
-        cabinet.Position = 0.5;
-        Assert.All(cabinet.Items, item => Assert.Equal(0.5, item.Position));
-        Assert.True(cabinet.IsOpen);
+        animations.All.Position = 0.5;
+        Assert.All(animations.Items, item => Assert.Equal(0.5, item.Position));
         Assert.False(animations.Pose.ContainsKey(table));
 
+        animations.All.Position = 0;
         animations.All.IsOpen = true;
         animations.Advance(10);
         Assert.All(animations.Items, item => Assert.Equal(1, item.Position));
+
+        animations.Filter([_document.Root.Entities[1]]);
+        Assert.Equal("Table", Assert.Single(animations.Items).Name);
+        Assert.False(animations.HasSeveral);
+    }
+
+    [Fact]
+    public void Starting_a_movement_stops_another_that_shares_a_part_without_holding_it_all()
+    {
+        // Open door and slide a pair of the door and the table share the door, and neither holds the other's parts.
+        var table = (BlockReference)_document.Root.Entities[1];
+        var doorAndTable = new Animation("Door_and_table", [Slide(_door), Slide(table)]);
+        _document.Animations.Add(doorAndTable);
+        var animations = new AnimationsViewModel(useTimer: false);
+        animations.Show(_document);
+        AnimationItemViewModel pair = animations.Items.Single(item => item.Animation == doorAndTable);
+        AnimationItemViewModel all = animations.Items.Single(item => item.Animation == _openAll);
+
+        pair.Position = 1;
+        all.Position = 0.5; // shares the door with the pair, which neither holds the other
+
+        Assert.Equal((0.0, false), (pair.Position, pair.IsOpen));
+        Assert.False(animations.Pose.ContainsKey(table));
+        Assert.Equal(Transform.Translation(250, 0, 0), animations.Pose[_door]);
     }
 
     // 500 mm along X in two seconds.

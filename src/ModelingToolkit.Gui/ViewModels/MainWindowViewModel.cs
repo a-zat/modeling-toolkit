@@ -47,6 +47,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(_settingsStore.Load()));
 
         Properties.Edit = Edit;
+        Properties.Animations = Animations;
         ModelTree.Edit = Edit;
         Pose = Animations.Pose;
         Animations.PropertyChanged += (_, e) =>
@@ -149,20 +150,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public PropertiesViewModel Properties { get; } = new();
 
-    /// <summary>The animations of the document, which the inspector plays and the 3D view shows.</summary>
+    /// <summary>The animations of the document, which the properties of what they move play and the 3D view shows.</summary>
     public AnimationsViewModel Animations { get; } = new();
-
-    /// <summary>What the lower part of the inspector shows: "Properties" or "Animations".</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPropertiesTab), nameof(IsAnimationsTab))]
-    public partial string InspectorTab { get; set; } = "Properties";
-
-    public bool IsPropertiesTab => InspectorTab == "Properties";
-
-    public bool IsAnimationsTab => InspectorTab == "Animations";
-
-    [RelayCommand]
-    private void ShowInspectorTab(string tab) => InspectorTab = tab;
 
     public CommandPaletteViewModel Palette { get; } = new();
 
