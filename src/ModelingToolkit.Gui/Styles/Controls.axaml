@@ -141,16 +141,9 @@
   </Style>
 
   <!-- The mark of the application, in the top bar. -->
-  <Style Selector="Border.appMark">
-    <Setter Property="Width" Value="22" />
-    <Setter Property="Height" Value="22" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Background" Value="{DynamicResource Mtk.Accent}" />
-  </Style>
-  <Style Selector="Border.appMark > PathIcon">
-    <Setter Property="Width" Value="14" />
-    <Setter Property="Height" Value="14" />
-    <Setter Property="Foreground" Value="White" />
+  <Style Selector="Image.appMark">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
   </Style>
 
   <!-- Bars across the window, panels at its sides: all on the chrome, divided by thin lines. -->
