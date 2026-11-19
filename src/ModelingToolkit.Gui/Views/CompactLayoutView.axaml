@@ -82,22 +82,22 @@
               </Button>
             </StackPanel>
           </Border>
-          <Border Classes="group">
+          <!-- A selector: one mode is always chosen, and clicking it again keeps it. -->
+          <Border Classes="segments">
             <StackPanel Orientation="Horizontal" Spacing="2">
-              <!-- A selector: one mode is always chosen, and clicking it again keeps it. -->
-              <ToggleButton Classes="tool" IsChecked="{Binding IsShaded}" ToolTip.Tip="Shaded">
+              <RadioButton Classes="segment" GroupName="DisplayMode" IsChecked="{Binding IsShaded}" ToolTip.Tip="Shaded">
                 <PathIcon Data="{StaticResource Icon.Cube}" />
-              </ToggleButton>
-              <ToggleButton Classes="tool" IsChecked="{Binding IsShadedWithEdges}" ToolTip.Tip="Shaded with edges">
+              </RadioButton>
+              <RadioButton Classes="segment" GroupName="DisplayMode" IsChecked="{Binding IsShadedWithEdges}" ToolTip.Tip="Shaded with edges">
                 <PathIcon Data="{StaticResource Icon.BorderOutside}" />
-              </ToggleButton>
-              <ToggleButton Classes="tool" IsChecked="{Binding IsWireframe}" ToolTip.Tip="Wireframe">
+              </RadioButton>
+              <RadioButton Classes="segment" GroupName="DisplayMode" IsChecked="{Binding IsWireframe}" ToolTip.Tip="Wireframe">
                 <PathIcon Data="{StaticResource Icon.Grid}" />
-              </ToggleButton>
-              <ToggleButton Classes="tool" IsChecked="{Binding IsRendered}"
-                            ToolTip.Tip="Rendered: under the sky, on the ground">
+              </RadioButton>
+              <RadioButton Classes="segment" GroupName="DisplayMode" IsChecked="{Binding IsRendered}"
+                           ToolTip.Tip="Rendered: under the sky, on the ground">
                 <PathIcon Data="{StaticResource Icon.WeatherSunny}" />
-              </ToggleButton>
+              </RadioButton>
             </StackPanel>
           </Border>
         </StackPanel>

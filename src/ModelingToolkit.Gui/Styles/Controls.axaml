@@ -48,6 +48,45 @@
     <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundSecondary}" />
   </Style>
 
+  <!-- A selector of one among a few, as a segmented control: a recessed track and the chosen segment raised on it, in the
+       tint of the accent. Radio buttons, so that clicking the chosen one keeps it, as a switch between modes does. -->
+  <Style Selector="Border.segments">
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="{DynamicResource Mtk.Hover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="RadioButton.segment">
+    <Setter Property="Width" Value="{StaticResource Mtk.ToolSize}" />
+    <Setter Property="Height" Value="{StaticResource Mtk.ToolSize}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.ForegroundSecondary}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="Segment" Background="Transparent" CornerRadius="6" BorderThickness="1" BorderBrush="Transparent"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+          <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.segment PathIcon">
+    <Setter Property="Width" Value="{StaticResource Mtk.IconSize}" />
+    <Setter Property="Height" Value="{StaticResource Mtk.IconSize}" />
+  </Style>
+  <Style Selector="RadioButton.segment:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.Foreground}" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked /template/ Border#Segment">
+    <Setter Property="Background" Value="{DynamicResource Mtk.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Mtk.BorderStrong}" />
+    <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked">
+    <Setter Property="Foreground" Value="{DynamicResource Mtk.AccentForeground}" />
+  </Style>
+
   <!-- The activity bar has larger buttons, one per panel. -->
   <Style Selector=":is(Button).activity">
     <Setter Property="Width" Value="34" />
