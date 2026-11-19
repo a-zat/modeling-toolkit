@@ -325,7 +325,9 @@ public sealed partial class AnimationsViewModel : ObservableObject
         item.Moved = ++_moves;
         StopOthers(item);
         Lead(item);
-        if (item.Goal is not null && _useTimer)
+        // Without an application, as in tests that make no window, touching the dispatcher would bind it to the thread
+        // of the caller and keep the application from taking it.
+        if (item.Goal is not null && _useTimer && Avalonia.Application.Current is not null)
         {
             StartTimer();
         }
