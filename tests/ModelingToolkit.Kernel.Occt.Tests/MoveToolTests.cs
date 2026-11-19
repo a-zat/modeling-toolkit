@@ -102,7 +102,7 @@ public sealed class MoveToolTests
     }
 
     [Fact]
-    public void Clicked_at_the_middle_of_a_face_of_its_box_a_selection_moves_freely_grabbed_by_a_handle_across_it_only()
+    public void Clicked_at_the_middle_of_a_face_of_its_box_a_selection_moves_freely_grabbed_by_a_handle_along_an_axis_only()
     {
         var block = new Block("Part");
         block.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(100, 100, 100)));
@@ -118,7 +118,7 @@ public sealed class MoveToolTests
         Assert.Equal(new Point3d(500, 0, 0), reference.Transform.Apply(Point3d.Origin));
         _host.Session.Undo();
 
-        // From a handle of the select tool, across the top only: up, whatever the pointer does sideways.
+        // From a handle of the select tool, along the axis it goes most along: up, the pointer above the top.
         Assert.True(_tool.Grab(top, constrained: true));
         _tool.Click(new ToolInput(new ToolPick(null, null, default, default,
             new PointerRay(new Point3d(800, 50, 300), new Vector3d(-1, 0, 0), 1, 0))));

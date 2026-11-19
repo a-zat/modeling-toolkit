@@ -35,12 +35,12 @@ public sealed class SelectionHandlesTests
     private Point3d Origin => _reference.Transform.Apply(Point3d.Origin);
 
     [Fact]
-    public void The_corners_move_the_middles_of_the_edges_slide_and_the_middles_of_the_faces_turn()
+    public void The_corners_move_the_middles_of_the_edges_and_of_the_faces_slide_and_the_middles_of_the_faces_turn()
     {
         var handles = new SelectionHandles(_reference, Transform.Identity);
 
         Assert.Equal(8, handles.Handles.Count(handle => handle.Kind == HandleKind.Move));
-        Assert.Equal(12, handles.Handles.Count(handle => handle.Kind == HandleKind.Slide));
+        Assert.Equal(12 + 6, handles.Handles.Count(handle => handle.Kind == HandleKind.Slide));
         Assert.Equal(6, handles.Handles.Count(handle => handle.Kind == HandleKind.Rotate));
         Assert.Equal(new Point3d(1000, 0, 0), handles.Handles[0].Point);
         Assert.Equal(new Point3d(1050, 50, 100), handles.Handles[TopFace].Point);
@@ -223,5 +223,40 @@ public sealed class SelectionHandlesTests
         HandleDrag? turn = SelectionHandles.Turn(top,
             Down(top.Point.X + 50 * end.X, top.Point.Y + 50 * end.Y, top.Point.Z), ref from, heading);
         Assert.Equal(148, turn!.Measure, Tolerance);
+    }
+
+    [Fact]
+    public void The_select_tool_shows_the_handles_of_the_face_under_the_pointer_and_none_off_the_box()
+    {
+        _tool.Activate(_host);
+        _host.SelectEntity([_reference]);
+        SelectionHandles handles = _tool.Handles!;
+
+        // Over the top: its four corners, the square at its middle and the arrow.
+        _tool.Hover(At(Down(1030, 40, 100), -1) with { Handle = null });
+        Assert.Equal(1, _tool.Face);
+        IReadOnlyList<SelectionHandle> top = [.. handles.OnFace(1).Select(i => handles.Handles[i])];
+        Assert.Equal(4, top.Count(handle => handle.Kind == HandleKind.Move));
+        Assert.All(top.Where(handle => handle.Kind == HandleKind.Move), handle => Assert.Equal(100, handle.Point.Z));
+        Assert.Equal(new Point3d(1050, 50, 100), Assert.Single(top, handle => handle.Kind == HandleKind.Slide).Point);
+        Assert.Single(top, handle => handle.Kind == HandleKind.Rotate);
+
+        // Just off a corner, on its handle: the face stays; off the box, none.
+        int corner = handles.OnFace(1).First(i => handles.Handles[i].Point == new Point3d(1100, 100, 100));
+        _tool.Hover(At(Down(1102, 102, 100), corner));
+        Assert.Equal(1, _tool.Face);
+        _tool.Hover(At(Down(1300, 300, 100), -1) with { Handle = null });
+        Assert.Null(_tool.Face);
+    }
+
+    [Fact]
+    public void The_square_at_the_middle_of_a_face_moves_the_selection_along_an_axis_only()
+    {
+        var handles = new SelectionHandles(_reference, Transform.Identity);
+        SelectionHandle middle = handles.Handles.Single(handle =>
+            handle is { Kind: HandleKind.Slide, Grip.Kind: InferenceKind.Centre } && handle.Point.Z == 100);
+
+        Assert.Equal(Vector3d.UnitZ, middle.Grip.Direction);
+        Assert.Equal(handles.Handles[TopFace].Point, middle.Point);
     }
 }

@@ -582,6 +582,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             case ViewportInputKind.Hover:
                 _lastHover = toolInput;
                 tool.Hover(toolInput);
+                // The handles of the face pointed at.
+                if (tool is SelectTool { Face: var face } && face != _shownFace)
+                {
+                    ShowOverlay();
+                }
                 break;
             case ViewportInputKind.Press:
                 tool.Press(toolInput);
@@ -1736,13 +1741,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             Overlay = Overlay with { Lines = [.. Overlay.Lines, .. axes] };
         }
-        // With the select tool, the handles: squares and diamonds move, arrows lying on the faces turn.
+        // With the select tool, the handles of the face pointed at: squares move, the arrow lying on it turns.
         SelectionHandles? handles = ShownHandles();
+        _shownFace = (ActiveTool as SelectTool)?.Face;
         var points = new List<Point3d>();
         var indices = new List<int>();
         if (handles is not null)
         {
-            seen = Seen(handles);
+            seen = SeenToSelect(handles);
             var markers = new List<OverlayMarker>();
             var lines = new List<OverlayLine>();
             foreach (int i in seen)
@@ -1768,21 +1774,43 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         Handles = points;
         _handleIndices = [.. indices];
-        _seenHandles = handles is null || ViewEye is not { } eye ? null : SeenKey(handles, eye);
+        _seenHandles = SeenKey();
+    }
+
+    // What the camera sees of the handles shown, to show them again only when it changes.
+    private string? SeenKey()
+    {
+        if (ViewEye is not { } eye)
+        {
+            return null;
+        }
+        if (ShownHandles() is { } handles)
+        {
+            return SeenKey(handles, SeenToSelect(handles), eye);
+        }
+        return ActiveTool is TransformTool && SelectedHandles() is { } box ? SeenKey(box, Seen(box), eye) : null;
     }
 
     // What is seen of the handles: which ones, and the size of the arrows to turn.
-    private static string SeenKey(SelectionHandles handles, Point3d eye) => string.Join(",", handles.VisibleFrom(eye)
+    private static string SeenKey(SelectionHandles handles, IReadOnlyList<int> seen, Point3d eye) => string.Join(",", seen
         .Select(i => handles.Handles[i] is { Kind: HandleKind.Rotate } turn
             ? $"{i}:{SelectionHandles.SightStep(turn.Point, eye)}"
             : $"{i}"));
 
     private static MarkerShape ShapeOf(InferenceKind kind) => kind switch
     {
-        InferenceKind.Endpoint => MarkerShape.Square,
         InferenceKind.Midpoint => MarkerShape.Diamond,
-        _ => MarkerShape.Dot,
+        _ => MarkerShape.Square,
     };
+
+    private int? _shownFace; // the face of the box whose handles the select tool shows
+
+    // The handles of the select tool: those of the face pointed at, none off the box; all those seen of a flat box,
+    // which has no faces to point at.
+    private IReadOnlyList<int> SeenToSelect(SelectionHandles handles) =>
+        (ActiveTool as SelectTool)?.Face is { } face ? handles.OnFace(face)
+        : handles.IsFlat ? Seen(handles)
+        : [];
 
     // The handles the box of the selection does not hide from the camera; all of them before the view has drawn.
     private IReadOnlyList<int> Seen(SelectionHandles handles) =>
@@ -1822,8 +1850,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
             _viewEye = value;
             // Turning the view shows other handles only when it shows other faces of the box, or nears the arrows.
-            SelectionHandles? handles = ShownHandles() ?? (ActiveTool is TransformTool ? SelectedHandles() : null);
-            if (handles is not null && value is { } eye && SeenKey(handles, eye) != _seenHandles)
+            if (value is not null && SeenKey() is { } seen && seen != _seenHandles)
             {
                 ShowOverlay();
             }

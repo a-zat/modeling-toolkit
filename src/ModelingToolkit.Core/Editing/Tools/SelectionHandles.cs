@@ -9,7 +9,7 @@ public enum HandleKind
     /// <summary>A corner: moves the selection anywhere, snapping as the move tool does.</summary>
     Move,
 
-    /// <summary>The middle of an edge: moves the selection along one of the axes only.</summary>
+    /// <summary>The middle of an edge, or a square at the middle of a face: moves the selection along one of the axes only.</summary>
     Slide,
 
     /// <summary>The middle of a face: turns the selection around the normal of the face, snapping to right angles.</summary>
@@ -81,7 +81,10 @@ public sealed class SelectionHandles
 
     public bool IsEmpty { get; }
 
-    /// <summary>The corners, then the middles of the edges, then the middles of the faces.</summary>
+    /// <summary>
+    /// The corners, then the middles of the edges, then the middles of the faces to turn, then the same middles to move
+    /// along the axes.
+    /// </summary>
     public IReadOnlyList<SelectionHandle> Handles { get; }
 
     /// <summary>The points to take the selection by, as the move and rotate tools snap to them.</summary>
@@ -148,6 +151,73 @@ public sealed class SelectionHandles
             yield return new SelectionHandle(HandleKind.Rotate, middle, new Inference(InferenceKind.Centre, middle,
                 new Plane(normal, normal.Dot(middle - Point3d.Origin)), normal));
         }
+        for (int f = 0; f < Faces.Length; f++)
+        {
+            if (_faces[f] is not ({ } middle, { } normal))
+            {
+                continue;
+            }
+            _faceMasks.Add(1 << f);
+            yield return new SelectionHandle(HandleKind.Slide, middle, new Inference(InferenceKind.Centre, middle,
+                new Plane(normal, normal.Dot(middle - Point3d.Origin)), normal));
+        }
+    }
+
+    /// <summary>Whether the box is flat, without thickness along one of its sides: it has no faces to point at.</summary>
+    public bool IsFlat => _faces.Any(face => face is null);
+
+    /// <summary>
+    /// The face of the box the ray meets first, turned to it; null when it misses the box, starts inside it, or the box
+    /// is flat.
+    /// </summary>
+    public int? FaceUnder(PointerRay ray)
+    {
+        ArgumentNullException.ThrowIfNull(ray);
+        int? nearest = null;
+        double nearestDistance = double.MaxValue;
+        for (int f = 0; f < _faces.Length; f++)
+        {
+            if (_faces[f] is not ({ } middle, { } normal) || normal.Dot(ray.Direction) >= 0 ||
+                InferenceEngine.Intersect(ray, new Plane(normal, normal.Dot(middle - Point3d.Origin))) is not { } hit)
+            {
+                continue;
+            }
+            // Within the face: along each of its sides, no further from its middle than half of it.
+            int[] corners = Faces[f];
+            Vector3d u = (_corners[corners[1]] - _corners[corners[0]]) / 2, v = (_corners[corners[2]] - _corners[corners[0]]) / 2;
+            Vector3d offset = hit - middle;
+            if (Math.Abs(offset.Dot(u)) > u.Dot(u) * (1 + 1e-9) || Math.Abs(offset.Dot(v)) > v.Dot(v) * (1 + 1e-9))
+            {
+                continue;
+            }
+            double distance = (hit - ray.Origin).Length;
+            if (distance < nearestDistance)
+            {
+                nearest = f;
+                nearestDistance = distance;
+            }
+        }
+        return nearest;
+    }
+
+    /// <summary>
+    /// The handles the select tool shows on a face pointed at: its corners, which move the selection anywhere, the
+    /// square at its middle, which moves it along the axes, and the arrow that turns it around its normal.
+    /// </summary>
+    public IReadOnlyList<int> OnFace(int face)
+    {
+        var shown = new List<int>();
+        for (int i = 0; i < Handles.Count; i++)
+        {
+            SelectionHandle handle = Handles[i];
+            bool corner = handle.Kind == HandleKind.Move && (_faceMasks[i] & 1 << face) != 0;
+            bool middle = handle.Grip.Kind == InferenceKind.Centre && _faceMasks[i] == 1 << face;
+            if (corner || middle)
+            {
+                shown.Add(i);
+            }
+        }
+        return shown;
     }
 
     /// <summary>
@@ -178,6 +248,10 @@ public sealed class SelectionHandles
         for (int i = 0; i < Handles.Count; i++)
         {
             int mask = _faceMasks[i];
+            if (Handles[i] is { Kind: HandleKind.Slide, Grip.Kind: InferenceKind.Centre })
+            {
+                continue; // shown only on the face pointed at
+            }
             if (all || (Handles[i].Kind == HandleKind.Rotate ? (mask & open) != 0 : (mask & front) != 0))
             {
                 visible.Add(i);

@@ -57,7 +57,7 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
 
     /// <summary>
     /// Takes the selection by a point of its box, as a handle of the select tool does: constrained, the middle of a face
-    /// moves it across that face only and the middle of an edge along the axes only.
+    /// or of an edge moves it along the axes only.
     /// </summary>
     public bool Grab(Inference grip, bool constrained)
     {
@@ -72,16 +72,12 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
         return true;
     }
 
-    // Starts moving from a point, anywhere; constrained, from the middle of a face of the box of the selection across
-    // that face only, from the middle of an edge along the axes only.
+    // Starts moving from a point, anywhere; constrained, from the middle of a face or of an edge of the box of the
+    // selection along the axes only.
     private void Start(Inference point, bool constrained)
     {
-        _alongAxes = constrained && IsEdgeGrip(point);
+        _alongAxes = constrained && (IsEdgeGrip(point) || point.Kind == InferenceKind.Centre);
         _start = point.Point;
-        if (constrained && point is { Kind: InferenceKind.Centre, Direction: { } across })
-        {
-            LockTo(across);
-        }
         Hint = NextHint;
         Show();
     }

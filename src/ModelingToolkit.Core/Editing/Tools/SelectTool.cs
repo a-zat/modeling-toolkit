@@ -231,6 +231,7 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
 
     protected override void OnDeactivated()
     {
+        Face = null;
         if (_grab is not null)
         {
             StopDrag();
@@ -251,6 +252,27 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
             return;
         }
         Hint = HintFor(input.Pick);
+        PointFace(input);
+    }
+
+    /// <summary>
+    /// The face of the box of the selection under the pointer, whose handles show; it stays while the pointer is on one
+    /// of them, as on a corner, which is half off the face. Null when the pointer is off the box.
+    /// </summary>
+    public int? Face { get; private set; }
+
+    private void PointFace(ToolInput input)
+    {
+        int? face = null;
+        if (_grab is null && Handles is { IsFlat: false } handles && input.Pick.Ray is { } ray)
+        {
+            face = handles.FaceUnder(ray);
+            if (face is null && Face is { } current && input.Handle is { } handle && handles.OnFace(current).Contains(handle))
+            {
+                face = current;
+            }
+        }
+        Face = face;
     }
 
     public override void Click(ToolInput input)
