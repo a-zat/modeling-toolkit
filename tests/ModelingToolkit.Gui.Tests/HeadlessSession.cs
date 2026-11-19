@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Headless;
 using Microsoft.Extensions.DependencyInjection;
 
+[assembly: AssemblyFixture(typeof(ModelingToolkit.Gui.Tests.HeadlessAssemblyFixture))]
+
 namespace ModelingToolkit.Gui.Tests;
 
 /// <summary>
@@ -23,8 +25,29 @@ public sealed class HeadlessSession
 {
     public static ServiceProvider Services { get; } = AppHost.Build();
 
-    public HeadlessUnitTestSession Session { get; } =
-        HeadlessUnitTestSession.StartNew(typeof(HeadlessSession), AvaloniaTestIsolationLevel.PerAssembly);
+    /// <summary>
+    /// The session, started before any test runs, by the assembly fixture below, and with its application made at once: the dispatcher of
+    /// Avalonia belongs to the thread that asks for it first, and a test that touched it before, from its own thread,
+    /// would keep the application from being made, as it did on Windows.
+    /// </summary>
+    // Lazy, not made by the type initializer: the thread of the session reads the members of this class while it makes
+    // the application, which would wait for that initializer to end.
+    private static readonly Lazy<HeadlessUnitTestSession> SharedSession = new(Start);
+
+    public static HeadlessUnitTestSession Shared => SharedSession.Value;
+
+#pragma warning disable CA1822 // Read through the fixture by the tests
+    public HeadlessUnitTestSession Session => Shared;
+#pragma warning restore CA1822
+
+    private static HeadlessUnitTestSession Start()
+    {
+        HeadlessUnitTestSession session =
+            HeadlessUnitTestSession.StartNew(typeof(HeadlessSession), AvaloniaTestIsolationLevel.PerAssembly);
+        session.Dispatch(() => 0, CancellationToken.None).GetAwaiter().GetResult();
+        return session;
+    }
+
 
     // Looked up by HeadlessUnitTestSession.StartNew.
     public static AppBuilder BuildAvaloniaApp() =>
@@ -38,4 +61,10 @@ public sealed class HeadlessSession
 public sealed class HeadlessCollection : ICollectionFixture<HeadlessSession>
 {
     public const string Name = "Avalonia";
+}
+
+/// <summary>Starts the session before any test runs, whichever order and in parallel they run in.</summary>
+public sealed class HeadlessAssemblyFixture
+{
+    public HeadlessAssemblyFixture() => _ = HeadlessSession.Shared;
 }
