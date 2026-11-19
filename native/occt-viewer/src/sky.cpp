@@ -1,5 +1,8 @@
 #include "sky.hpp"
 
+#include <future>
+#include <vector>
+
 #include <Graphic3d_CubeMapSeparate.hxx>
 #include <Image_PixMap.hxx>
 #include <NCollection_Array1.hxx>
@@ -100,8 +103,10 @@ uint8_t byte(double value) {
 } // namespace
 
 occ::handle<Graphic3d_CubeMap> mtk::make_sky(const gp_Dir& sun, float cloudiness, int size) {
-    NCollection_Array1<occ::handle<Image_PixMap>> faces(0, 5);
+    // A face each on its own thread: the sky is made again at every step of the time of day.
+    std::vector<std::future<occ::handle<Image_PixMap>>> tasks;
     for (int face = 0; face < 6; ++face) {
+        tasks.push_back(std::async(std::launch::async, [face, size, &sun, cloudiness] {
         occ::handle<Image_PixMap> image = new Image_PixMap();
         image->InitTrash(Image_Format_RGB, static_cast<size_t>(size), static_cast<size_t>(size));
         image->SetTopDown(true);
@@ -129,7 +134,12 @@ occ::handle<Graphic3d_CubeMap> mtk::make_sky(const gp_Dir& sun, float cloudiness
                 texel.b() = byte(color.b);
             }
         }
-        faces.SetValue(face, image);
+        return image;
+        }));
+    }
+    NCollection_Array1<occ::handle<Image_PixMap>> faces(0, 5);
+    for (int face = 0; face < 6; ++face) {
+        faces.SetValue(face, tasks[face].get());
     }
     return new Graphic3d_CubeMapSeparate(faces);
 }
