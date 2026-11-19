@@ -96,7 +96,7 @@ Rgb sky_color(double x, double y, double z, const gp_Dir& sun, double cloudiness
     return color;
 }
 
-uint8_t byte(double value) {
+uint8_t to_byte(double value) {
     return static_cast<uint8_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255.0));
 }
 
@@ -129,9 +129,9 @@ occ::handle<Graphic3d_CubeMap> mtk::make_sky(const gp_Dir& sun, float cloudiness
                 const Rgb color = sky_color(cz / length, cx / length, cy / length, sun, cloudiness);
                 Image_ColorRGB& texel = image->ChangeValue<Image_ColorRGB>(static_cast<size_t>(row),
                                                                            static_cast<size_t>(column));
-                texel.r() = byte(color.r);
-                texel.g() = byte(color.g);
-                texel.b() = byte(color.b);
+                texel.r() = to_byte(color.r);
+                texel.g() = to_byte(color.g);
+                texel.b() = to_byte(color.b);
             }
         }
         return image;
