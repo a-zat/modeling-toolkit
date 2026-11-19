@@ -77,6 +77,14 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<bool> IsWalkingProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(IsWalking));
 
+    /// <summary>Whether a click chooses where to stand: the pointer is a person with a cross under it.</summary>
+    public static readonly StyledProperty<bool> IsPlacingWalkProperty =
+        AvaloniaProperty.Register<ViewportView, bool>(nameof(IsPlacingWalk));
+
+    /// <summary>The point of the floor where the walk begins; null for the middle of what the camera looks at.</summary>
+    public static readonly StyledProperty<Point3d?> WalkStartProperty =
+        AvaloniaProperty.Register<ViewportView, Point3d?>(nameof(WalkStart));
+
     /// <summary>Whether walking stops at the parts of the model in the way, sliding along them.</summary>
     public static readonly StyledProperty<bool> CollidesProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(Collides));
@@ -123,6 +131,30 @@ public sealed class ViewportView : Border, IViewCamera
     public event EventHandler<ViewportPick>? MenuRequested;
 
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
+
+    // A person seen from the front with a cross on the ground under the feet, which is the point clicked.
+    private static readonly Lazy<Cursor> WalkerCursorLazy = new(() =>
+    {
+        var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
+        using (DrawingContext context = bitmap.CreateDrawingContext())
+        {
+            var outline = new Pen(Brushes.White, 4, lineCap: PenLineCap.Round);
+            var ink = new Pen(Brushes.Black, 2, lineCap: PenLineCap.Round);
+            var body = new RoundedRect(new Rect(10, 10, 12, 11), 4);
+            context.DrawEllipse(Brushes.Black, outline, new Point(16, 5), 3.5, 3.5);
+            context.DrawRectangle(Brushes.Black, outline, body);
+            context.DrawEllipse(Brushes.Black, null, new Point(16, 5), 3.5, 3.5);
+            context.DrawRectangle(Brushes.Black, null, body);
+            foreach (Pen pen in new[] { outline, ink })
+            {
+                context.DrawLine(pen, new Point(11, 24), new Point(21, 24));
+                context.DrawLine(pen, new Point(16, 19), new Point(16, 29));
+            }
+        }
+        return new Cursor(bitmap, new PixelPoint(16, 24));
+    });
+
+    private static Cursor WalkerCursor => WalkerCursorLazy.Value;
 
     // The handle under a point of the view, the closest within reach; null for none.
     private int? HandleAt(Point at)
@@ -259,6 +291,18 @@ public sealed class ViewportView : Border, IViewCamera
     {
         get => GetValue(CollidesProperty);
         set => SetValue(CollidesProperty, value);
+    }
+
+    public bool IsPlacingWalk
+    {
+        get => GetValue(IsPlacingWalkProperty);
+        set => SetValue(IsPlacingWalkProperty, value);
+    }
+
+    public Point3d? WalkStart
+    {
+        get => GetValue(WalkStartProperty);
+        set => SetValue(WalkStartProperty, value);
     }
 
     public bool IsWalking
@@ -460,6 +504,10 @@ public sealed class ViewportView : Border, IViewCamera
         {
             Send(ApplySettings);
         }
+        else if (change.Property == IsPlacingWalkProperty)
+        {
+            Cursor = IsPlacingWalk ? WalkerCursor : null;
+        }
         else if (change.Property == IsWalkingProperty)
         {
             SetWalking(IsWalking);
@@ -609,7 +657,7 @@ public sealed class ViewportView : Border, IViewCamera
         }
         else if (!buttons.IsRightButtonPressed && !buttons.IsMiddleButtonPressed)
         {
-            Cursor = HandleAt(e.GetPosition(_host)) is null ? null : HandCursor;
+            Cursor = IsPlacingWalk ? WalkerCursor : HandleAt(e.GetPosition(_host)) is null ? null : HandCursor;
             // What is under the pointer is known once the next frame has detected it.
             _hoverMoved = true;
             _hoverModifiers = e.KeyModifiers;
@@ -750,7 +798,7 @@ public sealed class ViewportView : Border, IViewCamera
             {
                 _orbitCamera = viewer.GetCamera();
                 double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
-                _walk = WalkCamera.Enter(_orbitCamera, floor, WalkSettings);
+                _walk = WalkCamera.Enter(_orbitCamera, floor, WalkSettings, WalkStart);
                 _walk.Limit = LimitWalk;
                 viewer.SetPerspective(true);
                 viewer.SetCamera(_walk.ToCamera());

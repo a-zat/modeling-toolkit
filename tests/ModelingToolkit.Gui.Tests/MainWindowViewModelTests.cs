@@ -388,12 +388,21 @@ public sealed class MainWindowViewModelTests
         await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
         Assert.NotEmpty(viewModel.ToolHint);
 
+        // The walk waits for a click that chooses where to stand, and the inspector closes as it begins.
+        IReadOnlyList<Entity> mesh = Flatten(viewModel.ModelTree.Model!).Last().Path;
         viewModel.ToggleWalkCommand.Execute(null);
+        Assert.True(viewModel.IsPlacingWalk);
+        Assert.False(viewModel.IsWalking);
+        Assert.True(viewModel.IsInspectorOpen);
+        viewModel.ViewInputCommand.Execute(new ViewportPick(mesh, null, new Point3d(1, 2, 3), new System.Numerics.Vector3(0, 0, 1),
+            KeyModifiers.None, 1, ViewportInputKind.Click));
+        Assert.False(viewModel.IsPlacingWalk);
         Assert.True(viewModel.IsWalking);
+        Assert.False(viewModel.IsInspectorOpen);
+        Assert.Equal(new Point3d(1, 2, 3), viewModel.WalkStart);
         Assert.Empty(viewModel.ToolHint);
 
         // A click on a part that nothing moves selects nothing, as the select tool would.
-        IReadOnlyList<Entity> mesh = Flatten(viewModel.ModelTree.Model!).Last().Path;
         viewModel.ViewInputCommand.Execute(new ViewportPick(mesh, null, default, default, KeyModifiers.None, 1,
             ViewportInputKind.Click));
         Assert.Null(viewModel.ModelTree.SelectedNode);
@@ -402,6 +411,12 @@ public sealed class MainWindowViewModelTests
         viewModel.EscapeCommand.Execute(null);
         Assert.False(viewModel.IsWalking);
         Assert.NotEmpty(viewModel.ToolHint);
+
+        // Escape also cancels the wait for the place.
+        viewModel.ToggleWalkCommand.Execute(null);
+        viewModel.EscapeCommand.Execute(null);
+        Assert.False(viewModel.IsPlacingWalk);
+        Assert.False(viewModel.IsWalkActive);
     }
 
     [Fact]

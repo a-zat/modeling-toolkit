@@ -51,8 +51,8 @@
           </Border>
           <Border Classes="group">
             <StackPanel Orientation="Horizontal" Spacing="2">
-              <ToggleButton Classes="tool" IsChecked="{Binding IsWalking}"
-                            ToolTip.Tip="Walk through the model at the height of the eyes">
+              <ToggleButton Classes="tool" IsChecked="{Binding IsWalkActive, Mode=OneWay}" Command="{Binding ToggleWalkCommand}"
+                            ToolTip.Tip="Walk through the model at the height of the eyes: click where to stand">
                 <PathIcon Data="{StaticResource Icon.Walk}" />
               </ToggleButton>
               <Button Classes="tool" Command="{Binding FitAllCommand}" ToolTip.Tip="Fit all">
@@ -158,7 +158,7 @@
                              Eye="{Binding ViewEye, Mode=OneWayToSource}"
                              Pose="{Binding Pose}"
                              Handles="{Binding Handles}"
-                             IsWalking="{Binding IsWalking}"
+                             IsWalking="{Binding IsWalking}" IsPlacingWalk="{Binding IsPlacingWalk}" WalkStart="{Binding WalkStart}"
                              Environment="{Binding SkyEnvironment}" Collides="{Binding Collisions}"
                              WalkSettings="{Binding WalkSettings}" EdgeWidth="{Binding EdgeWidth}"
                              OutlineWidth="{Binding OutlineWidth}"

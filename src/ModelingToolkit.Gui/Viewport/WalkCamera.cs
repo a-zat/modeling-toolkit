@@ -56,9 +56,9 @@ public sealed class WalkCamera
 
     /// <summary>
     /// Stands on a floor where the orbit camera looked, at the height of the eyes, facing the way it faced: entering a
-    /// model seen from outside puts the person in the middle of it.
+    /// model seen from outside puts the person in the middle of it; or on a point of the floor, <paramref name="at"/>.
     /// </summary>
-    public static WalkCamera Enter(ViewCamera camera, double floor, WalkSettings? settings = null)
+    public static WalkCamera Enter(ViewCamera camera, double floor, WalkSettings? settings = null, Point3d? at = null)
     {
         settings ??= WalkSettings.Default;
         ArgumentNullException.ThrowIfNull(camera);
@@ -66,7 +66,8 @@ public sealed class WalkCamera
         // Looking straight down, the top of the screen is the way ahead.
         Vector3d ahead = Math.Abs(direction.X) + Math.Abs(direction.Y) > 1e-6 * direction.Length ? direction : camera.Up;
         double yaw = Math.Atan2(ahead.Y, ahead.X);
-        return new WalkCamera(new Point3d(camera.Target.X, camera.Target.Y, floor + settings.EyeHeight), yaw, 0, settings);
+        Point3d stand = at ?? new Point3d(camera.Target.X, camera.Target.Y, floor);
+        return new WalkCamera(new Point3d(stand.X, stand.Y, stand.Z + settings.EyeHeight), yaw, 0, settings);
     }
 
     /// <summary>Turns by a drag of the pointer, in points: to the right turns right, up looks up.</summary>

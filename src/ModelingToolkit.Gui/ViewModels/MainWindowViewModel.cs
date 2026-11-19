@@ -558,6 +558,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ViewInput(ViewportPick input)
     {
+        if (IsPlacingWalk)
+        {
+            if (input.Kind == ViewportInputKind.Click && input.Path is not null)
+            {
+                // On a wall, stands on the floor of the model; on a surface facing up, on it.
+                double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
+                StartWalkAt(input.Normal.Z > 0.5f ? input.Point : new Point3d(input.Point.X, input.Point.Y, floor));
+            }
+            return;
+        }
         if (IsWalking || IsRendered)
         {
             if (input.Kind == ViewportInputKind.Click && !IsBusy && !Animations.ToggleAt(input.Path))
@@ -615,9 +625,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsSettingsOpen = false;
             return;
         }
-        if (IsWalking)
+        if (IsWalking || IsPlacingWalk)
         {
             IsWalking = false;
+            IsPlacingWalk = false;
+            StatusMessage = string.Empty;
             return;
         }
         if (ActiveTool is { IsActive: true } tool && tool.Key(ToolKey.Escape, ToolModifiers.None))
@@ -1137,11 +1149,44 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// opens or closes the part under the pointer that an animation moves.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ToolHint), nameof(IsEditable))]
+    [NotifyPropertyChangedFor(nameof(ToolHint), nameof(IsEditable), nameof(IsWalkActive))]
     public partial bool IsWalking { get; set; }
 
+    /// <summary>
+    /// Whether the next click in the 3D view chooses where to stand, to walk from there: the pointer is a person with a
+    /// cross under it. The inspector closes when the walk begins, to see more of the view.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWalkActive))]
+    public partial bool IsPlacingWalk { get; set; }
+
+    /// <summary>Where the walk begins, on the floor; null for the middle of what the camera looks at.</summary>
+    public Point3d? WalkStart { get; private set; }
+
+    /// <summary>Whether the walk is on or waits for the place to stand.</summary>
+    public bool IsWalkActive => IsWalking || IsPlacingWalk;
+
     [RelayCommand]
-    private void ToggleWalk() => IsWalking = !IsWalking;
+    private void ToggleWalk()
+    {
+        if (IsWalking || IsPlacingWalk)
+        {
+            IsWalking = false;
+            IsPlacingWalk = false;
+            return;
+        }
+        IsPlacingWalk = true;
+        StatusMessage = "Click where to stand; Escape cancels.";
+    }
+
+    private void StartWalkAt(Point3d point)
+    {
+        WalkStart = point;
+        IsPlacingWalk = false;
+        IsInspectorOpen = false;
+        StatusMessage = string.Empty;
+        IsWalking = true;
+    }
 
     /// <summary>Whether the grid on the ground and the axes through the origin are shown.</summary>
     [ObservableProperty]
@@ -1699,6 +1744,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnToolMeasurementChanged(this, EventArgs.Empty);
 
         IsWalking = false; // the view turns to the new document
+        IsPlacingWalk = false;
         Properties.Know(document, statistics);
         Animations.Show(document);
         ModelTree.Show(document);

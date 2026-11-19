@@ -79,7 +79,7 @@
                           IsChecked="{Binding IsInspectorOpen, Mode=OneWay}" Command="{Binding ToggleInspectorCommand}" />
           <NativeMenuItem Header="Settings…" Command="{Binding OpenSettingsCommand}" />
           <NativeMenuItemSeparator />
-          <NativeMenuItem Header="Walk" ToggleType="CheckBox" IsChecked="{Binding IsWalking, Mode=OneWay}"
+          <NativeMenuItem Header="Walk" ToggleType="CheckBox" IsChecked="{Binding IsWalkActive, Mode=OneWay}"
                           Command="{Binding ToggleWalkCommand}" />
           <NativeMenuItem Header="Fit All" Command="{Binding FitAllCommand}" />
           <NativeMenuItem Header="Standard Views">
