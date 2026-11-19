@@ -47,6 +47,30 @@ public sealed class SelectToolTests
     }
 
     [Fact]
+    public void A_shift_click_selects_the_innermost_component_under_the_pointer_entering_the_blocks_around_it()
+    {
+        // A room with a table with a chair, the chair placing the part.
+        var table = new Block("Table");
+        var chair = new BlockReference(_left.Block, Transform.Identity) { Name = "Chair" };
+        table.Entities.Add(chair);
+        var room = new Block("Room");
+        var tableReference = new BlockReference(table, Transform.Identity);
+        room.Entities.Add(tableReference);
+        _document.Blocks.Add(table);
+        _document.Blocks.Add(room);
+        var roomReference = new BlockReference(room, Transform.Identity);
+        _document.Root.Entities.Add(roomReference);
+        ElementReference face = new([roomReference, tableReference, chair, _shape], ElementKind.Face, 0);
+
+        _tool.Click(On(face, ToolModifiers.Shift));
+
+        Assert.Equal([roomReference, tableReference], _host.Context.Path);
+        Assert.Equal([roomReference, tableReference, chair], _host.SelectedEntity);
+        _host.Context.Leave();
+        Assert.Equal([roomReference], _host.Context.Path);
+    }
+
+    [Fact]
     public void A_click_selects_a_reference_and_a_double_click_enters_it()
     {
         _tool.Click(On(Face(_left)));

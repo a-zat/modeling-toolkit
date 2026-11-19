@@ -306,6 +306,24 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
                 host.SelectEntity(null);
                 host.Context.Enter(reference);
             }
+            else if (input.Modifiers.HasFlag(ToolModifiers.Shift))
+            {
+                // The innermost component under the pointer, its blocks entered as by double clicks.
+                int deepest = path.Count - 1;
+                while (path[deepest] is not BlockReference)
+                {
+                    deepest--;
+                }
+                for (int i = path.Count - within.Count; i < deepest; i++)
+                {
+                    if (path[i] is BlockReference around)
+                    {
+                        host.Context.Enter(around);
+                    }
+                }
+                host.Elements.Clear();
+                host.SelectEntity(path.Take(deepest + 1).ToArray());
+            }
             else
             {
                 host.Elements.Clear();
