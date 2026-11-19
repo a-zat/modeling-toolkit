@@ -34,6 +34,17 @@ public partial class App : Application
         {
             var window = new MainWindow { DataContext = viewModel };
             desktop.MainWindow = window;
+            // Once the window is up, which may set an icon of its own.
+            window.Opened += (_, _) =>
+            {
+                if (OperatingSystem.IsMacOS())
+                {
+                    using Stream icon = Avalonia.Platform.AssetLoader.Open(new Uri("avares://ModelingToolkit.Gui/Assets/app-icon.png"));
+                    using var bytes = new MemoryStream();
+                    icon.CopyTo(bytes);
+                    MacDockIcon.Set(bytes.ToArray());
+                }
+            };
 
             // A model given on the command line opens once the window is shown, as with File > Open. Options, such as
             // those that macOS may add, are not models.
