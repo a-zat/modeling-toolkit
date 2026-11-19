@@ -10,6 +10,61 @@ namespace ModelingToolkit.Gui.Tests;
 public sealed class ModelTreeUpdateTests
 {
     [Fact]
+    public void A_reference_inside_a_block_is_dragged_out_onto_the_project()
+    {
+        var chair = new Block("Chair") { Entities = { Square() } };
+        var room = new Block("Room");
+        var inner = new BlockReference(chair, Transform.Translation(10, 0, 0));
+        room.Entities.Add(inner);
+        var document = new Document();
+        document.Blocks.Add(chair);
+        document.Blocks.Add(room);
+        document.Root.Entities.Add(new BlockReference(room, Transform.Translation(100, 0, 0)));
+        var session = new ModelingToolkit.Core.Editing.EditSession(document);
+        var tree = new ModelTreeViewModel { Edit = command => { session.Execute(command); return true; } };
+        tree.Show(document);
+        ModelNodeViewModel dragged = tree.Model!.Children[0].Children[0];
+
+        Assert.True(tree.CanMoveInto(dragged, tree.Model));
+        Assert.True(tree.MoveInto(dragged, tree.Model));
+        Assert.Contains(inner, document.Root.Entities);
+        Assert.Equal(Transform.Translation(110, 0, 0), inner.Transform); // where it was in the project
+        session.Undo();
+
+        // From its menu, one level up.
+        dragged = tree.Model.Children[0].Children[0];
+        Assert.True(dragged.CanMoveOut);
+        Assert.Equal("Move out of Room", dragged.MoveOutLabel);
+        tree.MoveOutCommand.Execute(dragged);
+        Assert.Contains(inner, document.Root.Entities);
+        Assert.Same(inner, tree.SelectedNode?.Entity);
+        Assert.False(tree.SelectedNode!.CanMoveOut);
+    }
+
+    [Fact]
+    public void A_duplicate_goes_next_to_the_original_placing_the_same_block()
+    {
+        var chair = new Block("Chair") { Entities = { Square() } };
+        var original = new BlockReference(chair, Transform.Translation(10, 0, 0)) { Name = "Chair by the window" };
+        var document = new Document();
+        document.Blocks.Add(chair);
+        document.Root.Entities.Add(original);
+        var session = new ModelingToolkit.Core.Editing.EditSession(document);
+        var tree = new ModelTreeViewModel { Edit = command => { session.Execute(command); return true; } };
+        tree.Show(document);
+
+        tree.DuplicateCommand.Execute(tree.Model!.Children[0]);
+
+        var copy = Assert.IsType<BlockReference>(document.Root.Entities[1]);
+        Assert.Same(chair, copy.Block);
+        Assert.Equal(original.Transform, copy.Transform);
+        Assert.Equal("Chair by the window", copy.Name);
+        Assert.Same(copy, tree.SelectedNode?.Entity);
+        session.Undo();
+        Assert.Single(document.Root.Entities);
+    }
+
+    [Fact]
     public void TheOutlineShowsHidesAndRenamesTheEntitiesByCommands()
     {
         var wheel = new Block("Wheel") { Entities = { Square() } };

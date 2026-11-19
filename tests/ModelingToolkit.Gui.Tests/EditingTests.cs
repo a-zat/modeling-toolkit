@@ -37,13 +37,16 @@ public sealed class EditingTests
         SelectMesh(viewModel);
         viewModel.Properties.EditedName = "Crate";
         Assert.False(await viewModel.ConfirmCloseAsync());
+        Document before = viewModel.Document!;
+        await viewModel.NewCommand.ExecuteAsync(null); // cancelled: the project stays
+        Assert.Same(before, viewModel.Document);
         answer = SaveChoice.DontSave;
         Assert.True(await viewModel.ConfirmCloseAsync());
-        Assert.Equal(["Box.glb", "Box.glb"], asked);
+        Assert.Equal(["Box.glb", "Box.glb", "Box.glb"], asked);
 
         viewModel.AsksToSaveOnClose = false; // as in debug builds
         Assert.True(await viewModel.ConfirmCloseAsync());
-        Assert.Equal(2, asked.Count);
+        Assert.Equal(3, asked.Count);
     }
 
     [Fact]

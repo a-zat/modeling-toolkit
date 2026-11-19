@@ -89,6 +89,14 @@ public sealed partial class ModelNodeViewModel : ObservableObject
 
     public bool IsReference => Entity is BlockReference;
 
+    /// <summary>Whether the node is a reference inside the block of another one, which it can be moved out of.</summary>
+    public bool CanMoveOut => ModelTreeViewModel.CanMoveOut(this);
+
+    /// <summary>The name of the reference whose block this node is in, for "Move out of …".</summary>
+    public string MoveOutLabel => Path.Count >= 2 && Path[^2] is BlockReference parent
+        ? $"Move out of {parent.Name ?? parent.Block.Name}"
+        : "Move out";
+
     /// <summary>Whether a block can be added under the node: the model's, or a reference's.</summary>
     public bool CanHoldBlocks => (IsModel || IsReference) && Block is not null;
 

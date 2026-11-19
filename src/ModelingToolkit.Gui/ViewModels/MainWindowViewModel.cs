@@ -1424,9 +1424,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Starts an empty model, to draw in, saved under a name chosen when it is first saved.</summary>
+    /// <summary>
+    /// Starts an empty model, to draw in, saved under a name chosen when it is first saved; the changes of the one open
+    /// are saved first, or dropped, as asked.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(IsIdle))]
-    private void New()
+    private async Task New()
+    {
+        if (await ConfirmCloseAsync())
+        {
+            StartEmpty();
+        }
+    }
+
+    private void StartEmpty()
     {
         var document = new Document();
         Show(document, DocumentStatistics.Of(document), null);
@@ -1436,7 +1447,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task Open()
     {
-        if (FileDialogs is null)
+        if (FileDialogs is null || !await ConfirmCloseAsync())
         {
             return;
         }
@@ -1482,7 +1493,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (Session is null || Context is null || Document is null)
         {
-            New();
+            StartEmpty();
         }
 
         string name = Path.GetFileName(path);

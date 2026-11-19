@@ -80,6 +80,48 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         path.OfType<BlockReference>().Aggregate(Core.Geometry.Transform.Identity,
             (placement, reference) => placement * reference.Transform);
 
+    /// <summary>
+    /// Adds a copy of the entity of a node next to it, in the same block and at the same place, selected; a copy of a
+    /// reference places the same block, as a copy pasted does.
+    /// </summary>
+    [RelayCommand]
+    private void Duplicate(ModelNodeViewModel? node)
+    {
+        if (node is not { Entity: { Owner: { } owner } entity, Path.Count: > 0 })
+        {
+            return;
+        }
+        Entity copy = TransformCommands.Duplicate(entity, Core.Geometry.Transform.Identity);
+        copy.IsHidden = entity.IsHidden;
+        if (Edit?.Invoke(new AddEntityCommand("Duplicate", owner, copy)) == true)
+        {
+            Select([.. node.Path.Take(node.Path.Count - 1), copy]);
+        }
+    }
+
+    /// <summary>Moves a reference out of the block it is in, into the block that places that one, where it stays.</summary>
+    [RelayCommand(CanExecute = nameof(CanMoveOut))]
+    private void MoveOut(ModelNodeViewModel? node)
+    {
+        if (!CanMoveOut(node) || Model?.Block is not { } root)
+        {
+            return;
+        }
+        var reference = (BlockReference)node!.Entity!;
+        IReadOnlyList<Entity> into = [.. node.Path.Take(node.Path.Count - 2)];
+        Block target = into.Count == 0 ? root : ((BlockReference)into[^1]).Block;
+        var command = new MoveToBlockCommand(
+            reference, Placement(node.Path.Take(node.Path.Count - 1)), target, Placement(into));
+        if (Edit?.Invoke(command) == true)
+        {
+            Select([.. into, reference]);
+        }
+    }
+
+    /// <summary>Whether a node is a reference in the block of another reference, which it can be moved out of.</summary>
+    public static bool CanMoveOut(ModelNodeViewModel? node) =>
+        node is { Entity: BlockReference, Path.Count: >= 2 } && node.Path[^2] is BlockReference;
+
     /// <summary>Starts editing the name of a node in the outline.</summary>
     /// <summary>Adds an empty block into the block of a node, the model or a reference, selected and named at once.</summary>
     [RelayCommand]

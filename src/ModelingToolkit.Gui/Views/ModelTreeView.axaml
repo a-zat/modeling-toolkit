@@ -44,6 +44,12 @@
                 <MenuItem Header="New block inside" IsVisible="{Binding CanHoldBlocks}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).AddBlockCommand}"
                           CommandParameter="{Binding}" />
+                <MenuItem Header="Duplicate"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).DuplicateCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem Header="{Binding MoveOutLabel}" IsVisible="{Binding CanMoveOut}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).MoveOutCommand}"
+                          CommandParameter="{Binding}" />
                 <MenuItem Header="Edit block" IsVisible="{Binding IsReference}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).EnterCommand}"
                           CommandParameter="{Binding}" />

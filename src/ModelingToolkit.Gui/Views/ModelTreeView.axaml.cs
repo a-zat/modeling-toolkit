@@ -50,9 +50,10 @@ public partial class ModelTreeView : UserControl
             return;
         }
         _dragging = true;
-        TreeViewItem? target = NodeAt(Tree.InputHitTest(at)) is { } hit && model.CanMoveInto(dragged, hit.Node)
-            ? hit.Item
-            : null;
+        // Below the rows, into the project.
+        (TreeViewItem Item, ModelNodeViewModel Node)? hit = NodeAt(Tree.InputHitTest(at)) ??
+            (model.Model is { } project && Tree.TreeContainerFromItem(project) is TreeViewItem top ? (top, project) : null);
+        TreeViewItem? target = hit is { } found && model.CanMoveInto(dragged, found.Node) ? found.Item : null;
         SetDropTarget(target);
         e.Handled = true;
     }
