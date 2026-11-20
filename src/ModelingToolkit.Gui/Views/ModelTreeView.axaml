@@ -51,14 +51,9 @@
                 <MenuItem Header="{Binding MoveOutLabel}" IsVisible="{Binding CanMoveOut}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).MoveOutCommand}"
                           CommandParameter="{Binding}" />
-                <MenuItem Header="Group"
-                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupCommand}"
-                          CommandParameter="{Binding}" />
-                <MenuItem Header="Ungroup" IsVisible="{Binding IsGroup}"
-                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).UngroupCommand}"
-                          CommandParameter="{Binding}" />
-                <MenuItem Header="{Binding GroupToggleLabel}" IsVisible="{Binding IsReference}"
-                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).ToggleGroupCommand}"
+                <MenuItem Header="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupLabel}"
+                          IsVisible="{Binding IsReference}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupOrToggleCommand}"
                           CommandParameter="{Binding}" />
                 <MenuItem Header="Edit block" IsVisible="{Binding IsReference}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).EnterCommand}"

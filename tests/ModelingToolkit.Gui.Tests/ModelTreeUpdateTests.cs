@@ -87,7 +87,7 @@ public sealed class ModelTreeUpdateTests
     }
 
     [Fact]
-    public void References_selected_go_into_a_new_group_where_they_stay_and_ungrouping_takes_them_out()
+    public void References_selected_go_into_a_new_group_where_they_stay_and_one_reference_is_made_a_group_or_a_component()
     {
         var chair = new Block("Chair") { Entities = { Square() } };
         var document = new Document();
@@ -104,18 +104,20 @@ public sealed class ModelTreeUpdateTests
         tree.SelectedNodes.Add(tree.Model!.Children[0]);
         tree.SelectedNodes.Add(tree.Model.Children[2]);
 
-        tree.GroupCommand.Execute(tree.Model.Children[0]);
+        Assert.Equal("Group", tree.GroupLabel);
+        tree.GroupOrToggleCommand.Execute(tree.Model.Children[0]);
         var group = (BlockReference)document.Root.Entities.Single(entity => entity is BlockReference { IsGroup: true });
         Assert.Equal([chairs[0], chairs[2]], group.Block.Entities);
         Assert.Equal(Transform.Translation(200, 0, 0), chairs[2].Transform); // where it was
         Assert.Same(group, tree.SelectedNode?.Entity);
         Assert.True(tree.SelectedNode!.IsGroup);
 
-        tree.UngroupCommand.Execute(tree.SelectedNode);
-        Assert.DoesNotContain(group, document.Root.Entities);
-        Assert.Contains(chairs[0], document.Root.Entities);
-        Assert.Contains(chairs[2], document.Root.Entities);
-        session.Undo(); // the ungrouping
+        tree.SelectedNodes.Clear(); // as the outline leaves the group alone selected
+        // One menu item: "Group" with several selected, else making the one a group or a component.
+        Assert.Equal("Make component", tree.GroupLabel);
+        tree.GroupOrToggleCommand.Execute(tree.SelectedNode);
+        Assert.False(group.IsGroup);
+        session.Undo(); // a group again
         session.Undo(); // the grouping
         Assert.Equal(chairs, document.Root.Entities);
     }

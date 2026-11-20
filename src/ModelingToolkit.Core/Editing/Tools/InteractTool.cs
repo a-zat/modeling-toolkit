@@ -31,7 +31,7 @@ public sealed class InteractTool(Func<IReadOnlyList<Entity>?, Point3d, bool> can
         ArgumentNullException.ThrowIfNull(input);
         if (input.Pick.Path is not null && !_work(input.Pick.Path, input.Pick.Point))
         {
-            Host.Report("Nothing there opens or closes.");
+            Host.Report("Nothing there can be used.");
         }
     }
 }

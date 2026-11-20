@@ -346,7 +346,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 }
                 if (Animations.CanToggleAt(path, pick.Point))
                 {
-                    actions.Add(new("Open or close", ToggleAtCommand, path));
+                    actions.Add(new("Use", ToggleAtCommand, path));
                 }
                 if (entity is BlockReference component && Document is { } document)
                 {
@@ -382,7 +382,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         else if (pick.Path is { Count: > 0 } walked && Animations.CanToggleAt(walked, pick.Point))
         {
-            actions.Add(new("Open or close", ToggleAtCommand, walked));
+            actions.Add(new("Use", ToggleAtCommand, walked));
             actions.Add(ContextAction.Separator);
         }
         if (editable && CanPaste)
@@ -695,7 +695,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
             else
             {
-                StatusMessage = input.Path is null ? string.Empty : "Nothing there opens or closes.";
+                StatusMessage = input.Path is null ? string.Empty : "Nothing there can be used.";
             }
             return;
         }

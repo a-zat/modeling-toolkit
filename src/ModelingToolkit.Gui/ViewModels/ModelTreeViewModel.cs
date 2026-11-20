@@ -31,6 +31,9 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     /// </summary>
     public System.Collections.ObjectModel.ObservableCollection<object> SelectedNodes { get; } = [];
 
+    public ModelTreeViewModel() =>
+        SelectedNodes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(GroupLabel));
+
     // The nodes a command on a node works on: all those selected, when it is one of several, without those inside
     // another one; else the node alone.
     private List<ModelNodeViewModel> TargetsOf(ModelNodeViewModel node)
@@ -192,32 +195,32 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Takes the references out of a group, into the block holding it; the group goes if nothing is left in it.</summary>
+    /// <summary>
+    /// The one command of the menu about groups: with several nodes selected, "Group" puts them in a new group; with
+    /// one, it makes it a group, or a component again.
+    /// </summary>
+    public string GroupLabel => SelectedNodes.Count > 1 ? "Group"
+        : SelectedNode?.IsGroup == true ? "Make component" : "Make group";
+
     [RelayCommand]
-    private void Ungroup(ModelNodeViewModel? node)
+    private void GroupOrToggle(ModelNodeViewModel? node)
     {
-        if (node is not { Entity: BlockReference { IsGroup: true, Owner: { } owner } group } || Model is null)
+        if (node is null)
         {
             return;
         }
-        IReadOnlyList<Entity> into = [.. node.Path.Take(node.Path.Count - 1)];
-        Core.Geometry.Transform outer = Placement(into), inner = Placement(node.Path);
-        List<BlockReference> inside = [.. group.Block.Entities.OfType<BlockReference>()];
-        List<IEditCommand> commands = [.. inside.AsEnumerable().Reverse()
-            .Select(reference => (IEditCommand)new MoveToBlockCommand(reference, inner, owner, outer, owner.Entities.Count))];
-        if (group.Block.Entities.Count == inside.Count)
+        if (TargetsOf(node).Count > 1)
         {
-            commands.Add(new DeleteCommand(group));
+            Group(node);
         }
         else
         {
-            commands.Add(new SetGroupCommand(group, false)); // what is not a reference stays, in a component
+            ToggleGroup(node);
         }
-        if (Edit?.Invoke(new CompositeCommand("Ungroup", commands)) == true && inside.Count > 0)
-        {
-            Select([.. into, inside[0]]);
-        }
+        OnPropertyChanged(nameof(GroupLabel));
     }
+
+    partial void OnSelectedNodeChanged(ModelNodeViewModel? value) => OnPropertyChanged(nameof(GroupLabel));
 
     /// <summary>Makes the reference of a node, and those selected with it, groups, or components if it is a group.</summary>
     [RelayCommand]
