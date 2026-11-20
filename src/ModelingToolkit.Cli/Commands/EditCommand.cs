@@ -24,6 +24,14 @@ internal static class EditCommand
           rename=PATH@NAME         rename an entity
           hide=PATH  show=PATH     hide or show an entity
           delete=PATH              delete an entity
+          anchor=PATH@NAME,X,Y,Z[,DEGREES][,local]
+                                   add an anchor to a component, at a point of the model, facing a direction
+                                   (degrees from X around the vertical); with local, in the coordinates of its
+                                   block, as for a part scaled to nothing until an animation shows it
+          view=PATH@NAME,X,Y,Z[,DEGREES][,local]
+                                   add a point of view to a component: the eyes at the point, looking that way
+          attach=PATH@ANCHOR       make a component follow an anchor, the path of the anchor beginning where the
+                                   component is; detach=PATH stops it
           simplify=PATH@PRESET     simplify the meshes of an entity (presets: clean-up, fewer-lines,
                                    furniture-at-room-scale, background-object)
         """;
@@ -45,6 +53,9 @@ internal static class EditCommand
             IDocumentWriter writer = formats.WriterFor(outputFile.FullName);
             var warnings = new List<string>();
             Document document = formats.ReaderFor(inputFile.FullName).Read(inputFile.FullName, warnings);
+            // As the application opens it: the node of a glTF file holding the whole model is the model, so that
+            // writing it back does not wrap it once more.
+            ModelPaths.UnwrapGltf(document, inputFile.FullName);
             var session = new EditSession(document);
             foreach (string operation in parseResult.GetRequiredValue(operations))
             {
@@ -74,9 +85,11 @@ internal static class EditCommand
             session.Execute(import);
             if (value is not null)
             {
+                // At the point of the model, whatever wraps the block of the model.
                 Point3d point = Point(value);
+                Transform wrapping = InferenceEngine.PlacementOf(ModelPaths.Wrappers(document));
                 session.Execute(new SetTransformCommand("Move", import.Reference,
-                    Transform.Translation(point.X, point.Y, point.Z) * import.Reference.Transform));
+                    wrapping.Inverse() * Transform.Translation(point.X, point.Y, point.Z) * import.Reference.Transform));
             }
             return $"Imported {target} as {import.Reference.Block.Name}.";
         }
@@ -131,6 +144,72 @@ internal static class EditCommand
             case "delete":
                 session.Execute(new DeleteCommand(entity));
                 return $"Deleted {target}.";
+            case "anchor" or "view":
+            {
+                if (entity is not BlockReference component)
+                {
+                    throw new ArgumentException($"{target} is not a component: only components have anchors.");
+                }
+                string[] parts = (value ?? throw new ArgumentException($"{verb} needs @NAME,X,Y,Z.")).Split(',');
+                bool local = parts[^1].Trim() == "local";
+                if (local)
+                {
+                    parts = parts[..^1];
+                }
+                if (parts.Length is not (4 or 5) || string.IsNullOrWhiteSpace(parts[0]))
+                {
+                    throw new ArgumentException($"\"{value}\" is not NAME,X,Y,Z[,DEGREES][,local].");
+                }
+                Point3d point = Point(string.Join(',', parts[1..4]));
+                double degrees = parts.Length == 5 ? double.Parse(parts[4], CultureInfo.InvariantCulture) : 0;
+                // In the coordinates of the block of the component, Z up, X the way given.
+                Transform toBlock = local ? Transform.Identity : (placement * component.Transform).Inverse();
+                double angle = degrees * Math.PI / 180;
+                Vector3d x = toBlock.ApplyVector(new Vector3d(Math.Cos(angle), Math.Sin(angle), 0)).Normalized();
+                Vector3d z = toBlock.ApplyVector(Vector3d.UnitZ);
+                z = (z - x * z.Dot(x)).Normalized();
+                Vector3d y = z.Cross(x);
+                Point3d o = toBlock.Apply(point);
+                var frame = new Transform(x.X, y.X, z.X, o.X, x.Y, y.Y, z.Y, o.Y, x.Z, y.Z, z.Z, o.Z);
+                var anchor = new AnchorEntity(frame, verb == "view" ? AnchorKind.PointOfView : AnchorKind.Attach)
+                {
+                    Name = parts[0].Trim(),
+                };
+                session.Execute(new AddEntityCommand(verb == "view" ? "Add point of view" : "Add anchor", component.Block, anchor));
+                return $"Added {(verb == "view" ? "the point of view" : "the anchor")} {anchor.Name} to {target}.";
+            }
+            case "attach":
+            {
+                if (entity is not BlockReference follower)
+                {
+                    throw new ArgumentException($"{target} is not a component: only components follow anchors.");
+                }
+                string anchorPath = value ?? throw new ArgumentException("attach needs @ANCHOR.");
+                IReadOnlyList<Entity> reached = ModelPaths.Find(document, anchorPath)
+                    ?? throw new ArgumentException($"Nothing is at \"{anchorPath}\".");
+                if (reached is not [.., AnchorEntity anchor])
+                {
+                    throw new ArgumentException($"{anchorPath} is not an anchor.");
+                }
+                int shared = path.Count - 1;
+                if (reached.Count <= shared || !path.Take(shared).SequenceEqual(reached.Take(shared)))
+                {
+                    throw new ArgumentException($"{anchorPath} is not in the block where {target} is.");
+                }
+                BlockReference[] chain = [.. reached.Skip(shared).Take(reached.Count - shared - 1).Cast<BlockReference>()];
+                var attachment = new Attachment(follower, chain, anchor, Attachment.OffsetOf(follower, chain, anchor));
+                session.Execute(new AttachCommand("Attach", document, attachment, attach: true));
+                return $"{target} follows {anchorPath}.";
+            }
+            case "detach":
+            {
+                if (entity is not BlockReference follower || document.AttachmentOf(follower) is not { } attachment)
+                {
+                    throw new ArgumentException($"{target} follows no anchor.");
+                }
+                session.Execute(new AttachCommand("Detach", document, attachment, attach: false));
+                return $"{target} no longer follows an anchor.";
+            }
             default:
                 throw new ArgumentException($"There is no operation \"{verb}\".");
         }

@@ -11,6 +11,30 @@ internal static class ModelPaths
     public static string NameOf(Entity entity) =>
         entity.Name ?? (entity as BlockReference)?.Block.Name ?? (entity as MeshEntity)?.Material?.Name ?? entity.GetType().Name;
 
+    /// <summary>The name of an entity in a path: <see cref="NameOf"/>, with "#N" after it when others before it in its block have it.</summary>
+    public static string StepOf(Entity entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        string name = NameOf(entity);
+        if (entity.Owner is not { } block)
+        {
+            return name;
+        }
+        int same = 0;
+        foreach (Entity other in block.Entities)
+        {
+            if (NameOf(other) == name)
+            {
+                same++;
+            }
+            if (ReferenceEquals(other, entity))
+            {
+                break;
+            }
+        }
+        return same > 1 ? $"{name}#{same}" : name;
+    }
+
     /// <summary>
     /// The references that only wrap the model, as the root nodes of glTF files do: from the top, each alone in its
     /// block. The outline starts inside them, and so do the paths.
@@ -26,6 +50,15 @@ internal static class ModelPaths
             block = only.Block;
         }
         return wrappers;
+    }
+
+    /// <summary>Takes a model read from a glTF file out of the node that wraps it, as the application does.</summary>
+    public static void UnwrapGltf(Document document, string path)
+    {
+        if (Path.GetExtension(path).ToLowerInvariant() is ".glb" or ".gltf")
+        {
+            DocumentRoot.Unwrap(document);
+        }
     }
 
     /// <summary>The block of the model, inside its wrappers.</summary>
@@ -46,7 +79,7 @@ internal static class ModelPaths
         string[] names = path.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         for (int i = 0; i < names.Length; i++)
         {
-            Entity? entity = block.Entities.FirstOrDefault(candidate => NameOf(candidate) == names[i]);
+            Entity? entity = block.Entities.FirstOrDefault(candidate => StepOf(candidate) == names[i]);
             if (entity is null)
             {
                 return null;

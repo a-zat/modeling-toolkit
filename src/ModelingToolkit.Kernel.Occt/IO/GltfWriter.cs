@@ -271,7 +271,17 @@ public sealed class GltfWriter : IDocumentWriter
 
         private int ReferenceNode(BlockReference reference)
         {
-            var node = new JsonObject { ["name"] = reference.Name ?? reference.Block.Name };
+            // A placement of a mesh alone, as the reading makes of a mesh used in several places, is one node holding
+            // the mesh: a node of its block, holding a node of the mesh, would be read back as one more level each time.
+            bool meshOnly = reference is { Name: null, IsGroup: false } &&
+                reference.Block.Entities is [MeshEntity { Triangles.Length: > 0, IsHidden: false }];
+            var node = meshOnly
+                ? new JsonObject { ["mesh"] = MeshOf((MeshEntity)reference.Block.Entities[0]) }
+                : new JsonObject { ["name"] = reference.Name ?? reference.Block.Name };
+            if (meshOnly && reference.Block.Entities[0].Name is { } meshName)
+            {
+                node["name"] = meshName;
+            }
             Transform transform = ToGltf(reference.Transform);
             if (_animated.Contains(reference))
             {
@@ -304,7 +314,7 @@ public sealed class GltfWriter : IDocumentWriter
                 _referenceNodes[reference] = nodes = [];
             }
             nodes.Add(index);
-            JsonArray children = Children(reference.Block);
+            JsonArray children = meshOnly ? [] : Children(reference.Block);
             if (children.Count > 0)
             {
                 node["children"] = children;

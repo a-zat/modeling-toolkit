@@ -155,6 +155,34 @@ public sealed class GltfWriterTests : IDisposable
         Assert.Equal(30, box.Max.Z - box.Min.Z, 1e-3);
     }
 
+    [Fact]
+    public void Saving_again_what_was_read_adds_no_level_to_a_mesh_placed_in_several_places()
+    {
+        // A plate placed twice in a cabinet, and the cabinet in the model, as a file of another program holds them.
+        var document = new Document();
+        var cabinet = new Block("Cabinet");
+        var plate = new Block("Plate");
+        plate.Entities.Add(new MeshEntity(
+            [new(0, 0, 0), new(100, 0, 0), new(100, 100, 0)], [new(0, 1, 2)]));
+        cabinet.Entities.Add(new BlockReference(plate, Transform.Identity));
+        cabinet.Entities.Add(new BlockReference(plate, Transform.Translation(0, 0, 500)));
+        document.Blocks.AddRange([cabinet, plate]);
+        document.Root.Entities.Add(new BlockReference(cabinet, Transform.Identity) { Name = "Cabinet" });
+
+        Document once = RoundTrip(document);
+        DocumentRoot.Unwrap(once);
+        Document twice = RoundTrip(once);
+        DocumentRoot.Unwrap(twice);
+        Document thrice = RoundTrip(twice);
+        DocumentRoot.Unwrap(thrice);
+
+        static int Depth(Block block) =>
+            1 + block.Entities.OfType<BlockReference>().Select(reference => Depth(reference.Block)).DefaultIfEmpty(0).Max();
+        Assert.Equal(Depth(once.Root), Depth(twice.Root));
+        Assert.Equal(Depth(once.Root), Depth(thrice.Root));
+        Assert.Equal(once.Blocks.Count, thrice.Blocks.Count);
+    }
+
     private Document RoundTrip(Document document)
     {
         string path = Path.Combine(_folder, Guid.NewGuid() + ".glb");

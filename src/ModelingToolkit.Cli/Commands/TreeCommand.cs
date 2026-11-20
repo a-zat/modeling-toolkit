@@ -27,19 +27,34 @@ internal static class TreeCommand
             string Placed(BlockReference reference, Core.Geometry.Transform placement)
             {
                 Core.Geometry.Point3d at = (placement * reference.Transform).Apply(Core.Geometry.Point3d.Origin);
-                return string.Create(culture, $"component of {reference.Block.Name}, at {Math.Round(at.X, 1) + 0.0:0.#}, {Math.Round(at.Y, 1) + 0.0:0.#}, {Math.Round(at.Z, 1) + 0.0:0.#}");
+                string follows = document.AttachmentOf(reference) is { IsActive: true } attachment
+                    ? $", follows {attachment.Anchor.Name ?? "an anchor"}"
+                    : string.Empty;
+                return string.Create(culture, $"component of {reference.Block.Name}, at {Math.Round(at.X, 1) + 0.0:0.#}, {Math.Round(at.Y, 1) + 0.0:0.#}, {Math.Round(at.Z, 1) + 0.0:0.#}{follows}");
+            }
+
+            // Where an anchor is in the model, and the way it faces.
+            string Anchored(AnchorEntity anchor, Core.Geometry.Transform placement)
+            {
+                Core.Geometry.Transform frame = placement * anchor.Placement;
+                Core.Geometry.Point3d at = frame.Apply(Core.Geometry.Point3d.Origin);
+                Core.Geometry.Vector3d ahead = frame.ApplyVector(Core.Geometry.Vector3d.UnitX);
+                double degrees = Math.Round(Math.Atan2(ahead.Y, ahead.X) * 180 / Math.PI, 1) + 0.0;
+                return string.Create(culture,
+                    $"{(anchor.Kind == AnchorKind.PointOfView ? "point of view" : "anchor")}, at {Math.Round(at.X, 1) + 0.0:0.#}, {Math.Round(at.Y, 1) + 0.0:0.#}, {Math.Round(at.Z, 1) + 0.0:0.#}, facing {degrees:0.#}°");
             }
 
             void Write(Block block, string prefix, int level, Core.Geometry.Transform placement)
             {
                 foreach (Entity entity in block.Entities)
                 {
-                    string path = prefix.Length == 0 ? ModelPaths.NameOf(entity) : $"{prefix}/{ModelPaths.NameOf(entity)}";
+                    string path = prefix.Length == 0 ? ModelPaths.StepOf(entity) : $"{prefix}/{ModelPaths.StepOf(entity)}";
                     string kind = entity switch
                     {
                         BlockReference reference => Placed(reference, placement),
                         MeshEntity mesh => string.Create(culture, $"mesh, {mesh.Triangles.Length:N0} triangles"),
                         BrepEntity => "shape",
+                        AnchorEntity anchor => Anchored(anchor, placement),
                         _ => entity.GetType().Name,
                     };
                     console.WriteLine($"{new string(' ', 2 * level)}{path}  ({kind}{(entity.IsHidden ? ", hidden" : "")})");

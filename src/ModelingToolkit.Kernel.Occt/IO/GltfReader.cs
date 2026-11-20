@@ -163,8 +163,8 @@ public sealed class GltfReader : IDocumentReader
 
     // The anchors that the toolkit writes as empty nodes, which OpenCASCADE leaves out, each with its kind in its extras,
     // put in the block of the reference of the node above it; and the attachments, in the extras of the nodes that
-    // follow them. References are found by name, as the animated ones: an anchor or an attachment whose reference has a
-    // name that is not unique is left out, with a warning.
+    // follow them. References are found by the names of the nodes from the top down, and by their order among nodes of
+    // the same name: an anchor or an attachment whose reference cannot be told apart so is left out, with a warning.
     private static void ReadAnchors(string path, Document document, ICollection<string> warnings)
     {
         try
@@ -191,8 +191,45 @@ public sealed class GltfReader : IDocumentReader
             }
             var references = document.Blocks.Prepend(document.Root).SelectMany(block => block.Entities)
                 .OfType<BlockReference>().Where(reference => reference.Name is not null).ToLookup(reference => reference.Name!);
-            BlockReference? ReferenceOf(int node) =>
-                Name(nodes[node]) is { } name && references[name].ToList() is [BlockReference only] ? only : null;
+            int[] roots = [.. Enumerable.Range(0, nodes.Length).Where(index => !parents.ContainsKey(index))];
+            var found = new Dictionary<int, BlockReference?>();
+            // The reference of a node: down the nodes above it, each the one of its name among the references of the
+            // block of the one above, in the order of the nodes of that name, when there are as many of each; else the
+            // one reference of that name in the model.
+            BlockReference? ReferenceOf(int node)
+            {
+                if (found.TryGetValue(node, out BlockReference? known))
+                {
+                    return known;
+                }
+                found[node] = null; // against a cycle of nodes
+                BlockReference? reference = null;
+                if (Name(nodes[node]) is { } name)
+                {
+                    Block? block = parents.TryGetValue(node, out int parent) ? ReferenceOf(parent)?.Block : document.Root;
+                    if (block is not null)
+                    {
+                        BlockReference[] same = [.. block.Entities.OfType<BlockReference>()
+                            .Where(candidate => (candidate.Name ?? candidate.Block.Name) == name)];
+                        int[] siblings = parents.TryGetValue(node, out int above)
+                            ? [.. ChildrenOf(above).Where(child => Name(nodes[child]) == name)]
+                            : [.. roots.Where(root => Name(nodes[root]) == name)];
+                        if (same.Length == siblings.Length && System.Array.IndexOf(siblings, node) is >= 0 and int k)
+                        {
+                            reference = same[k];
+                        }
+                    }
+                    if (reference is null && references[name].ToList() is [BlockReference only])
+                    {
+                        reference = only;
+                    }
+                }
+                return found[node] = reference;
+            }
+            IEnumerable<int> ChildrenOf(int node) =>
+                nodes[node].TryGetProperty("children", out JsonElement children) && children.ValueKind == JsonValueKind.Array
+                    ? children.EnumerateArray().Where(child => child.TryGetInt32(out _)).Select(child => child.GetInt32())
+                    : [];
 
             var anchors = new Dictionary<int, AnchorEntity>();
             int lost = 0;
@@ -238,7 +275,7 @@ public sealed class GltfReader : IDocumentReader
             }
             if (lost > 0)
             {
-                warnings.Add($"{lost} anchor(s) or attachment(s) are left out: the components they belong to have names that are not unique.");
+                warnings.Add($"{lost} anchor(s) or attachment(s) are left out: the components they belong to cannot be told apart by their names.");
             }
 
             // The nodes from below the one given down to the one holding the anchor; null if it is not under it.

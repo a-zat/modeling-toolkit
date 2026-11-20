@@ -52,6 +52,30 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public void Anchors_points_of_view_and_attachments_are_added_by_edits_and_kept_in_glTF()
+    {
+        string edited = Path.Combine(_folder, "edited.glb");
+
+        // Two boxes of the same name, told apart by "#2"; the second follows an anchor behind the truck.
+        (int exitCode, _, string error) = Run("edit", Asset("CesiumMilkTruck.glb"), edited,
+            $"import={Asset("Box.glb")}@3000,0,0", $"import={Asset("Box.glb")}@0,-2500,0", "rename=Box 2@Box",
+            "anchor=Cesium_Milk_Truck@Back,0,-2000,500,-90", "view=Cesium_Milk_Truck@Driver,400,1000,1800,90",
+            "attach=Box#2@Cesium_Milk_Truck/Back");
+        Assert.True(exitCode == 0, error);
+
+        (_, string tree, _) = Run("tree", edited, "--depth", "2");
+        Assert.Contains("Cesium_Milk_Truck/Back  (anchor, at 0, -2000, 500, facing -90°)", tree, StringComparison.Ordinal);
+        Assert.Contains("Cesium_Milk_Truck/Driver  (point of view, at 400, 1000, 1800, facing 90°)", tree, StringComparison.Ordinal);
+        Assert.Contains("Box  (component of Box, at 3000, 0, 0)", tree, StringComparison.Ordinal);
+        Assert.Contains("Box#2  (component of Box, at 0, -2500, 0, follows Back)", tree, StringComparison.Ordinal);
+
+        // Saved again, the file is the same.
+        string again = Path.Combine(_folder, "again.glb");
+        Assert.Equal(0, Run("convert", edited, again).ExitCode);
+        Assert.Equal(tree, Run("tree", again, "--depth", "2").Output);
+    }
+
+    [Fact]
     public void An_edit_of_nothing_fails_and_writes_nothing()
     {
         string edited = Path.Combine(_folder, "edited.mtk");
