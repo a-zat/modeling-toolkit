@@ -30,9 +30,6 @@ internal static class ConvertCommand
 
             var warnings = new List<string>();
             Document document = reader.Read(inputFile.FullName, warnings);
-            // As the application opens it: the node of a glTF file holding the whole model is the model, so that
-            // writing it back does not wrap it once more.
-            ModelPaths.UnwrapGltf(document, inputFile.FullName);
             CommandErrors.WriteWarnings(parseResult, warnings);
             writer.Write(document, outputFile.FullName);
 

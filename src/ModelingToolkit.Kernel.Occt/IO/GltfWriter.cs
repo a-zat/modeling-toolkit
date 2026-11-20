@@ -107,8 +107,9 @@ public sealed class GltfWriter : IDocumentWriter
 
         public byte[] Build()
         {
-            int root = AddNode(new JsonObject { ["name"] = document.Root.Name });
-            _nodes[root]!["children"] = Children(document.Root);
+            // The entities of the model space are the nodes of the scene, which takes the name of the model: no node
+            // wraps them to carry it.
+            JsonArray roots = Children(document.Root);
             WriteAttachments();
             JsonArray animations = Animations();
 
@@ -116,7 +117,7 @@ public sealed class GltfWriter : IDocumentWriter
             {
                 ["asset"] = new JsonObject { ["version"] = "2.0", ["generator"] = "Modeling Toolkit" },
                 ["scene"] = 0,
-                ["scenes"] = new JsonArray(new JsonObject { ["nodes"] = new JsonArray(root) }),
+                ["scenes"] = new JsonArray(new JsonObject { ["name"] = document.Root.Name, ["nodes"] = roots }),
                 ["nodes"] = _nodes,
             };
             AddIfAny(json, "meshes", _meshes);

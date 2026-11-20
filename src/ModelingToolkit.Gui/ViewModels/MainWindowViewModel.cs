@@ -1537,10 +1537,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
             (Document document, DocumentStatistics statistics) = await Task.Run(() =>
             {
                 Document read = reader.Read(path, warnings, progress, cancellation.Token);
-                if (UseGlb && IsGltf(path))
-                {
-                    DocumentRoot.Unwrap(read);
-                }
                 return (read, DocumentStatistics.Of(read));
             }, cancellation.Token);
             Show(document, statistics, path);

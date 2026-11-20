@@ -41,9 +41,6 @@ internal static class SimplifyCommand
             IDocumentWriter writer = formats.WriterFor(outputFile.FullName);
             var warnings = new List<string>();
             Document document = reader.Read(inputFile.FullName, warnings);
-            // As the application opens it: the node of a glTF file holding the whole model is the model, so that
-            // writing it back does not wrap it once more.
-            ModelPaths.UnwrapGltf(document, inputFile.FullName);
             CommandErrors.WriteWarnings(parseResult, warnings);
 
             double? crease = parseResult.GetValue(recompute);

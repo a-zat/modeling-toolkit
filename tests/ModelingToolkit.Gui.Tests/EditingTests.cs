@@ -21,6 +21,24 @@ public sealed class EditingTests
     }
 
     [Fact]
+    public async Task TheModelIsRenamedFromItsPropertiesAndUndoingGivesBackTheName()
+    {
+        MainWindowViewModel viewModel = await OpenBox();
+        string before = viewModel.Document!.Root.Name;
+        viewModel.ModelTree.SelectCommand.Execute(new List<Entity>());
+        Assert.True(viewModel.Properties.IsEditable);
+
+        viewModel.Properties.EditedName = " Flat ";
+
+        Assert.Equal("Flat", viewModel.Document.Root.Name);
+        Assert.Equal("Flat", viewModel.ModelTree.Model!.Name);
+        Assert.Equal("Flat", viewModel.Properties.Title);
+        viewModel.UndoCommand.Execute(null);
+        Assert.Equal(before, viewModel.Document.Root.Name);
+        Assert.Equal(before, viewModel.ModelTree.Model!.Name);
+    }
+
+    [Fact]
     public async Task ClosingAsksToSaveOnlyChangesNotSaved()
     {
         MainWindowViewModel viewModel = await OpenBox();
@@ -233,7 +251,7 @@ public sealed class EditingTests
         viewModel.ModelTree.SelectedNode = viewModel.ModelTree.Model!;
 
         Assert.False(viewModel.DeleteCommand.CanExecute(null));
-        Assert.False(viewModel.Properties.IsEditable);
+        Assert.True(viewModel.Properties.IsEditable); // it can be renamed
     }
 
     private static async Task<MainWindowViewModel> OpenBox()

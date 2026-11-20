@@ -64,8 +64,7 @@ internal static class TreeCommand
                     }
                 }
             }
-            Write(ModelPaths.ModelBlock(document), string.Empty, 0,
-                Core.Editing.Tools.InferenceEngine.PlacementOf(ModelPaths.Wrappers(document)));
+            Write(document.Root, string.Empty, 0, Core.Geometry.Transform.Identity);
             return 0;
         }));
         return command;

@@ -49,10 +49,10 @@ public sealed class GltfWriterTests : IDisposable
     }
 
     [Fact]
-    public void The_model_space_becomes_the_root_node_with_its_name_and_hidden_entities_stay_hidden()
+    public void The_model_space_gives_the_scene_its_name_with_no_node_around_it_and_hidden_entities_stay_hidden()
     {
         Document original = _reader.Read(Asset("CesiumMilkTruck.glb"), []);
-        DocumentRoot.Unwrap(original);
+        original.Root.Name = "Truck model";
         BlockReference wheel = Assert.Single(original.Blocks.SelectMany(block => block.Entities)
             .OfType<BlockReference>(), reference => reference.Name == "Wheels");
         wheel.IsHidden = true;
@@ -62,8 +62,8 @@ public sealed class GltfWriterTests : IDisposable
 
         Document copy = RoundTrip(original);
 
-        Assert.True(DocumentRoot.Unwrap(copy));
         Assert.Equal(rootName, copy.Root.Name);
+        Assert.Equal(original.Root.Entities.Count, copy.Root.Entities.Count); // none wraps them
         Assert.True(copy.Blocks.SelectMany(block => block.Entities).OfType<BlockReference>()
             .Single(reference => reference.Name == "Wheels").IsHidden);
         Assert.Equal(250, copy.Materials.Single(material => material.Name == textured.Name).TextureSize);
@@ -94,7 +94,6 @@ public sealed class GltfWriterTests : IDisposable
         tableReference.IsHidden = true; // both in the extras
 
         Document copy = RoundTrip(document);
-        DocumentRoot.Unwrap(copy);
 
         BlockReference Named(string name) =>
             copy.Blocks.Prepend(copy.Root).SelectMany(block => block.Entities).OfType<BlockReference>().Single(r => r.Name == name);
@@ -129,7 +128,6 @@ public sealed class GltfWriterTests : IDisposable
         document.Root.Entities.Add(new BlockReference(part, Transform.Translation(0, 500, 0)) { Name = "Fittings" });
 
         Document copy = RoundTrip(document);
-        DocumentRoot.Unwrap(copy);
 
         string?[] names = [.. copy.Blocks.Prepend(copy.Root).SelectMany(block => block.Entities).OfType<MeshEntity>()
             .Select(mesh => mesh.Name)];
@@ -170,11 +168,8 @@ public sealed class GltfWriterTests : IDisposable
         document.Root.Entities.Add(new BlockReference(cabinet, Transform.Identity) { Name = "Cabinet" });
 
         Document once = RoundTrip(document);
-        DocumentRoot.Unwrap(once);
         Document twice = RoundTrip(once);
-        DocumentRoot.Unwrap(twice);
         Document thrice = RoundTrip(twice);
-        DocumentRoot.Unwrap(thrice);
 
         static int Depth(Block block) =>
             1 + block.Entities.OfType<BlockReference>().Select(reference => Depth(reference.Block)).DefaultIfEmpty(0).Max();

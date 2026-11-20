@@ -58,10 +58,68 @@ public sealed class GltfReader : IDocumentReader
             {
                 warnings.Add(warning);
             }
+            DropAxisNode(document);
+            ReadSceneName(fullPath, document);
             ReadAnimations(fullPath, document, warnings);
             ReadExtras(fullPath, document);
             ReadAnchors(fullPath, document, warnings);
             return document;
+        }
+    }
+
+    // OpenCASCADE puts the nodes of the scene under one of its own, "Yup2Zup", which turns the axes of glTF into its
+    // own; the file has no such node, so its entities, turned as it turns them, are those of the model space.
+    private static void DropAxisNode(Document document)
+    {
+        if (document.Root.Entities is [BlockReference { Name: "Yup2Zup", IsHidden: false } wrapper] &&
+            wrapper.Block != document.Root &&
+            document.Blocks.SelectMany(block => block.Entities).OfType<BlockReference>()
+                .All(reference => reference == wrapper || reference.Block != wrapper.Block))
+        {
+            Transform turn = wrapper.Transform;
+            Block block = wrapper.Block;
+            document.Root.Entities.Remove(wrapper);
+            while (block.Entities.Count > 0)
+            {
+                Entity entity = block.Entities[0];
+                block.Entities.RemoveAt(0);
+                if (entity is BlockReference reference)
+                {
+                    reference.Transform = turn * reference.Transform;
+                    document.Root.Entities.Add(reference);
+                }
+                else
+                {
+                    document.Root.Entities.Add(Core.Editing.TransformCommands.Duplicate(entity, turn));
+                }
+            }
+            document.Blocks.Remove(block);
+        }
+    }
+
+    // The name of the scene, when it has one, is the name of the model.
+    private static void ReadSceneName(string path, Document document)
+    {
+        try
+        {
+            using JsonDocument file = JsonDocument.Parse(GltfAnimations.Load(path).Json);
+            JsonElement root = file.RootElement;
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("scenes", out JsonElement scenes) &&
+                scenes.ValueKind == JsonValueKind.Array && scenes.GetArrayLength() > 0)
+            {
+                int index = root.TryGetProperty("scene", out JsonElement chosen) && chosen.TryGetInt32(out int number) &&
+                    number >= 0 && number < scenes.GetArrayLength() ? number : 0;
+                JsonElement scene = scenes[index];
+                if (scene.ValueKind == JsonValueKind.Object && scene.TryGetProperty("name", out JsonElement name) &&
+                    name.ValueKind == JsonValueKind.String && name.GetString() is { Length: > 0 } text)
+                {
+                    document.Root.Name = text;
+                }
+            }
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException or IOException
+                                              or InvalidOperationException)
+        {
         }
     }
 
@@ -256,8 +314,10 @@ public sealed class GltfReader : IDocumentReader
                 {
                     continue;
                 }
+                // A node of the scene has no node above it: the chain is then from the top of the scene.
+                int top = parents.GetValueOrDefault(index, -1);
                 if (ReferenceOf(index) is not { } follower || !anchors.TryGetValue(anchorNode, out AnchorEntity? anchor) ||
-                    !parents.TryGetValue(index, out int top) || Chain(anchorNode, top) is not { } chainNodes ||
+                    Chain(anchorNode, top) is not { } chainNodes ||
                     chainNodes.Select(ReferenceOf).ToList() is not { } chain || chain.Contains(null))
                 {
                     lost++;

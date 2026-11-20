@@ -70,11 +70,19 @@ public sealed partial class PropertiesViewModel : ObservableObject
     /// <summary>The name of the entity, as typed: setting it renames the entity, or takes its name away when empty.</summary>
     public string EditedName
     {
-        get => _node?.Entity?.Name ?? string.Empty;
+        get => _node is { IsModel: true, Document: { } model } ? model.Root.Name : _node?.Entity?.Name ?? string.Empty;
         set
         {
             string? name = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-            if (_node?.Entity is { } entity && name != entity.Name)
+            if (_node is { IsModel: true, Document: { } model })
+            {
+                // The model has the name of its scene in glTF: it always has one.
+                if (name is not null && name != model.Root.Name)
+                {
+                    Edit?.Invoke(new RenameBlockCommand(model.Root, name));
+                }
+            }
+            else if (_node?.Entity is { } entity && name != entity.Name)
             {
                 Edit?.Invoke(new RenameCommand(entity, name, _document));
             }
@@ -342,7 +350,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
     {
         _node = node;
         IsRenaming = false;
-        IsEditable = node?.Entity is not null;
+        IsEditable = node?.Entity is not null || node is { IsModel: true };
         HasBlock = node?.Entity is BlockReference;
         OnPropertyChanged(nameof(BlockName));
         ShowAnchors(node);

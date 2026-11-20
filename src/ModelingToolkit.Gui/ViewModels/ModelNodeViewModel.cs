@@ -161,6 +161,10 @@ public sealed partial class ModelNodeViewModel : ObservableObject
             OnPropertyChanged(nameof(IsGroup));
             OnPropertyChanged(nameof(IsComponent));
         }
+        else if (IsModel && change is Core.Model.PropertyChanged { Target: Block block } && ReferenceEquals(block, _block))
+        {
+            Name = block.Name; // the model is renamed
+        }
         if (IsGeometry && ReferenceEquals(changed, _block))
         {
             Detail = GeometryDetail(_block!);

@@ -53,9 +53,6 @@ internal static class EditCommand
             IDocumentWriter writer = formats.WriterFor(outputFile.FullName);
             var warnings = new List<string>();
             Document document = formats.ReaderFor(inputFile.FullName).Read(inputFile.FullName, warnings);
-            // As the application opens it: the node of a glTF file holding the whole model is the model, so that
-            // writing it back does not wrap it once more.
-            ModelPaths.UnwrapGltf(document, inputFile.FullName);
             var session = new EditSession(document);
             foreach (string operation in parseResult.GetRequiredValue(operations))
             {
@@ -81,15 +78,13 @@ internal static class EditCommand
         if (verb == "import")
         {
             var imported = formats.ReaderFor(Path.GetFullPath(target)).Read(Path.GetFullPath(target), warnings);
-            var import = new ImportCommand(document, ModelPaths.ModelBlock(document), imported, Path.GetFileNameWithoutExtension(target));
+            var import = new ImportCommand(document, document.Root, imported, Path.GetFileNameWithoutExtension(target));
             session.Execute(import);
             if (value is not null)
             {
-                // At the point of the model, whatever wraps the block of the model.
                 Point3d point = Point(value);
-                Transform wrapping = InferenceEngine.PlacementOf(ModelPaths.Wrappers(document));
                 session.Execute(new SetTransformCommand("Move", import.Reference,
-                    wrapping.Inverse() * Transform.Translation(point.X, point.Y, point.Z) * import.Reference.Transform));
+                    Transform.Translation(point.X, point.Y, point.Z) * import.Reference.Transform));
             }
             return $"Imported {target} as {import.Reference.Block.Name}.";
         }
@@ -100,8 +95,8 @@ internal static class EditCommand
         {
             SimplifyPreset preset = SimplifyPreset.Named(value ?? "clean-up")
                 ?? throw new ArgumentException($"There is no preset \"{value}\".");
-            Entity whole = path.Count == 0 || path[^1] is BlockReference { } top && ReferenceEquals(top.Block, ModelPaths.ModelBlock(document)) && target.Trim() == "."
-                ? new BlockReference(ModelPaths.ModelBlock(document), Transform.Identity)
+            Entity whole = path.Count == 0 || path[^1] is BlockReference { } top && ReferenceEquals(top.Block, document.Root) && target.Trim() == "."
+                ? new BlockReference(document.Root, Transform.Identity)
                 : path[^1];
             SimplifiedComponent result = SimplifiedComponent.Of(whole, preset.Options);
             session.Execute(result.Command());
