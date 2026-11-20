@@ -33,11 +33,28 @@ public sealed class AnchorEntity : Entity
         {
             throw new ArgumentException($"Unknown anchor kind {kind}.", nameof(kind));
         }
-        Placement = placement;
+        _placement = placement;
         Kind = kind;
     }
 
-    public Transform Placement { get; }
+    private Transform _placement;
+
+    /// <summary>
+    /// From the frame of the anchor to the coordinates of its block; set, what follows the anchor goes with it.
+    /// </summary>
+    public Transform Placement
+    {
+        get => _placement;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (!ReferenceEquals(_placement, value))
+            {
+                _placement = value;
+                Raise(new PropertyChanged(this, nameof(Placement)));
+            }
+        }
+    }
 
     public AnchorKind Kind { get; }
 

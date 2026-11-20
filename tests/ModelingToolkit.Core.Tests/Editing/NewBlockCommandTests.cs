@@ -50,4 +50,21 @@ public sealed class NewBlockCommandTests
         session.Undo();
         Assert.Equal("New block", added.Reference.Block.Name);
     }
+
+    [Fact]
+    public void A_block_is_renamed_to_a_name_no_other_block_has_and_undoing_gives_back_the_old_one()
+    {
+        var document = new Document();
+        var chair = new Block("Block 12");
+        document.Blocks.AddRange([chair, new Block("Table")]);
+        var session = new EditSession(document);
+
+        session.Execute(new RenameBlockCommand(chair, "  Chair ", document));
+        Assert.Equal("Chair", chair.Name);
+        Assert.Throws<EditRefusedException>(() => new RenameBlockCommand(chair, "Table", document));
+        Assert.Throws<EditRefusedException>(() => new RenameBlockCommand(chair, " ", document));
+
+        session.Undo();
+        Assert.Equal("Block 12", chair.Name);
+    }
 }

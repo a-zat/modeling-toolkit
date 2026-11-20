@@ -10,19 +10,28 @@
       <ScrollViewer IsVisible="{Binding HasSelection}">
         <Border Classes="card" Margin="10,0,10,10" VerticalAlignment="Top">
           <StackPanel Spacing="12">
+            <!-- The title is the name: a double click edits it, Enter or leaving the field renames, Escape goes
+                 back to the name it had. -->
             <StackPanel Spacing="2">
-              <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="TitleText" Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
+                         TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}"
+                         DoubleTapped="OnTitleDoubleTapped" Background="Transparent"
+                         ToolTip.Tip="Double click to rename" />
+              <TextBox x:Name="NameBox" FontSize="14" FontWeight="SemiBold" PlaceholderText="{Binding Title}"
+                       Text="{Binding EditedName, UpdateSourceTrigger=LostFocus}" KeyDown="OnNameKeyDown"
+                       LostFocus="OnNameLostFocus" IsVisible="{Binding IsRenaming}" />
               <TextBlock Text="{Binding Kind}" Classes="secondary" FontSize="12" />
             </StackPanel>
             <Border Height="1" Background="{DynamicResource Mtk.Separator}" />
             <!-- An edit is made when the field loses the focus, or with Enter: one command, not one per key. -->
             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="6" ColumnSpacing="14"
                   IsVisible="{Binding HasFields}">
-              <TextBlock Text="Name" Classes="secondary" FontSize="12" VerticalAlignment="Center"
-                         IsVisible="{Binding IsEditable}" />
-              <TextBox x:Name="NameBox" Grid.Column="1" FontSize="12" PlaceholderText="{Binding Title}"
-                       Text="{Binding EditedName, UpdateSourceTrigger=LostFocus}" KeyDown="OnNameKeyDown"
-                       IsVisible="{Binding IsEditable}" />
+              <!-- The name of the block, which the references to it without a name of their own show. -->
+              <TextBlock Text="Block" Classes="secondary" FontSize="12" VerticalAlignment="Center"
+                         IsVisible="{Binding HasBlock}" />
+              <TextBox x:Name="BlockBox" Grid.Column="1" FontSize="12"
+                       Text="{Binding BlockName, UpdateSourceTrigger=LostFocus}" KeyDown="OnFieldKeyDown"
+                       IsVisible="{Binding HasBlock}" />
               <!-- The material of the surfaces selected: a mesh, a shape or faces. -->
               <TextBlock Grid.Row="1" Text="Material" Classes="secondary" FontSize="12" VerticalAlignment="Center"
                          IsVisible="{Binding HasMaterial}" />
@@ -54,6 +63,88 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            <!-- The anchors and points of view of a component, and the anchor it follows. -->
+            <StackPanel Spacing="8" IsVisible="{Binding HasAnchors}">
+              <Border Height="1" Background="{DynamicResource Mtk.Separator}" />
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                <TextBlock Classes="label" Text="ANCHORS" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="field" FontSize="11" Height="24" Padding="8,0" VerticalContentAlignment="Center" Content="+ Anchor"
+                        Command="{Binding AddAnchorCommand}"
+                        ToolTip.Tip="Click on the component, in the 3D view, where another one is to follow it" />
+                <Button Grid.Column="2" Classes="field" FontSize="11" Height="24" Padding="8,0" VerticalContentAlignment="Center" Content="+ Point of view"
+                        Command="{Binding AddPointOfViewCommand}"
+                        ToolTip.Tip="Click on the component, in the 3D view, where to look from: the eyes are above it" />
+              </Grid>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14" IsVisible="{Binding CanAttach}">
+                <TextBlock Text="Follows" Classes="secondary" FontSize="12" VerticalAlignment="Center" />
+                <!-- A menu of commands rather than a list with a selection, which would write its first item
+                     back when given new ones: only a choice made here changes what the component follows. -->
+                <Button Grid.Column="1" Classes="field" FontSize="12" HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        ToolTip.Tip="An anchor that the component goes with, wherever it is moved or animated">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Attached.Label, FallbackValue=''}" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <PathIcon Grid.Column="1" Width="10" Height="10" Margin="6,0,0,0"
+                              Data="{StaticResource Icon.ChevronDown}" />
+                  </Grid>
+                  <Button.Flyout>
+                    <MenuFlyout ItemsSource="{Binding AttachChoices}" Placement="BottomEdgeAlignedLeft">
+                      <MenuFlyout.ItemContainerTheme>
+                        <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                      x:DataType="vm:AttachChoice">
+                          <Setter Property="Header" Value="{Binding Label}" />
+                          <Setter Property="Command" Value="{Binding Choose}" />
+                          <Setter Property="CommandParameter" Value="{Binding}" />
+                          <Setter Property="ToggleType" Value="Radio" />
+                          <Setter Property="IsChecked" Value="{Binding IsChosen, Mode=OneWay}" />
+                        </ControlTheme>
+                      </MenuFlyout.ItemContainerTheme>
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+              </Grid>
+              <ItemsControl ItemsSource="{Binding Anchors}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="vm:AnchorRowViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="6"
+                          RowSpacing="4" Margin="0,2,0,6">
+                      <PathIcon Width="14" Height="14" VerticalAlignment="Center" ToolTip.Tip="{Binding KindName}"
+                                Data="{StaticResource Icon.Eye}" IsVisible="{Binding IsPointOfView}" />
+                      <PathIcon Width="14" Height="14" VerticalAlignment="Center" ToolTip.Tip="{Binding KindName}"
+                                Data="{StaticResource Icon.Circle}" IsVisible="{Binding !IsPointOfView}" />
+                      <TextBox Grid.Column="1" FontSize="12" Text="{Binding Name, UpdateSourceTrigger=LostFocus}"
+                               KeyDown="OnFieldKeyDown" />
+                      <Button Grid.Column="2" Classes="tool" Width="24" Height="24" Command="{Binding LookCommand}"
+                              IsVisible="{Binding CanLook}" ToolTip.Tip="Look from here, walking">
+                        <PathIcon Width="14" Height="14" Data="{StaticResource Icon.Walk}" />
+                      </Button>
+                      <Button Grid.Column="3" Classes="tool" Width="24" Height="24" Command="{Binding RemoveCommand}"
+                              ToolTip.Tip="Remove">
+                        <PathIcon Width="12" Height="12" Data="{StaticResource Icon.Dismiss}" />
+                      </Button>
+                      <!-- In the coordinates of the component, in millimetres, and the way it faces, in degrees. -->
+                      <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
+                            ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*" ColumnSpacing="4">
+                        <TextBlock Text="X" Classes="secondary" FontSize="11" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" FontSize="11" MinWidth="0" Padding="4,2"
+                                 Text="{Binding X, UpdateSourceTrigger=LostFocus}" KeyDown="OnFieldKeyDown" />
+                        <TextBlock Grid.Column="2" Text="Y" Classes="secondary" FontSize="11" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="3" FontSize="11" MinWidth="0" Padding="4,2"
+                                 Text="{Binding Y, UpdateSourceTrigger=LostFocus}" KeyDown="OnFieldKeyDown" />
+                        <TextBlock Grid.Column="4" Text="Z" Classes="secondary" FontSize="11" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="5" FontSize="11" MinWidth="0" Padding="4,2"
+                                 Text="{Binding Z, UpdateSourceTrigger=LostFocus}" KeyDown="OnFieldKeyDown" />
+                        <TextBlock Grid.Column="6" Text="∠" Classes="secondary" FontSize="11" VerticalAlignment="Center"
+                                   ToolTip.Tip="The way it faces, in degrees from the X axis of the component" />
+                        <TextBox Grid.Column="7" FontSize="11" MinWidth="0" Padding="4,2"
+                                 Text="{Binding Facing, UpdateSourceTrigger=LostFocus}" KeyDown="OnFieldKeyDown" />
+                      </Grid>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
             <!-- What the selection holds that moves, with a switch and a slider each. -->
             <views:AnimationsView DataContext="{Binding Animations}" IsVisible="{Binding HasItems}" />
           </StackPanel>

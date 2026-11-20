@@ -325,7 +325,7 @@ public sealed partial class AnimationsViewModel : ObservableObject
             {
                 depth++;
             }
-            if (depth == 0 || depth < nearestDepth ||
+            if (depth < Owning(part.Chain) || depth < nearestDepth ||
                 !part.Item.Animation.PoseAt(part.Item.Animation.Duration).TryGetValue(part.Target, out Transform? shown))
             {
                 continue;
@@ -349,6 +349,13 @@ public sealed partial class AnimationsViewModel : ObservableObject
         }
         return nearest;
     }
+
+    /// <summary>
+    /// How many references of a chain, from the model down, a click must be inside for what the chain holds to be the
+    /// one clicked: all of them, so that a click on the chair beside a table, gathered with it in one component, is not
+    /// taken for a click on the table.
+    /// </summary>
+    internal static int Owning(IReadOnlyList<BlockReference> chain) => Math.Max(1, chain.Count);
 
     // The parts hidden at rest that an animation shows, each with the references from the model down to the one holding
     // it, once for every place it is in: found again after a change of the document, and only when a part is hidden.

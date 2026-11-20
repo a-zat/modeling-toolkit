@@ -106,11 +106,39 @@ public sealed class Document
     internal void Raise(DocumentChange change)
     {
         Changed?.Invoke(this, change);
-        if (_attachments.Count > 0 &&
-            change is PropertyChanged { Target: BlockReference moved, Property: nameof(BlockReference.Transform) })
+        if (_attachments.Count == 0)
+        {
+            return;
+        }
+        if (change is PropertyChanged { Target: BlockReference moved, Property: nameof(BlockReference.Transform) })
         {
             Follow(moved);
         }
+        else if (change is PropertyChanged { Target: AnchorEntity anchor, Property: nameof(AnchorEntity.Placement) })
+        {
+            // What follows the anchor goes where it is now.
+            foreach (Attachment attachment in _attachments.ToArray())
+            {
+                if (ReferenceEquals(attachment.Anchor, anchor) && attachment.IsActive)
+                {
+                    Place(attachment);
+                }
+            }
+        }
+    }
+
+    private void Place(Attachment attachment)
+    {
+        _placing.Add(attachment.Follower);
+        try
+        {
+            attachment.Follower.Transform = attachment.PlacementOf(r => r.Transform);
+        }
+        finally
+        {
+            _placing.Remove(attachment.Follower);
+        }
+        Follow(attachment.Follower); // and what follows it
     }
 
     // A follower moved alone keeps its new place from the anchor; the followers of a reference moved go with it.
@@ -131,16 +159,7 @@ public sealed class Document
         {
             if (attachment.IsActive && attachment.Chain.Contains(moved, ReferenceEqualityComparer.Instance))
             {
-                _placing.Add(attachment.Follower);
-                try
-                {
-                    attachment.Follower.Transform = attachment.PlacementOf(r => r.Transform);
-                }
-                finally
-                {
-                    _placing.Remove(attachment.Follower);
-                }
-                Follow(attachment.Follower); // and what follows it
+                Place(attachment);
             }
         }
     }

@@ -52,6 +52,37 @@ public sealed class RenameCommand : IEditCommand
     }
 }
 
+/// <summary>Renames a block, which every reference to it shows when it has no name of its own.</summary>
+public sealed class RenameBlockCommand : IEditCommand
+{
+    private readonly Block _block;
+    private readonly string _name;
+    private readonly string _before;
+
+    /// <exception cref="EditRefusedException">The name is empty, or another block of the document has it.</exception>
+    public RenameBlockCommand(Block block, string name, Document? document = null)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new EditRefusedException("A block needs a name.");
+        }
+        if (document is not null && document.Blocks.Any(other => other != block && other.Name == name.Trim()))
+        {
+            throw new EditRefusedException($"Another block is named {name.Trim()}.");
+        }
+        _block = block;
+        _name = name.Trim();
+        _before = block.Name;
+    }
+
+    public string Name => "Rename block";
+
+    public void Apply() => _block.Name = _name;
+
+    public void Revert() => _block.Name = _before;
+}
+
 /// <summary>Shows or hides entities, as layers are switched on or off, as one command.</summary>
 public sealed class SetHiddenCommand : IEditCommand
 {

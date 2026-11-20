@@ -25,6 +25,11 @@ public static class TransformCommands
         {
             return new SetTransformCommand(name, moved, transform * moved.Transform);
         }
+        if (!copy && entity is AnchorEntity anchor)
+        {
+            // The same anchor, moved, so that what follows it still does.
+            return new SetAnchorCommand(name, anchor, transform * anchor.Placement);
+        }
         if (!copy && entity is BrepEntity brep)
         {
             return new ReplaceShapeCommand(
@@ -92,6 +97,20 @@ public sealed class SetTransformCommand(string name, BlockReference reference, T
     public void Apply() => _reference.Transform = _after;
 
     public void Revert() => _reference.Transform = _before;
+}
+
+/// <summary>Places an anchor again; what follows it goes with it, and undoing puts both back.</summary>
+public sealed class SetAnchorCommand(string name, AnchorEntity anchor, Transform placement) : IEditCommand
+{
+    private readonly AnchorEntity _anchor = anchor ?? throw new ArgumentNullException(nameof(anchor));
+    private readonly Transform _before = anchor.Placement;
+    private readonly Transform _after = placement ?? throw new ArgumentNullException(nameof(placement));
+
+    public string Name { get; } = name ?? throw new ArgumentNullException(nameof(name));
+
+    public void Apply() => _anchor.Placement = _after;
+
+    public void Revert() => _anchor.Placement = _before;
 }
 
 /// <summary>Puts an entity in the place of another in its block; undoing puts the old one back.</summary>

@@ -39,6 +39,32 @@ public sealed class AttachmentTests
     }
 
     [Fact]
+    public void An_anchor_placed_again_takes_its_follower_along_and_undoing_brings_both_back()
+    {
+        Attach();
+        var command = new Core.Editing.SetAnchorCommand("Move anchor", _anchor, Transform.Translation(450, 300, 0));
+
+        command.Apply();
+        Assert.Equal(new Point3d(1500, 300, 0), Origin(_chair));
+
+        command.Revert();
+        Assert.Equal(new Point3d(1500, 0, 0), Origin(_chair));
+        Assert.Equal(new Point3d(450, 0, 0), _anchor.Point);
+    }
+
+    [Fact]
+    public void Moving_an_anchor_by_the_transform_commands_keeps_it_the_one_followed()
+    {
+        Attachment attachment = Attach();
+
+        Core.Editing.TransformCommands.Of("Move", _anchor, Transform.Translation(0, 0, 100)).Apply();
+
+        Assert.Same(_anchor, attachment.Anchor);
+        Assert.Contains(_anchor, _leaf.Block.Entities);
+        Assert.Equal(new Point3d(1500, 0, 100), Origin(_chair));
+    }
+
+    [Fact]
     public void The_follower_goes_with_the_references_of_the_chain_and_keeps_its_place_when_moved_alone()
     {
         Attachment attachment = Attach();

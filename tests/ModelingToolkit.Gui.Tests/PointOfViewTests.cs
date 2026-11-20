@@ -57,6 +57,53 @@ public sealed class PointOfViewTests : IDisposable
             KeyModifiers.None, 1, ViewportInputKind.Click));
 
     [Fact]
+    public async Task A_click_on_a_chair_gathered_with_a_table_sits_rather_than_extending_the_table()
+    {
+        // A dining set: a table with a leaf hidden until it is extended, and a chair beside it, in one component.
+        var document = new Document();
+        var leaf = new Block("Leaf");
+        leaf.Entities.Add(Plate(760));
+        var top = new Block("Top");
+        top.Entities.Add(Plate(760));
+        var hidden = new BlockReference(leaf, Transform.Translation(900, 0, 0) * Transform.Scaling(default, 1e-6)) { Name = "Leaf" };
+        top.Entities.Add(hidden);
+        var chair = new Block("Chair");
+        chair.Entities.Add(Plate(450));
+        chair.Entities.Add(new AnchorEntity(Transform.Translation(0, 0, 1200), AnchorKind.PointOfView) { Name = "Sitting" });
+        var set = new Block("Set");
+        var table = new BlockReference(top, Transform.Identity) { Name = "Table" };
+        var seat = new BlockReference(chair, Transform.Translation(1000, 0, 0)) { Name = "Chair" };
+        set.Entities.Add(table);
+        set.Entities.Add(seat);
+        document.Blocks.AddRange([leaf, top, chair, set]);
+        var dining = new BlockReference(set, Transform.Identity) { Name = "Dining" };
+        document.Root.Entities.Add(dining);
+        document.Animations.Add(new Animation("Extend", [new AnimationChannel(hidden, AnimatedProperty.Scale,
+            AnimationInterpolation.Linear, [0, 1], [1, 1, 1, 1e6, 1e6, 1e6])]));
+        string path = Path.Combine(_folder, "dining.mtk");
+        new NativeDocumentWriter().Write(document, path);
+        var viewModel = new MainWindowViewModel(
+            new DocumentFormats([new NativeDocumentReader(new OcctKernel())], [new NativeDocumentWriter()]),
+            new NoAppearance());
+        await viewModel.LoadAsync(path);
+        BlockReference read = (BlockReference)viewModel.Document!.Root.Entities[0];
+        BlockReference[] parts = [.. read.Block.Entities.OfType<BlockReference>()];
+        viewModel.ToggleWalkCommand.Execute(null);
+        Click(viewModel, [read, parts[0], parts[0].Block.Entities[0]], new Point3d(0, 0, 0));
+
+        // Near where the leaf shows, the chair is sat on and the table stays as it is.
+        Click(viewModel, [read, parts[1], parts[1].Block.Entities[0]], new Point3d(1000, 0, 450));
+        Assert.NotNull(viewModel.Seat);
+        Assert.DoesNotContain(viewModel.Animations.Items, item => item.IsOpen);
+
+        // A click on the table extends it.
+        viewModel.EscapeCommand.Execute(null);
+        Click(viewModel, [read, parts[0], parts[0].Block.Entities[0]], new Point3d(800, 0, 760));
+        Assert.Null(viewModel.Seat);
+        Assert.Contains(viewModel.Animations.Items, item => item.IsOpen);
+    }
+
+    [Fact]
     public async Task A_click_on_a_chair_while_walking_looks_from_its_seat_and_a_click_escape_or_a_new_walk_stands_up()
     {
         MainWindowViewModel viewModel = await OpenRoomAsync();
@@ -103,35 +150,62 @@ public sealed class PointOfViewTests : IDisposable
     }
 
     [Fact]
-    public async Task The_menu_of_a_component_adds_an_anchor_where_clicked_and_attaches_another_component_to_it()
+    public async Task The_properties_of_a_component_add_an_anchor_where_clicked_and_attach_another_component_to_it()
     {
         MainWindowViewModel viewModel = await OpenRoomAsync();
-        IReadOnlyList<ContextAction> actions = viewModel.ContextActions(new ViewportPick(
-            MeshOf(viewModel, "Door"), null, new Point3d(100, 3100, 1000), new System.Numerics.Vector3(0, 0, 1),
-            KeyModifiers.None, 1, ViewportInputKind.Click));
-        ContextAction add = actions.First(action => action.Header == "Add anchor here");
-        add.Command!.Execute(add.Parameter);
-
         var door = (BlockReference)viewModel.Document!.Root.Entities.First(entity => entity.Name == "Door");
-        AnchorEntity anchor = Assert.Single(door.Block.Entities.OfType<AnchorEntity>());
-        Assert.Equal(new Point3d(100, 100, 1000), anchor.Point); // in the block of the door
-
-        // The chair, brought near it, is offered to follow it; then it moves with the door.
         var chair = (BlockReference)viewModel.Document.Root.Entities.First(entity => entity.Name == "Chair");
+        viewModel.ModelTree.SelectCommand.Execute(new List<Entity> { door });
+        Assert.True(viewModel.Properties.HasAnchors);
+
+        // A click elsewhere does not place it; a click on the door does, in the block of the door.
+        viewModel.Properties.AddAnchorCommand.Execute(null);
+        Assert.True(viewModel.IsPlacingAnchor);
+        Click(viewModel, MeshOf(viewModel, "Chair"), new Point3d(2000, 0, 450));
+        Assert.Empty(door.Block.Entities.OfType<AnchorEntity>());
+        Click(viewModel, MeshOf(viewModel, "Door"), new Point3d(100, 3100, 1000));
+        Assert.False(viewModel.IsPlacingAnchor);
+        AnchorEntity anchor = Assert.Single(door.Block.Entities.OfType<AnchorEntity>());
+        Assert.Equal(new Point3d(100, 100, 1000), anchor.Point);
+        AnchorRowViewModel row = Assert.Single(viewModel.Properties.Anchors);
+        row.Name = "Handle";
+        Assert.Equal("Handle", anchor.Name);
+
+        // The chair follows it, chosen in its properties; then it moves with the door, and with the anchor.
         chair.Transform = Transform.Translation(500, 2000, 0);
-        IReadOnlyList<ContextAction> chairActions = viewModel.ContextActions(new ViewportPick(
-            MeshOf(viewModel, "Chair"), null, new Point3d(500, 2000, 450), new System.Numerics.Vector3(0, 0, 1),
-            KeyModifiers.None, 1, ViewportInputKind.Click));
-        ContextAction attach = chairActions.First(action => action.Header.StartsWith("Attach to", StringComparison.Ordinal));
-        attach.Command!.Execute(attach.Parameter);
+        viewModel.ModelTree.SelectCommand.Execute(new List<Entity> { chair });
+        AttachChoice choice = Assert.Single(viewModel.Properties.AttachChoices, item => item.Attachment is not null);
+        Assert.Equal("Handle of Door", choice.Label);
+        viewModel.Properties.AttachCommand.Execute(choice);
         Assert.Single(viewModel.Document.Attachments);
+        Assert.Equal("Handle of Door", viewModel.Properties.Attached?.Label);
 
         door.Transform = Transform.Translation(0, 3500, 0);
-        Assert.Equal(500, chair.Transform.Apply(Point3d.Origin).X, 1e-9);
-        Assert.Equal(2500, chair.Transform.Apply(Point3d.Origin).Y, 1e-9);
+        Assert.Equal(new Point3d(500, 2500, 0), chair.Transform.Apply(Point3d.Origin));
+        viewModel.ModelTree.SelectCommand.Execute(new List<Entity> { door });
+        viewModel.Properties.Anchors[0].X = "300";
+        Assert.Equal(new Point3d(700, 2500, 0), chair.Transform.Apply(Point3d.Origin));
 
+        viewModel.UndoCommand.Execute(null); // the move of the anchor
+        Assert.Equal(new Point3d(500, 2500, 0), chair.Transform.Apply(Point3d.Origin));
         viewModel.UndoCommand.Execute(null); // the attachment
         Assert.Empty(viewModel.Document.Attachments);
+    }
+
+    [Fact]
+    public async Task A_point_of_view_is_looked_from_by_its_properties_walking_from_below_it()
+    {
+        MainWindowViewModel viewModel = await OpenRoomAsync();
+        var chair = (BlockReference)viewModel.Document!.Root.Entities.First(entity => entity.Name == "Chair");
+        viewModel.ModelTree.SelectCommand.Execute(new List<Entity> { chair });
+        AnchorRowViewModel row = Assert.Single(viewModel.Properties.Anchors);
+        Assert.True(row.CanLook);
+
+        row.LookCommand.Execute(null);
+
+        Assert.True(viewModel.IsWalking);
+        WalkSeat seat = Assert.IsType<WalkSeat>(viewModel.Seat);
+        Assert.Equal(new Point3d(2000, 0, 1200), seat.Eye);
     }
 
     private sealed class NoAppearance : IAppearance

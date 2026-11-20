@@ -48,6 +48,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         Properties.Edit = Edit;
         Properties.Animations = Animations;
+        Properties.Refused = message => StatusMessage = message;
+        Properties.PlaceAnchor = PlaceAnchor;
+        Properties.LookFrom = row => LookFrom(row.Anchor, row.Path);
         ModelTree.Edit = Edit;
         Pose = Animations.Pose;
         Animations.PropertyChanged += (_, e) =>
@@ -348,21 +351,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 {
                     actions.Add(new("Interact", ToggleAtCommand, path));
                 }
-                if (entity is BlockReference component && Document is { } document)
-                {
-                    actions.Add(ContextAction.Separator);
-                    actions.Add(new("Add anchor here", AddAnchorCommand, new AnchorRequest(target, pick.Point, AnchorKind.Attach)));
-                    actions.Add(new("Add point of view here", AddAnchorCommand,
-                        new AnchorRequest(target, pick.Point, AnchorKind.PointOfView)));
-                    if (document.AttachmentOf(component) is { } attached)
-                    {
-                        actions.Add(new($"Detach from {attached.Anchor.Name ?? "its anchor"}", DetachFromAnchorCommand, attached));
-                    }
-                    else if (Attachment.Nearest(component, AttachReach) is { } nearest)
-                    {
-                        actions.Add(new($"Attach to {nearest.Anchor.Name ?? "the nearest anchor"}", AttachToAnchorCommand, nearest));
-                    }
-                }
                 actions.Add(ContextAction.Separator);
                 foreach (ToolItemViewModel tool in Tools.Where(item => item.Tool is MoveTool or RotateTool or ScaleTool))
                 {
@@ -417,9 +405,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleAt(IReadOnlyList<Entity>? path) => Animations.ToggleAt(path);
 
-    /// <summary>How far from the origin of a component the anchor it is attached to may be, in millimetres.</summary>
-    private const double AttachReach = 3000;
-
     /// <summary>Of the eyes above the point clicked, for a point of view added there: those of a person sitting.</summary>
     internal const double SeatedEyeHeight = 750;
 
@@ -466,22 +451,42 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private void AttachToAnchor(Attachment attachment)
+    // The anchor or point of view to add by the next click in the 3D view, on the component at the end of the path.
+    private (AnchorKind Kind, IReadOnlyList<Entity> Target)? _placingAnchor;
+
+    /// <summary>Whether the next click in the 3D view places an anchor or a point of view on the component selected.</summary>
+    public bool IsPlacingAnchor => _placingAnchor is not null;
+
+    // Begins to place an anchor or a point of view on the component selected; Escape cancels.
+    private void PlaceAnchor(AnchorKind kind)
     {
-        if (Document is { } document && Edit(new AttachCommand("Attach", document, attachment, attach: true)))
+        if (ModelTree.SelectedNode is not { Entity: BlockReference, Path: { } path } || !IsEditable)
         {
-            StatusMessage = $"{attachment.Follower.Name ?? attachment.Follower.Block.Name} follows {attachment.Anchor.Name ?? "the anchor"}.";
+            return;
         }
+        _placingAnchor = (kind, path);
+        StatusMessage = PlacingHint(_placingAnchor.Value);
     }
 
-    [RelayCommand]
-    private void DetachFromAnchor(Attachment attachment)
+    private static string PlacingHint((AnchorKind Kind, IReadOnlyList<Entity> Target) placing)
     {
-        if (Document is { } document)
+        string name = placing.Target[^1] is BlockReference component ? component.Name ?? component.Block.Name : "the component";
+        return placing.Kind == AnchorKind.PointOfView
+            ? $"Click on {name} where to look from: the eyes are above the point clicked. Escape cancels."
+            : $"Click on {name} where to put the anchor. Escape cancels.";
+    }
+
+    // Looks from a point of view of a component, walking: from where the walk is, or from below it.
+    private void LookFrom(AnchorEntity anchor, IReadOnlyList<Entity> path)
+    {
+        BlockReference[] chain = [.. path.OfType<BlockReference>()];
+        if (!IsWalking)
         {
-            Edit(new AttachCommand("Detach", document, attachment, attach: false));
+            Point3d eye = PlacementOf(chain).Apply(anchor.Point);
+            double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
+            StartWalkAt(new Point3d(eye.X, eye.Y, floor));
         }
+        SitAt((anchor, chain));
     }
 
     private static readonly Avalonia.Media.Color AnchorColor = Avalonia.Media.Color.FromRgb(0xE8, 0x8A, 0x1A);
@@ -660,6 +665,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ViewInput(ViewportPick input)
     {
+        if (_placingAnchor is { } placing)
+        {
+            if (input.Kind == ViewportInputKind.Click)
+            {
+                // On the component it is for, where it was clicked.
+                if (input.Path is { } path && path.Count > placing.Target.Count &&
+                    path.Take(placing.Target.Count).SequenceEqual(placing.Target))
+                {
+                    _placingAnchor = null;
+                    AddAnchor(new AnchorRequest(placing.Target, input.Point, placing.Kind));
+                }
+                else
+                {
+                    StatusMessage = PlacingHint(placing);
+                }
+            }
+            return;
+        }
         if (IsPlacingWalk)
         {
             if (input.Kind == ViewportInputKind.Click && input.Path is not null)
@@ -746,6 +769,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (IsSettingsOpen)
         {
             IsSettingsOpen = false;
+            return;
+        }
+        if (_placingAnchor is not null)
+        {
+            _placingAnchor = null;
+            StatusMessage = string.Empty;
             return;
         }
         if (Seat is not null)
@@ -1405,7 +1434,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 depth++;
             }
-            if (depth == 0 || depth < bestDepth)
+            if (depth < AnimationsViewModel.Owning(chain) || depth < bestDepth)
             {
                 continue;
             }

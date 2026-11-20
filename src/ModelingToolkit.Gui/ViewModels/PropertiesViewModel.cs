@@ -62,8 +62,8 @@ public sealed partial class PropertiesViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasFields))]
     public partial bool HasMaterial { get; private set; }
 
-    /// <summary>Whether the selection has a field to edit: its name or its material.</summary>
-    public bool HasFields => IsEditable || HasMaterial;
+    /// <summary>Whether the selection has a field to edit: the name of its block or its material.</summary>
+    public bool HasFields => HasBlock || HasMaterial;
 
     private Surfaces[] _surfaces = [];
 
@@ -80,6 +80,183 @@ public sealed partial class PropertiesViewModel : ObservableObject
             }
             OnPropertyChanged(); // the name the entity has, if the edit was refused or trimmed
         }
+    }
+
+    /// <summary>Whether the title is being edited, to rename the entity: a double click on it begins.</summary>
+    [ObservableProperty]
+    public partial bool IsRenaming { get; set; }
+
+    /// <summary>Begins to edit the title, when the selection is an entity.</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void StartRename() => IsRenaming = IsEditable;
+
+    /// <summary>Whether the selection is a reference, whose block has a name of its own to edit.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFields))]
+    public partial bool HasBlock { get; private set; }
+
+    /// <summary>
+    /// The name of the block of the reference selected, as typed: setting it renames the block, which every reference to
+    /// it without a name of its own shows.
+    /// </summary>
+    public string BlockName
+    {
+        get => (_node?.Entity as BlockReference)?.Block.Name ?? string.Empty;
+        set
+        {
+            if (_node?.Entity is BlockReference { Block: var block } && !string.IsNullOrWhiteSpace(value) &&
+                value.Trim() != block.Name)
+            {
+                try
+                {
+                    Edit?.Invoke(new RenameBlockCommand(block, value, _document));
+                }
+                catch (EditRefusedException exception)
+                {
+                    Refused?.Invoke(exception.Message);
+                }
+            }
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Tells why an edit of a field was refused, as the status bar does.</summary>
+    public Action<string>? Refused { get; set; }
+
+    /// <summary>Begins to place an anchor or a point of view on the component selected, by a click in the 3D view.</summary>
+    public Action<AnchorKind>? PlaceAnchor { get; set; }
+
+    /// <summary>Looks from a point of view of the component selected, walking.</summary>
+    public Action<AnchorRowViewModel>? LookFrom { get; set; }
+
+    /// <summary>
+    /// Whether the selection is a component, not a group, which has anchors and points of view, and can follow an anchor.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HasAnchors { get; private set; }
+
+    /// <summary>The anchors and the points of view of the block of the component selected.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<AnchorRowViewModel> Anchors { get; } = [];
+
+    /// <summary>What the component selected can follow: nothing, or each anchor of the block where it is, at any depth.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<AttachChoice> AttachChoices { get; private set; } = [];
+
+    /// <summary>Whether there is an anchor to follow, or one followed, so that the choice is shown.</summary>
+    [ObservableProperty]
+    public partial bool CanAttach { get; private set; }
+
+    /// <summary>The anchor that the component follows, or nothing, as its choice shows it.</summary>
+    [ObservableProperty]
+    public partial AttachChoice? Attached { get; private set; }
+
+    // Makes the component follow the anchor chosen, from where it is, or nothing: one command.
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void Attach(AttachChoice? choice)
+    {
+        if (choice is null || choice.IsChosen || _document is not { } document || _node?.Entity is not BlockReference component)
+        {
+            return;
+        }
+        List<IEditCommand> commands = [];
+        if (document.AttachmentOf(component) is { } current)
+        {
+            commands.Add(new AttachCommand("Detach", document, current, attach: false));
+        }
+        if (choice.Attachment is { } attachment)
+        {
+            commands.Add(new AttachCommand("Attach", document, attachment, attach: true));
+        }
+        if (commands.Count > 0)
+        {
+            Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand("Attach", commands));
+        }
+    }
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void AddAnchor() => PlaceAnchor?.Invoke(AnchorKind.Attach);
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void AddPointOfView() => PlaceAnchor?.Invoke(AnchorKind.PointOfView);
+
+    // The anchors of the component, and what it can follow.
+    private void ShowAnchors(ModelNodeViewModel? node)
+    {
+        Anchors.Clear();
+        // A group gathers components, as a room its furniture: what it holds has anchors, not the group.
+        if (node is not { Entity: BlockReference { IsGroup: false } component, Path: { } path } || Edit is not { } edit)
+        {
+            HasAnchors = false;
+            CanAttach = false;
+            AttachChoices = [];
+            Attached = null;
+            return;
+        }
+        HasAnchors = true;
+        foreach (AnchorEntity anchor in component.Block.Entities.OfType<AnchorEntity>())
+        {
+            Anchors.Add(new AnchorRowViewModel(anchor, path, edit, LookFrom));
+        }
+        Attachment? current = _document?.AttachmentOf(component) is { IsActive: true } active ? active : null;
+        var choices = new List<AttachChoice>
+        {
+            new("Nothing", null) { Choose = AttachCommand, IsChosen = current is null },
+        };
+        foreach (Attachment candidate in Followable(component))
+        {
+            string holder = candidate.Chain.Count > 0
+                ? candidate.Chain[^1].Name ?? candidate.Chain[^1].Block.Name
+                : "this block";
+            bool chosen = current is not null && ReferenceEquals(current.Anchor, candidate.Anchor) &&
+                current.Chain.SequenceEqual(candidate.Chain);
+            choices.Add(new AttachChoice($"{candidate.Anchor.Name ?? "Anchor"} of {holder}", candidate)
+            {
+                Choose = AttachCommand,
+                IsChosen = chosen,
+            });
+        }
+        if (current is not null && !choices.Exists(choice => choice.IsChosen))
+        {
+            // Followed from further away than the block of the component, as a file may say.
+            choices.Add(new AttachChoice(current.Anchor.Name ?? "Anchor", null) { IsChosen = true });
+        }
+        AttachChoices = choices;
+        Attached = choices.First(choice => choice.IsChosen);
+        CanAttach = choices.Count > 1;
+    }
+
+    // The anchors to attach to in the block holding the component and in the components there, at any depth, but those
+    // inside the component itself; each as the attachment that keeps the component where it is.
+    private static List<Attachment> Followable(BlockReference component)
+    {
+        var found = new List<Attachment>();
+        if (component.Owner is not { } owner)
+        {
+            return found;
+        }
+        var chain = new List<BlockReference>();
+        void Look(Block block)
+        {
+            foreach (Entity entity in block.Entities)
+            {
+                if (found.Count >= 200)
+                {
+                    return;
+                }
+                if (entity is AnchorEntity { Kind: AnchorKind.Attach } anchor)
+                {
+                    found.Add(new Attachment(component, [.. chain], anchor, Attachment.OffsetOf(component, chain, anchor)));
+                }
+                else if (entity is BlockReference reference && !ReferenceEquals(reference, component) && chain.Count < 32)
+                {
+                    chain.Add(reference);
+                    Look(reference.Block);
+                    chain.RemoveAt(chain.Count - 1);
+                }
+            }
+        }
+        Look(owner);
+        return found;
     }
 
     /// <summary>The choice of a material for the surfaces selected.</summary>
@@ -164,7 +341,11 @@ public sealed partial class PropertiesViewModel : ObservableObject
     public void Show(ModelNodeViewModel? node)
     {
         _node = node;
+        IsRenaming = false;
         IsEditable = node?.Entity is not null;
+        HasBlock = node?.Entity is BlockReference;
+        OnPropertyChanged(nameof(BlockName));
+        ShowAnchors(node);
         ShowMaterials(node?.Entity switch
         {
             MeshEntity mesh => [new Surfaces(mesh, null, [])],
@@ -179,7 +360,8 @@ public sealed partial class PropertiesViewModel : ObservableObject
             null => string.Empty,
             { IsModel: true } => "Project",
             { IsGeometry: true, Block: { } geometryBlock } => $"of {geometryBlock.Name}",
-            { IsReference: true } => "Block reference",
+            { IsGroup: true } => "Group",
+            { IsReference: true } => "Component",
             { IsMesh: true } => "Mesh",
             { IsBrep: true } => "B-rep shape",
             _ => "Entity",
@@ -341,7 +523,6 @@ public sealed partial class PropertiesViewModel : ObservableObject
         Transform transform = reference.Transform;
         return
         [
-            new("Block", reference.Block.Name),
             new("Position", Formatting.Point(transform.M03, transform.M13, transform.M23)),
             new("Entities", Formatting.Count(reference.Block.Entities.Count)),
             new("Size", Formatting.Size(reference.GetBoundingBox())),

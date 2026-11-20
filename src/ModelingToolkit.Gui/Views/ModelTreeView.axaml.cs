@@ -30,6 +30,15 @@ public partial class ModelTreeView : UserControl
     private bool _dragging;
     private TreeViewItem? _dropTarget;
 
+    // The menu of a node is for its entity: the project and the geometries have none, and get no menu.
+    private void OnRowContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is Control { DataContext: ModelNodeViewModel { HasEntity: false } })
+        {
+            e.Handled = true;
+        }
+    }
+
     private void OnTreePointerPressed(object? sender, PointerPressedEventArgs e)
     {
         _pressed = e.GetCurrentPoint(Tree).Properties.IsLeftButtonPressed &&

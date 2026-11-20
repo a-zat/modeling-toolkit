@@ -36,9 +36,11 @@
       </TreeView.Styles>
       <TreeView.ItemTemplate>
         <TreeDataTemplate DataType="vm:ModelNodeViewModel" ItemsSource="{Binding Children}">
-          <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+          <!-- Nothing to offer on the project and the geometries: the menu does not open (a menu made invisible
+               would still take the pointer, and the window would stop answering). -->
+          <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent" ContextRequested="OnRowContextRequested">
             <Grid.ContextMenu>
-              <ContextMenu IsVisible="{Binding HasEntity}">
+              <ContextMenu>
                 <MenuItem Header="Rename" InputGesture="F2"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).StartRenameCommand}"
                           CommandParameter="{Binding}" />
