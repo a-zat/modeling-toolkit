@@ -160,6 +160,64 @@ public sealed class ModelTreeUpdateTests
     }
 
     [Fact]
+    public async Task Deleting_a_component_with_things_in_it_asks_first_and_an_empty_one_does_not()
+    {
+        var full = new Block("Full") { Entities = { Square() } };
+        var empty = new Block("Empty");
+        var document = new Document();
+        document.Blocks.AddRange([full, empty]);
+        document.Root.Entities.Add(new BlockReference(full, Transform.Identity) { Name = "Full" });
+        document.Root.Entities.Add(new BlockReference(empty, Transform.Identity) { Name = "Empty" });
+        var session = new ModelingToolkit.Core.Editing.EditSession(document);
+        var asked = new List<(string What, int Count)>();
+        bool answer = false;
+        var tree = new ModelTreeViewModel
+        {
+            Edit = command => { session.Execute(command); return true; },
+            ConfirmDelete = (what, count) =>
+            {
+                asked.Add((what, count));
+                return Task.FromResult(answer);
+            },
+        };
+        tree.Show(document);
+
+        await tree.DeleteCommand.ExecuteAsync(tree.Model!.Children[1]); // the empty one
+        Assert.Empty(asked);
+        Assert.Single(document.Root.Entities);
+
+        await tree.DeleteCommand.ExecuteAsync(tree.Model.Children[0]); // refused
+        Assert.Equal([("\"Full\"", 1)], asked);
+        Assert.Single(document.Root.Entities);
+
+        answer = true;
+        await tree.DeleteCommand.ExecuteAsync(tree.Model.Children[0]);
+        Assert.Empty(document.Root.Entities);
+    }
+
+    [Fact]
+    public void A_component_with_geometry_cannot_be_made_a_group_and_the_menu_says_why()
+    {
+        var solid = new Block("Solid") { Entities = { Square() } };
+        var holder = new Block("Holder");
+        var document = new Document();
+        document.Blocks.AddRange([solid, holder]);
+        holder.Entities.Add(new BlockReference(solid, Transform.Identity));
+        document.Root.Entities.Add(new BlockReference(solid, Transform.Identity) { Name = "Solid" });
+        document.Root.Entities.Add(new BlockReference(holder, Transform.Identity) { Name = "Holder" });
+        var tree = new ModelTreeViewModel { Edit = _ => true };
+        tree.Show(document);
+
+        tree.SelectedNode = tree.Model!.Children[0];
+        Assert.False(tree.CanChangeGroup);
+        Assert.Contains("only contain blocks", tree.GroupHint, StringComparison.Ordinal);
+
+        tree.SelectedNode = tree.Model.Children[1];
+        Assert.True(tree.CanChangeGroup);
+        Assert.Null(tree.GroupHint);
+    }
+
+    [Fact]
     public void A_duplicate_goes_next_to_the_original_placing_the_same_block()
     {
         var chair = new Block("Chair") { Entities = { Square() } };

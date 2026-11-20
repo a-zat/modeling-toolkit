@@ -32,7 +32,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     public System.Collections.ObjectModel.ObservableCollection<object> SelectedNodes { get; } = [];
 
     public ModelTreeViewModel() =>
-        SelectedNodes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(GroupLabel));
+        SelectedNodes.CollectionChanged += (_, _) => GroupChanged();
 
     // The nodes a command on a node works on: all those selected, when it is one of several, without those inside
     // another one; else the node alone.
@@ -52,16 +52,35 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     private static IEnumerable<ModelNodeViewModel> InBlockOrder(IEnumerable<ModelNodeViewModel> nodes) =>
         nodes.OrderByDescending(n => n.Entity!.Owner?.Entities.IndexOf(n.Entity!) ?? -1);
 
-    /// <summary>Deletes the entity of a node, or of all the nodes selected with it, as one command.</summary>
+    /// <summary>
+    /// Asks whether to delete what holds other things, given what it is and how many things it holds; null deletes
+    /// without asking.
+    /// </summary>
+    public Func<string, int, Task<bool>>? ConfirmDelete { get; set; }
+
+    /// <summary>
+    /// Deletes the entity of a node, or of all the nodes selected with it, as one command; after asking, when a
+    /// component or a group that is not empty is among them.
+    /// </summary>
     [RelayCommand]
-    private void Delete(ModelNodeViewModel? node)
+    private async Task Delete(ModelNodeViewModel? node)
     {
         if (node?.Entity is null || Edit is not { } edit)
         {
             return;
         }
-        List<IEditCommand> commands = [.. InBlockOrder(TargetsOf(node).Where(n => n.Entity!.Owner is not null))
-            .Select(n => new DeleteCommand(n.Entity!))];
+        List<ModelNodeViewModel> targets = [.. TargetsOf(node).Where(n => n.Entity!.Owner is not null)];
+        if (ConfirmDelete is { } ask &&
+            targets.Where(n => n.Entity is BlockReference { Block.Entities.Count: > 0 }).ToList() is { Count: > 0 } held)
+        {
+            int count = held.Sum(n => ((BlockReference)n.Entity!).Block.Entities.Count);
+            string what = targets.Count == 1 ? $"\"{node.Name}\"" : $"{targets.Count} items";
+            if (!await ask(what, count))
+            {
+                return;
+            }
+        }
+        List<IEditCommand> commands = [.. InBlockOrder(targets).Select(n => new DeleteCommand(n.Entity!))];
         if (commands.Count > 0)
         {
             edit(commands.Count == 1 ? commands[0] : new CompositeCommand("Delete", commands));
@@ -211,6 +230,32 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         }
     }
 
+    // Why the command of the menu about groups cannot be used now; null when it can.
+    private string? GroupRefusal
+    {
+        get
+        {
+            ModelNodeViewModel? first = SelectedNode ?? SelectedNodes.OfType<ModelNodeViewModel>().FirstOrDefault();
+            return first is { Entity: BlockReference { IsGroup: false } reference } && TargetsOf(first).Count == 1 &&
+                !Groups.HoldsOnlyComponents(reference.Block)
+                ? "A group can only contain blocks: this one has geometry of its own."
+                : null;
+        }
+    }
+
+    /// <summary>Whether the command of the menu about groups can be used on the selection.</summary>
+    public bool CanChangeGroup => GroupRefusal is null;
+
+    /// <summary>Why it cannot, to show on the disabled item; null when it can.</summary>
+    public string? GroupHint => GroupRefusal;
+
+    private void GroupChanged()
+    {
+        OnPropertyChanged(nameof(GroupLabel));
+        OnPropertyChanged(nameof(CanChangeGroup));
+        OnPropertyChanged(nameof(GroupHint));
+    }
+
     [RelayCommand]
     private void GroupOrToggle(ModelNodeViewModel? node)
     {
@@ -231,7 +276,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         {
             ToggleGroup(node);
         }
-        OnPropertyChanged(nameof(GroupLabel));
+        GroupChanged();
     }
 
     /// <summary>
@@ -267,7 +312,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         }
     }
 
-    partial void OnSelectedNodeChanged(ModelNodeViewModel? value) => OnPropertyChanged(nameof(GroupLabel));
+    partial void OnSelectedNodeChanged(ModelNodeViewModel? value) => GroupChanged();
 
     /// <summary>Makes the reference of a node, and those selected with it, groups, or components if it is a group.</summary>
     [RelayCommand]

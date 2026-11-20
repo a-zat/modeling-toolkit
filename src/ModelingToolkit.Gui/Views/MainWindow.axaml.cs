@@ -80,6 +80,7 @@ public partial class MainWindow : Window
             viewModel.FileDialogs = new StorageProviderFileDialogs(this);
             viewModel.ShowSimplify = simplify => new SimplifyWindow { DataContext = simplify }.ShowDialog(this);
             viewModel.AskToSave = name => new SaveChangesWindow(name).ShowDialog<SaveChoice>(this);
+            viewModel.ModelTree.ConfirmDelete = (what, count) => new ConfirmDeleteWindow(what, count).ShowDialog<bool>(this);
         }
     }
 

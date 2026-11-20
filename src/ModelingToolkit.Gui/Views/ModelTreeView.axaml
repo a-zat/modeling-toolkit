@@ -55,6 +55,9 @@
                           CommandParameter="{Binding}" />
                 <MenuItem Header="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupLabel}"
                           IsVisible="{Binding CanGroup}"
+                          IsEnabled="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).CanChangeGroup}"
+                          ToolTip.Tip="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupHint}"
+                          ToolTip.ShowOnDisabled="True"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupOrToggleCommand}"
                           CommandParameter="{Binding}" />
                 <MenuItem Header="Edit block" IsVisible="{Binding IsComponent}"
