@@ -27,7 +27,7 @@ public partial class CompactLayoutView : UserControl
                 PlaceTimeOfDay();
             }
         };
-        _outlineRow = new CollapsibleRow(Inspector.RowDefinitions[1]);
+        _outlineRow = new CollapsibleRow(Inspector.RowDefinitions[1], Inspector.RowDefinitions[3]);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

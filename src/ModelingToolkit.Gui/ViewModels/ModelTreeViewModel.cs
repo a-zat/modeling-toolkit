@@ -25,6 +25,46 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     [ObservableProperty]
     public partial ModelNodeViewModel? SelectedNode { get; set; }
 
+    /// <summary>
+    /// The nodes selected in the outline, with Command or Shift: <see cref="SelectedNode"/> is the one that the rest of
+    /// the application shows; the commands of the outline on one of them work on all.
+    /// </summary>
+    public System.Collections.ObjectModel.ObservableCollection<object> SelectedNodes { get; } = [];
+
+    // The nodes a command on a node works on: all those selected, when it is one of several, without those inside
+    // another one; else the node alone.
+    private List<ModelNodeViewModel> TargetsOf(ModelNodeViewModel node)
+    {
+        List<ModelNodeViewModel> selected = [.. SelectedNodes.OfType<ModelNodeViewModel>().Where(n => n.Entity is not null)];
+        if (selected.Count < 2 || !selected.Contains(node))
+        {
+            return [node];
+        }
+        var entities = new HashSet<Entity>(selected.Select(n => n.Entity!), ReferenceEqualityComparer.Instance);
+        return [.. selected.Where(n => !n.Path.Take(n.Path.Count - 1).Any(entities.Contains))];
+    }
+
+    // The commands of the nodes, each built in the document as it is, applied from the last entity of each block to the
+    // first, so that undoing puts each back where it was.
+    private static IEnumerable<ModelNodeViewModel> InBlockOrder(IEnumerable<ModelNodeViewModel> nodes) =>
+        nodes.OrderByDescending(n => n.Entity!.Owner?.Entities.IndexOf(n.Entity!) ?? -1);
+
+    /// <summary>Deletes the entity of a node, or of all the nodes selected with it, as one command.</summary>
+    [RelayCommand]
+    private void Delete(ModelNodeViewModel? node)
+    {
+        if (node?.Entity is null || Edit is not { } edit)
+        {
+            return;
+        }
+        List<IEditCommand> commands = [.. InBlockOrder(TargetsOf(node).Where(n => n.Entity!.Owner is not null))
+            .Select(n => new DeleteCommand(n.Entity!))];
+        if (commands.Count > 0)
+        {
+            edit(commands.Count == 1 ? commands[0] : new CompositeCommand("Delete", commands));
+        }
+    }
+
     public bool IsEmpty => Model is null;
 
     /// <summary>Executed with a node to edit: one of a reference enters its block.</summary>
@@ -39,7 +79,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     {
         if (node?.Entity is { } entity)
         {
-            Edit?.Invoke(new SetHiddenCommand([entity], !entity.IsHidden));
+            Edit?.Invoke(new SetHiddenCommand(TargetsOf(node).Select(n => n.Entity!), !entity.IsHidden));
         }
     }
 
@@ -55,23 +95,27 @@ public sealed partial class ModelTreeViewModel : ObservableObject
             !ReferenceEquals(reference.Owner, block) && !MoveToBlockCommand.Places(reference.Block, block);
     }
 
-    /// <summary>Moves the reference of a node into the block of another, where it stays in the project.</summary>
+    /// <summary>
+    /// Moves the reference of a node into the block of another, where it stays in the project; with the other references
+    /// selected with it, those that can go there.
+    /// </summary>
     public bool MoveInto(ModelNodeViewModel dragged, ModelNodeViewModel target)
     {
         if (!CanMoveInto(dragged, target))
         {
             return false;
         }
-        var reference = (BlockReference)dragged.Entity!;
         // A geometry has the path of the node it is the geometry of.
         IReadOnlyList<Entity> into = target.Path;
-        var command = new MoveToBlockCommand(
-            reference, Placement(dragged.Path.Take(dragged.Path.Count - 1)), target.Block!, Placement(into));
-        if (Edit?.Invoke(command) != true)
+        List<ModelNodeViewModel> moved = [.. TargetsOf(dragged).Where(node => CanMoveInto(node, target))];
+        int end = target.Block!.Entities.Count;
+        List<IEditCommand> commands = [.. InBlockOrder(moved).Select(node => new MoveToBlockCommand(
+            (BlockReference)node.Entity!, Placement(node.Path.Take(node.Path.Count - 1)), target.Block!, Placement(into), end))];
+        if (Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand("Move into block", commands)) != true)
         {
             return false;
         }
-        Select([.. into, reference]);
+        Select([.. into, dragged.Entity!]);
         return true;
     }
 
@@ -107,15 +151,85 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         {
             return;
         }
-        var reference = (BlockReference)node!.Entity!;
-        IReadOnlyList<Entity> into = [.. node.Path.Take(node.Path.Count - 2)];
-        Block target = into.Count == 0 ? root : ((BlockReference)into[^1]).Block;
-        var command = new MoveToBlockCommand(
-            reference, Placement(node.Path.Take(node.Path.Count - 1)), target, Placement(into));
-        if (Edit?.Invoke(command) == true)
+        // Each one up a level, into the block holding the one it is in.
+        var commands = new List<IEditCommand>();
+        foreach (ModelNodeViewModel moved in InBlockOrder(TargetsOf(node!).Where(CanMoveOut)))
         {
-            Select([.. into, reference]);
+            IReadOnlyList<Entity> up = [.. moved.Path.Take(moved.Path.Count - 2)];
+            Block target = up.Count == 0 ? root : ((BlockReference)up[^1]).Block;
+            commands.Add(new MoveToBlockCommand((BlockReference)moved.Entity!,
+                Placement(moved.Path.Take(moved.Path.Count - 1)), target, Placement(up), target.Entities.Count));
         }
+        IReadOnlyList<Entity> into = [.. node!.Path.Take(node.Path.Count - 2)];
+        if (Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand("Move out", commands)) == true)
+        {
+            Select([.. into, node.Entity!]);
+        }
+    }
+
+    /// <summary>
+    /// Puts the references of a node, or of the nodes selected with it in the same block, into a new group there, where
+    /// they stay in the project; the group is selected.
+    /// </summary>
+    [RelayCommand]
+    private void Group(ModelNodeViewModel? node)
+    {
+        if (node is not { Entity: BlockReference { Owner: { } owner } } || Model?.Document is not { } document)
+        {
+            return;
+        }
+        List<ModelNodeViewModel> grouped = [.. TargetsOf(node)
+            .Where(n => n.Entity is BlockReference && ReferenceEquals(n.Entity.Owner, owner))];
+        IReadOnlyList<Entity> into = [.. node.Path.Take(node.Path.Count - 1)];
+        var made = new NewBlockCommand(document, owner, "Group");
+        made.Reference.IsGroup = true;
+        Core.Geometry.Transform placement = Placement(into);
+        List<IEditCommand> commands = [made, .. InBlockOrder(grouped).Select(n => (IEditCommand)new MoveToBlockCommand(
+            (BlockReference)n.Entity!, placement, made.Reference.Block, placement, 0))];
+        if (Edit?.Invoke(new CompositeCommand("Group", commands)) == true)
+        {
+            Select([.. into, made.Reference]);
+        }
+    }
+
+    /// <summary>Takes the references out of a group, into the block holding it; the group goes if nothing is left in it.</summary>
+    [RelayCommand]
+    private void Ungroup(ModelNodeViewModel? node)
+    {
+        if (node is not { Entity: BlockReference { IsGroup: true, Owner: { } owner } group } || Model is null)
+        {
+            return;
+        }
+        IReadOnlyList<Entity> into = [.. node.Path.Take(node.Path.Count - 1)];
+        Core.Geometry.Transform outer = Placement(into), inner = Placement(node.Path);
+        List<BlockReference> inside = [.. group.Block.Entities.OfType<BlockReference>()];
+        List<IEditCommand> commands = [.. inside.AsEnumerable().Reverse()
+            .Select(reference => (IEditCommand)new MoveToBlockCommand(reference, inner, owner, outer, owner.Entities.Count))];
+        if (group.Block.Entities.Count == inside.Count)
+        {
+            commands.Add(new DeleteCommand(group));
+        }
+        else
+        {
+            commands.Add(new SetGroupCommand(group, false)); // what is not a reference stays, in a component
+        }
+        if (Edit?.Invoke(new CompositeCommand("Ungroup", commands)) == true && inside.Count > 0)
+        {
+            Select([.. into, inside[0]]);
+        }
+    }
+
+    /// <summary>Makes the reference of a node, and those selected with it, groups, or components if it is a group.</summary>
+    [RelayCommand]
+    private void ToggleGroup(ModelNodeViewModel? node)
+    {
+        if (node?.Entity is not BlockReference reference)
+        {
+            return;
+        }
+        List<IEditCommand> commands = [.. TargetsOf(node).Select(n => n.Entity).OfType<BlockReference>()
+            .Select(target => (IEditCommand)new SetGroupCommand(target, !reference.IsGroup))];
+        Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand(reference.IsGroup ? "Make component" : "Make group", commands));
     }
 
     /// <summary>Whether a node is a reference in the block of another reference, which it can be moved out of.</summary>

@@ -9,6 +9,7 @@
   <Panel>
     <!-- No scrolling sideways: a long name is cut short, and the eyes stay in view at the right. -->
     <TreeView x:Name="Tree" ItemsSource="{Binding TopNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+              SelectionMode="Multiple" SelectedItems="{Binding SelectedNodes}"
               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
       <TreeView.Styles>
         <Style Selector="TreeViewItem" x:DataType="vm:ModelNodeViewModel">
@@ -50,17 +51,28 @@
                 <MenuItem Header="{Binding MoveOutLabel}" IsVisible="{Binding CanMoveOut}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).MoveOutCommand}"
                           CommandParameter="{Binding}" />
+                <MenuItem Header="Group"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem Header="Ungroup" IsVisible="{Binding IsGroup}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).UngroupCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem Header="{Binding GroupToggleLabel}" IsVisible="{Binding IsReference}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).ToggleGroupCommand}"
+                          CommandParameter="{Binding}" />
                 <MenuItem Header="Edit block" IsVisible="{Binding IsReference}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).EnterCommand}"
                           CommandParameter="{Binding}" />
-                <MenuItem Header="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Instance}}"
-                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).ToggleVisibleCommand}"
+                <Separator />
+                <MenuItem Header="Delete" InputGesture="Back"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).DeleteCommand}"
                           CommandParameter="{Binding}" />
               </ContextMenu>
             </Grid.ContextMenu>
             <Panel Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}">
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Document}" IsVisible="{Binding IsModel}" />
-              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.CubeLink}" IsVisible="{Binding IsReference}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.CubeLink}" IsVisible="{Binding IsComponent}" />
+              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Group}" IsVisible="{Binding IsGroup}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsMesh}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsBrep}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsGeometry}" />

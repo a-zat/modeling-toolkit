@@ -42,6 +42,85 @@ public sealed class ModelTreeUpdateTests
     }
 
     [Fact]
+    public void Several_references_selected_move_out_and_are_deleted_together_and_come_back_in_their_order()
+    {
+        var chair = new Block("Chair") { Entities = { Square() } };
+        var room = new Block("Room");
+        BlockReference[] chairs = [.. Enumerable.Range(0, 3).Select(i =>
+            new BlockReference(chair, Transform.Translation(i * 100, 0, 0)) { Name = $"Chair {i}" })];
+        foreach (BlockReference added in chairs)
+        {
+            room.Entities.Add(added);
+        }
+        var document = new Document();
+        document.Blocks.AddRange([chair, room]);
+        document.Root.Entities.Add(new BlockReference(room, Transform.Identity));
+        var session = new ModelingToolkit.Core.Editing.EditSession(document);
+        var tree = new ModelTreeViewModel { Edit = command => { session.Execute(command); return true; } };
+        tree.Show(document);
+        IReadOnlyList<ModelNodeViewModel> nodes = tree.Model!.Children[0].Children;
+        tree.SelectedNodes.Add(nodes[0]);
+        tree.SelectedNodes.Add(nodes[2]);
+
+        tree.MoveOutCommand.Execute(nodes[2]);
+        Assert.Equal([chairs[1]], room.Entities);
+        Assert.Contains(chairs[0], document.Root.Entities);
+        Assert.Contains(chairs[2], document.Root.Entities);
+        session.Undo();
+        Assert.Equal(chairs, room.Entities); // one undo, each back in its place
+
+        nodes = tree.Model.Children[0].Children;
+        tree.SelectedNodes.Clear();
+        tree.SelectedNodes.Add(nodes[0]);
+        tree.SelectedNodes.Add(nodes[2]);
+        tree.DeleteCommand.Execute(nodes[0]);
+        Assert.Equal([chairs[1]], room.Entities);
+        session.Undo();
+        Assert.Equal(chairs, room.Entities);
+
+        // A node that is not among those selected is the only one worked on.
+        tree.SelectedNodes.Clear();
+        tree.SelectedNodes.Add(tree.Model.Children[0].Children[0]);
+        tree.SelectedNodes.Add(tree.Model.Children[0].Children[2]);
+        tree.DeleteCommand.Execute(tree.Model.Children[0].Children[1]);
+        Assert.Equal([chairs[0], chairs[2]], room.Entities);
+    }
+
+    [Fact]
+    public void References_selected_go_into_a_new_group_where_they_stay_and_ungrouping_takes_them_out()
+    {
+        var chair = new Block("Chair") { Entities = { Square() } };
+        var document = new Document();
+        document.Blocks.Add(chair);
+        BlockReference[] chairs = [.. Enumerable.Range(0, 3).Select(i =>
+            new BlockReference(chair, Transform.Translation(i * 100, 0, 0)) { Name = $"Chair {i}" })];
+        foreach (BlockReference added in chairs)
+        {
+            document.Root.Entities.Add(added);
+        }
+        var session = new ModelingToolkit.Core.Editing.EditSession(document);
+        var tree = new ModelTreeViewModel { Edit = command => { session.Execute(command); return true; } };
+        tree.Show(document);
+        tree.SelectedNodes.Add(tree.Model!.Children[0]);
+        tree.SelectedNodes.Add(tree.Model.Children[2]);
+
+        tree.GroupCommand.Execute(tree.Model.Children[0]);
+        var group = (BlockReference)document.Root.Entities.Single(entity => entity is BlockReference { IsGroup: true });
+        Assert.Equal([chairs[0], chairs[2]], group.Block.Entities);
+        Assert.Equal(Transform.Translation(200, 0, 0), chairs[2].Transform); // where it was
+        Assert.Same(group, tree.SelectedNode?.Entity);
+        Assert.True(tree.SelectedNode!.IsGroup);
+
+        tree.UngroupCommand.Execute(tree.SelectedNode);
+        Assert.DoesNotContain(group, document.Root.Entities);
+        Assert.Contains(chairs[0], document.Root.Entities);
+        Assert.Contains(chairs[2], document.Root.Entities);
+        session.Undo(); // the ungrouping
+        session.Undo(); // the grouping
+        Assert.Equal(chairs, document.Root.Entities);
+    }
+
+    [Fact]
     public void A_duplicate_goes_next_to_the_original_placing_the_same_block()
     {
         var chair = new Block("Chair") { Entities = { Square() } };

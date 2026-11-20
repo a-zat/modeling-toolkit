@@ -36,7 +36,18 @@ public partial class ModelTreeView : UserControl
             NodeAt(e.Source) is { Node: { IsReference: true, IsRenaming: false } node } ? node : null;
         _pressedAt = e.GetPosition(Tree);
         _dragging = false;
+        // A press on one of several nodes selected keeps them all, to drag them together; a click without a drag
+        // selects that one alone, on the release.
+        _selectOnRelease = null;
+        if (_pressed is { } pressed && e.KeyModifiers == KeyModifiers.None && Model is { } model &&
+            model.SelectedNodes.Count > 1 && model.SelectedNodes.Contains(pressed) && e.Source is not Button)
+        {
+            _selectOnRelease = pressed;
+            e.Handled = true;
+        }
     }
+
+    private ModelNodeViewModel? _selectOnRelease;
 
     private void OnTreePointerMoved(object? sender, PointerEventArgs e)
     {
@@ -65,6 +76,12 @@ public partial class ModelTreeView : UserControl
             Model?.MoveInto(dragged, target);
             e.Handled = true;
         }
+        else if (!_dragging && _selectOnRelease is { } alone && Model is { } model)
+        {
+            model.SelectedNodes.Clear();
+            model.SelectedNode = alone;
+        }
+        _selectOnRelease = null;
         _pressed = null;
         _dragging = false;
         SetDropTarget(null);
