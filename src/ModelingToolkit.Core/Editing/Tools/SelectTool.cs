@@ -299,12 +299,17 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
         }
 
         IReadOnlyList<Entity> within = LeaveTo(path);
-        if (within[0] is BlockReference reference)
+        if (within[0] is BlockReference)
         {
+            // Past the groups, to the component inside them.
+            int first = path.Count - within.Count, chosen = Groups.Through(path, first);
             if (input.ClickCount == 2)
             {
                 host.SelectEntity(null);
-                host.Context.Enter(reference);
+                for (int i = first; i <= chosen; i++)
+                {
+                    host.Context.Enter((BlockReference)path[i]);
+                }
             }
             else if (input.Modifiers.HasFlag(ToolModifiers.Shift))
             {
@@ -327,7 +332,7 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
             else
             {
                 host.Elements.Clear();
-                host.SelectEntity(path.Take(path.Count - within.Count + 1).ToArray());
+                host.SelectEntity(path.Take(chosen + 1).ToArray());
             }
         }
         else if (input.ClickCount > 1)
@@ -411,8 +416,9 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
         {
             return "Click to leave the block and select there";
         }
-        if (within[0] is BlockReference reference)
+        if (within[0] is BlockReference)
         {
+            var reference = (BlockReference)path[Groups.Through(path, path.Count - within.Count)];
             return $"Click to select {reference.Name ?? reference.Block.Name}, double-click to edit its block";
         }
         if (pick.Element is { } element)

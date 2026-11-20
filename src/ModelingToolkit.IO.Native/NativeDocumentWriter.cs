@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
 
@@ -80,7 +81,8 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                 document.Materials.Select(ToEntry).ToList(),
                 ToEntry(document.Root),
                 document.Blocks.Select(ToEntry).ToList(),
-                AnimationEntries());
+                AnimationEntries(),
+                AttachmentEntries());
 
             using Stream stream = archive.CreateEntry(NativeFormat.ManifestEntry, CompressionLevel.Optimal).Open();
             JsonSerializer.Serialize(stream, manifest, ManifestContext.Default.Manifest);
@@ -129,6 +131,31 @@ public sealed class NativeDocumentWriter : IDocumentWriter
             return entries.Count > 0 ? entries : null;
         }
 
+        // The attachments of references that are no longer in the document are left out.
+        private List<AttachmentEntry>? AttachmentEntries()
+        {
+            var entries = new List<AttachmentEntry>();
+            foreach (Attachment attachment in document.Attachments.Where(attachment => attachment.IsActive))
+            {
+                Block owner = attachment.Follower.Owner!;
+                int? block = owner == document.Root ? null : _blocks.TryGetValue(owner, out int index) ? index : -1;
+                if (block == -1)
+                {
+                    continue;
+                }
+                entries.Add(new AttachmentEntry(
+                    block,
+                    owner.Entities.IndexOf(attachment.Follower),
+                    [.. attachment.Chain.Select(reference => reference.Owner!.Entities.IndexOf(reference))],
+                    attachment.Anchor.Owner!.Entities.IndexOf(attachment.Anchor),
+                    Values(attachment.Offset)));
+            }
+            return entries.Count > 0 ? entries : null;
+        }
+
+        private static double[] Values(Transform t) =>
+            [t.M00, t.M01, t.M02, t.M03, t.M10, t.M11, t.M12, t.M13, t.M20, t.M21, t.M22, t.M23];
+
         private TextureEntry WriteTexture(Texture texture, int index)
         {
             _steps.Next();
@@ -165,9 +192,11 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                         reference.Transform.M00, reference.Transform.M01, reference.Transform.M02, reference.Transform.M03,
                         reference.Transform.M10, reference.Transform.M11, reference.Transform.M12, reference.Transform.M13,
                         reference.Transform.M20, reference.Transform.M21, reference.Transform.M22, reference.Transform.M23,
-                    ]),
+                    ]) { Group = reference.IsGroup ? true : null },
                 GuideEntity guide => new GuideEntry(guide.Name, [guide.Point.X, guide.Point.Y, guide.Point.Z],
                     [guide.Direction.X, guide.Direction.Y, guide.Direction.Z]),
+                AnchorEntity anchor => new AnchorEntry(anchor.Name, Values(anchor.Placement),
+                    JsonNamingPolicy.CamelCase.ConvertName(anchor.Kind.ToString())),
                 _ => throw new NotSupportedException($"Entities of type {entity.GetType().Name} cannot be written."),
             };
         }

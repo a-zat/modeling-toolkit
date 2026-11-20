@@ -46,7 +46,10 @@ public static class TransformCommands
 
     private static Entity Transformed(Entity entity, Transform transform) => entity switch
     {
-        BlockReference reference => new BlockReference(reference.Block, transform * reference.Transform),
+        BlockReference reference => new BlockReference(reference.Block, transform * reference.Transform)
+        {
+            IsGroup = reference.IsGroup,
+        },
         BrepEntity brep => new BrepEntity(brep.Kernel, Placed(brep, transform), brep.FaceMaterials),
         MeshEntity mesh => new MeshEntity(
             [.. mesh.Vertices.Select(transform.Apply)],
@@ -54,6 +57,7 @@ public static class TransformCommands
             mesh.Normals?.Select(normal => Turned(normal, transform)).ToArray(),
             mesh.TextureCoordinates) { Material = mesh.Material },
         GuideEntity guide => new GuideEntity(transform.Apply(guide.Point), transform.ApplyVector(guide.Direction)),
+        AnchorEntity anchor => new AnchorEntity(transform * anchor.Placement, anchor.Kind),
         _ => throw new ArgumentException($"An entity of type {entity.GetType().Name} cannot be transformed.", nameof(entity)),
     };
 

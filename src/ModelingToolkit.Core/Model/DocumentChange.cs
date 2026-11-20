@@ -42,3 +42,6 @@ public sealed record BlockRemoved(Block Block) : DocumentChange;
 /// <param name="Target">The entity or the block.</param>
 /// <param name="Property">The name of the property, as <c>nameof</c> gives it.</param>
 public sealed record PropertyChanged(object Target, string Property) : DocumentChange;
+
+/// <summary>An attachment was added to <see cref="Document.Attachments"/>, or removed from it.</summary>
+public sealed record AttachmentsChanged(Attachment Attachment, bool Added) : DocumentChange;

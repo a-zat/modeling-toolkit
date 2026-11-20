@@ -87,6 +87,10 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 Fill(document.Blocks[index], manifest.Blocks[index], document);
             }
             document.Animations.AddRange((manifest.Animations ?? []).Select(entry => ToAnimation(entry, document)));
+            foreach (AttachmentEntry entry in manifest.Attachments ?? [])
+            {
+                document.Attach(ToAttachment(entry, document));
+            }
             return document;
         }
 
@@ -180,11 +184,51 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                     BrepEntry shape => ReadShape(shape, document.Materials),
                     BlockReferenceEntry reference => ToBlockReference(reference, document.Blocks),
                     GuideEntry guide => ToGuide(guide),
+                    AnchorEntry anchor => ToAnchor(anchor),
                     _ => throw new InvalidDataException($"Unknown entity in block '{entry.Name}'."),
                 };
                 entity.Name = entityEntry.Name;
                 entity.IsHidden = entityEntry.Hidden == true;
                 block.Entities.Add(entity);
+            }
+        }
+
+        private static AnchorEntity ToAnchor(AnchorEntry entry) =>
+            new(ToTransform(entry.Placement, "An anchor"), Parse<AnchorKind>(entry.Kind));
+
+        private static Transform ToTransform(double[]? m, string what) => m is { Length: 12 } && m.All(double.IsFinite)
+            ? new Transform(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11])
+            : throw new InvalidDataException($"{what} has an invalid transformation.");
+
+        private static Attachment ToAttachment(AttachmentEntry entry, Document document)
+        {
+            Block block = entry.Block is { } index ? At(document.Blocks, index, "block") : document.Root;
+            if (At(block.Entities, entry.Follower, "entity") is not BlockReference follower)
+            {
+                throw new InvalidDataException("An attachment moves an entity that is not a block reference.");
+            }
+            var chain = new List<BlockReference>();
+            Block holder = block;
+            foreach (int link in Required(entry.Chain, "chain"))
+            {
+                if (At(holder.Entities, link, "entity") is not BlockReference reference)
+                {
+                    throw new InvalidDataException("The chain of an attachment holds an entity that is not a block reference.");
+                }
+                chain.Add(reference);
+                holder = reference.Block;
+            }
+            if (At(holder.Entities, entry.Anchor, "entity") is not AnchorEntity anchor)
+            {
+                throw new InvalidDataException("An attachment follows an entity that is not an anchor.");
+            }
+            try
+            {
+                return new Attachment(follower, chain, anchor, ToTransform(entry.Offset, "An attachment"));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException($"An attachment is invalid: {exception.Message}", exception);
             }
         }
 
@@ -273,7 +317,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 throw new InvalidDataException("A block reference has an invalid transformation.");
             }
             var transform = new Transform(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11]);
-            return new BlockReference(At(blocks, entry.Block, "block"), transform);
+            return new BlockReference(At(blocks, entry.Block, "block"), transform) { IsGroup = entry.Group == true };
         }
 
         private static Animation ToAnimation(AnimationEntry entry, Document document)
@@ -305,13 +349,13 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 throw new InvalidDataException($"Animation '{entry.Name}' has no channels.");
             }
             return new Animation(Required(entry.Name, "animation name"), channels);
-
-            static T Parse<T>(string? value)
-                where T : struct, Enum =>
-                Enum.TryParse(value, ignoreCase: true, out T parsed) && Enum.IsDefined(parsed)
-                    ? parsed
-                    : throw new InvalidDataException($"'{value}' is not a valid {typeof(T).Name}.");
         }
+
+        private static T Parse<T>(string? value)
+            where T : struct, Enum =>
+            Enum.TryParse(value, ignoreCase: true, out T parsed) && Enum.IsDefined(parsed)
+                ? parsed
+                : throw new InvalidDataException($"'{value}' is not a valid {typeof(T).Name}.");
 
         private ZipArchiveEntry Entry(string path) =>
             archive.GetEntry(path) ?? throw new InvalidDataException($"The archive has no '{path}' entry.");

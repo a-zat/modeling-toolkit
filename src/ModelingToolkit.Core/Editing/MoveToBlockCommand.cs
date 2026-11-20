@@ -15,17 +15,24 @@ public sealed class MoveToBlockCommand : IEditCommand
     private readonly int _index;
     private readonly Transform _before;
     private readonly Transform _after;
+    private readonly int? _insertAt;
 
     /// <param name="reference">The reference moved, an entity of its block.</param>
     /// <param name="fromPlacement">From the coordinates of the block it leaves to those of the project.</param>
     /// <param name="to">The block it goes into.</param>
     /// <param name="toPlacement">From the coordinates of that block to those of the project.</param>
+    /// <param name="insertAt">
+    /// Where it goes among the entities of that block, as there when applied; null for after them. References moved
+    /// together, from the last to the first, keep their order when all go at the same place.
+    /// </param>
     /// <exception cref="ArgumentException">
     /// The reference is in no block, it already is in <paramref name="to"/>, or <paramref name="to"/> is its block or in
     /// it, which would place a block in itself.
     /// </exception>
-    public MoveToBlockCommand(BlockReference reference, Transform fromPlacement, Block to, Transform toPlacement)
+    public MoveToBlockCommand(
+        BlockReference reference, Transform fromPlacement, Block to, Transform toPlacement, int? insertAt = null)
     {
+        _insertAt = insertAt;
         ArgumentNullException.ThrowIfNull(reference);
         ArgumentNullException.ThrowIfNull(fromPlacement);
         ArgumentNullException.ThrowIfNull(to);
@@ -52,7 +59,14 @@ public sealed class MoveToBlockCommand : IEditCommand
     {
         _from.Entities.Remove(_reference);
         _reference.Transform = _after;
-        _to.Entities.Add(_reference);
+        if (_insertAt is { } at)
+        {
+            _to.Entities.Insert(Math.Clamp(at, 0, _to.Entities.Count), _reference);
+        }
+        else
+        {
+            _to.Entities.Add(_reference);
+        }
     }
 
     public void Revert()

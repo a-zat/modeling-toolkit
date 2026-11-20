@@ -70,6 +70,54 @@ public sealed class GltfWriterTests : IDisposable
     }
 
     [Fact]
+    public void Anchors_are_empty_nodes_and_attachments_survive_a_round_trip()
+    {
+        var document = new Document();
+        MeshEntity Triangle() => new([new(0, 0, 0), new(100, 0, 0), new(0, 100, 0)], [new(0, 1, 2)]);
+        var leaf = new Block("Leaf") { Entities = { Triangle() } };
+        var end = new AnchorEntity(Transform.Translation(450, 0, 760) * Transform.Rotation(Point3d.Origin, Vector3d.UnitZ, Math.PI / 2))
+            { Name = "End" };
+        leaf.Entities.Add(end);
+        var chair = new Block("Chair") { Entities = { Triangle() } };
+        chair.Entities.Add(new AnchorEntity(Transform.Translation(0, 0, 1200), AnchorKind.PointOfView) { Name = "Sitting" });
+        var table = new Block("Table");
+        var leafReference = new BlockReference(leaf, Transform.Translation(900, 0, 0)) { Name = "Leaf" };
+        table.Entities.Add(leafReference);
+        document.Blocks.AddRange([leaf, chair, table]);
+        var tableReference = new BlockReference(table, Transform.Translation(0, 1000, 0)) { Name = "Table" };
+        var chairReference = new BlockReference(chair, Transform.Translation(1500, 1000, 0)) { Name = "Chair" };
+        document.Root.Entities.Add(tableReference);
+        document.Root.Entities.Add(chairReference);
+        document.Attach(new Attachment(chairReference, [tableReference, leafReference], end,
+            Attachment.OffsetOf(chairReference, [tableReference, leafReference], end)));
+        tableReference.IsGroup = true;
+        tableReference.IsHidden = true; // both in the extras
+
+        Document copy = RoundTrip(document);
+        DocumentRoot.Unwrap(copy);
+
+        BlockReference Named(string name) =>
+            copy.Blocks.Prepend(copy.Root).SelectMany(block => block.Entities).OfType<BlockReference>().Single(r => r.Name == name);
+        AnchorEntity copiedEnd = Assert.Single(Named("Leaf").Block.Entities.OfType<AnchorEntity>());
+        Assert.Equal(("End", AnchorKind.Attach), (copiedEnd.Name, copiedEnd.Kind));
+        Assert.Equal(450, copiedEnd.Point.X, 1e-6);
+        Assert.Equal(760, copiedEnd.Point.Z, 1e-6);
+        Assert.Equal(1, copiedEnd.Placement.ApplyVector(Vector3d.UnitX).Y, 1e-6); // still turned a quarter
+        Assert.Equal(AnchorKind.PointOfView, Assert.Single(Named("Chair").Block.Entities.OfType<AnchorEntity>()).Kind);
+        Assert.True(Named("Table").IsGroup);
+        Assert.True(Named("Table").IsHidden);
+        Assert.False(Named("Chair").IsGroup);
+        Attachment attachment = Assert.Single(copy.Attachments);
+        Assert.Same(Named("Chair"), attachment.Follower);
+        Assert.Equal([Named("Table"), Named("Leaf")], attachment.Chain);
+        Assert.True(attachment.IsActive);
+
+        // It works as before: the table moved, the chair goes with it.
+        Named("Table").Transform = Transform.Translation(0, 2000, 0);
+        Assert.Equal(2000, Named("Chair").Transform.Apply(Point3d.Origin).Y, 1e-6);
+    }
+
+    [Fact]
     public void What_glTF_cannot_hold_is_reported()
     {
         var document = new Document();

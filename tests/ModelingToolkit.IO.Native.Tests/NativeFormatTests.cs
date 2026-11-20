@@ -127,7 +127,7 @@ public sealed class NativeFormatTests : IDisposable
         using Stream stream = archive.GetEntry("manifest.json")!.Open();
         using JsonDocument manifest = JsonDocument.Parse(stream);
         Assert.Equal("modeling-toolkit", manifest.RootElement.GetProperty("format").GetString());
-        Assert.Equal(5, manifest.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(6, manifest.RootElement.GetProperty("version").GetInt32());
         Assert.Equal("mm", manifest.RootElement.GetProperty("units").GetString());
     }
 
@@ -202,6 +202,39 @@ public sealed class NativeFormatTests : IDisposable
 
         string old = Archive("version3.mtk", Manifest("{}"));
         Assert.Empty(_reader.Read(old, []).Root.Entities);
+    }
+
+    [Fact]
+    public void Anchors_and_attachments_survive_a_round_trip()
+    {
+        var document = new Document();
+        var leaf = new Block("Leaf");
+        var anchor = new AnchorEntity(Transform.Translation(450, 0, 0)) { Name = "End" };
+        leaf.Entities.Add(anchor);
+        var seat = new Block("Chair");
+        seat.Entities.Add(new AnchorEntity(Transform.Translation(0, 0, 1200), AnchorKind.PointOfView));
+        document.Blocks.AddRange([leaf, seat]);
+        var leafReference = new BlockReference(leaf, Transform.Translation(900, 0, 0));
+        var chair = new BlockReference(seat, Transform.Translation(1500, 0, 0));
+        document.Root.Entities.Add(leafReference);
+        document.Root.Entities.Add(chair);
+        document.Attach(new Attachment(chair, [leafReference], anchor, Transform.Translation(150, 0, 0)));
+        leafReference.IsGroup = true;
+        string path = PathOf("anchors.mtk");
+
+        _writer.Write(document, path);
+        Document copy = _reader.Read(path, []);
+
+        var copiedAnchor = Assert.IsType<AnchorEntity>(copy.Blocks[0].Entities[0]);
+        Assert.Equal(("End", AnchorKind.Attach, new Point3d(450, 0, 0)), (copiedAnchor.Name, copiedAnchor.Kind, copiedAnchor.Point));
+        Assert.Equal(AnchorKind.PointOfView, Assert.IsType<AnchorEntity>(copy.Blocks[1].Entities[0]).Kind);
+        Attachment attachment = Assert.Single(copy.Attachments);
+        Assert.Same(copy.Root.Entities[1], attachment.Follower);
+        Assert.Same(copy.Root.Entities[0], Assert.Single(attachment.Chain));
+        Assert.Same(copiedAnchor, attachment.Anchor);
+        Assert.Equal(Transform.Translation(150, 0, 0), attachment.Offset);
+        Assert.True(((BlockReference)copy.Root.Entities[0]).IsGroup);
+        Assert.False(((BlockReference)copy.Root.Entities[1]).IsGroup);
     }
 
     [Fact]
@@ -330,7 +363,7 @@ public sealed class NativeFormatTests : IDisposable
     }
 
     [Theory]
-    [InlineData(6)] // newer than this reader
+    [InlineData(7)] // newer than this reader
     [InlineData(0)]
     [InlineData(-1)]
     public void Versions_that_this_reader_does_not_know_are_rejected(int version)

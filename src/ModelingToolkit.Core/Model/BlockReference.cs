@@ -34,6 +34,23 @@ public sealed class BlockReference : Entity
         }
     }
 
+    /// <summary>
+    /// Whether it groups what it places, as a room its furniture, rather than being a component: a click in the 3D view
+    /// selects what is inside it, and the outline selects it as a whole.
+    /// </summary>
+    public bool IsGroup
+    {
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                Raise(new PropertyChanged(this, nameof(IsGroup)));
+            }
+        }
+    }
+
     internal override BoundingBox ComputeBoundingBox(Dictionary<Block, BoundingBox> blockBoxes) =>
         Block.ComputeBoundingBox(blockBoxes).Transform(Transform);
 }

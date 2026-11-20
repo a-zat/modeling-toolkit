@@ -109,6 +109,7 @@ public sealed class GltfWriter : IDocumentWriter
         {
             int root = AddNode(new JsonObject { ["name"] = document.Root.Name });
             _nodes[root]!["children"] = Children(document.Root);
+            WriteAttachments();
             JsonArray animations = Animations();
 
             var json = new JsonObject
@@ -172,6 +173,7 @@ public sealed class GltfWriter : IDocumentWriter
                     MeshEntity mesh when mesh.Triangles.Length > 0 => MeshNode(mesh, MeshOf(mesh)),
                     BrepEntity brep => ShapeOf(brep) is { } shapeMesh ? MeshNode(brep, shapeMesh) : null,
                     GuideEntity => CountGuide(),
+                    AnchorEntity anchor => AnchorNode(anchor),
                     _ => null,
                 };
                 if (node is { } index)
@@ -180,6 +182,66 @@ public sealed class GltfWriter : IDocumentWriter
                 }
             }
             return children;
+        }
+
+        // The nodes of each anchor, one per placement of its block, as those of references.
+        private readonly Dictionary<AnchorEntity, List<int>> _anchorNodes = new(ReferenceEqualityComparer.Instance);
+
+        // An empty node, its kind in its extras: "attach" or "pointOfView".
+        private int AnchorNode(AnchorEntity anchor)
+        {
+            Transform t = ToGltf(anchor.Placement);
+            var node = new JsonObject
+            {
+                ["matrix"] = Array(
+                    t.M00, t.M10, t.M20, 0,
+                    t.M01, t.M11, t.M21, 0,
+                    t.M02, t.M12, t.M22, 0,
+                    t.M03, t.M13, t.M23, 1),
+                ["extras"] = new JsonObject
+                {
+                    ["anchor"] = anchor.Kind == AnchorKind.PointOfView ? "pointOfView" : "attach",
+                },
+            };
+            if (anchor.Name is { } name)
+            {
+                node["name"] = name;
+            }
+            int index = AddNode(node);
+            if (!_anchorNodes.TryGetValue(anchor, out List<int>? nodes))
+            {
+                _anchorNodes[anchor] = nodes = [];
+            }
+            nodes.Add(index);
+            return index;
+        }
+
+        // Each follower names, in its extras, the node of the anchor it follows: when both are placed once, so that the
+        // node is that one.
+        private void WriteAttachments()
+        {
+            int skipped = 0;
+            foreach (Attachment attachment in document.Attachments.Where(attachment => attachment.IsActive))
+            {
+                if (_referenceNodes.TryGetValue(attachment.Follower, out List<int>? followers) && followers.Count == 1 &&
+                    _anchorNodes.TryGetValue(attachment.Anchor, out List<int>? anchors) && anchors.Count == 1)
+                {
+                    var node = (JsonObject)_nodes[followers[0]]!;
+                    if (node["extras"] is not JsonObject extras)
+                    {
+                        node["extras"] = extras = [];
+                    }
+                    extras["follows"] = anchors[0];
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+            if (skipped > 0)
+            {
+                Warnings.Add($"{skipped} attachment(s) are left out: their component or anchor is placed more than once.");
+            }
         }
 
         private int? CountGuide()
@@ -228,6 +290,14 @@ public sealed class GltfWriter : IDocumentWriter
                     transform.M03, transform.M13, transform.M23, 1);
             }
             MarkHidden(node, reference);
+            if (reference.IsGroup)
+            {
+                if (node["extras"] is not JsonObject extras)
+                {
+                    node["extras"] = extras = [];
+                }
+                extras["group"] = true;
+            }
             int index = AddNode(node);
             if (!_referenceNodes.TryGetValue(reference, out List<int>? nodes))
             {

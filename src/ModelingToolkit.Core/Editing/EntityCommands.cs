@@ -323,3 +323,47 @@ public sealed class ReplaceShapeCommand : IEditCommand
 
     public void Revert() => _entity.Replace(_before, _beforeMaterials);
 }
+
+/// <summary>Makes a reference follow an anchor, or stops it from following one; undoing does the other.</summary>
+public sealed class AttachCommand(string name, Document document, Attachment attachment, bool attach) : IEditCommand
+{
+    private readonly Document _document = document ?? throw new ArgumentNullException(nameof(document));
+    private readonly Attachment _attachment = attachment ?? throw new ArgumentNullException(nameof(attachment));
+
+    public string Name { get; } = name ?? throw new ArgumentNullException(nameof(name));
+
+    public void Apply() => Set(attach);
+
+    public void Revert() => Set(!attach);
+
+    private void Set(bool attached)
+    {
+        if (attached)
+        {
+            try
+            {
+                _document.Attach(_attachment);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new EditRefusedException(exception.Message);
+            }
+        }
+        else
+        {
+            _document.Detach(_attachment);
+        }
+    }
+}
+
+/// <summary>Makes a reference a group, or a component again; undoing does the other.</summary>
+public sealed class SetGroupCommand(BlockReference reference, bool group) : IEditCommand
+{
+    private readonly BlockReference _reference = reference ?? throw new ArgumentNullException(nameof(reference));
+
+    public string Name => group ? "Make group" : "Make component";
+
+    public void Apply() => _reference.IsGroup = group;
+
+    public void Revert() => _reference.IsGroup = !group;
+}

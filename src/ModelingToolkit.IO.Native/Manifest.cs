@@ -13,7 +13,8 @@ internal sealed record Manifest(
     List<MaterialEntry> Materials,
     BlockEntry Root,
     List<BlockEntry> Blocks,
-    List<AnimationEntry>? Animations = null);
+    List<AnimationEntry>? Animations = null,
+    List<AttachmentEntry>? Attachments = null);
 
 internal sealed record TextureEntry(string Name, string MediaType, string Path);
 
@@ -33,6 +34,7 @@ internal sealed record BlockEntry(string Name, List<EntityEntry> Entities);
 [JsonDerivedType(typeof(BrepEntry), "brep")]
 [JsonDerivedType(typeof(BlockReferenceEntry), "blockReference")]
 [JsonDerivedType(typeof(GuideEntry), "guide")]
+[JsonDerivedType(typeof(AnchorEntry), "anchor")]
 internal abstract record EntityEntry(string? Name)
 {
     /// <summary>True for a hidden entity; absent otherwise.</summary>
@@ -55,7 +57,25 @@ internal sealed record FaceMaterialEntry(int Face, int Material);
 
 internal sealed record GuideEntry(string? Name, double[] Point, double[] Direction) : EntityEntry(Name);
 
-internal sealed record BlockReferenceEntry(string? Name, int Block, double[] Transform) : EntityEntry(Name);
+/// <param name="Placement">The 12 values of the transform of the anchor, by rows.</param>
+/// <param name="Kind">attach or pointOfView.</param>
+internal sealed record AnchorEntry(string? Name, double[] Placement, string Kind) : EntityEntry(Name);
+
+/// <param name="Block">The block holding the follower, null for the root.</param>
+/// <param name="Follower">The index of the follower among the entities of its block.</param>
+/// <param name="Chain">
+/// The references down to the block of the anchor, each by its index among the entities of the block of the one before,
+/// the first in the block of the follower.
+/// </param>
+/// <param name="Anchor">The index of the anchor among the entities of the block of the last reference.</param>
+/// <param name="Offset">The 12 values of the offset from the anchor, by rows.</param>
+internal sealed record AttachmentEntry(int? Block, int Follower, int[] Chain, int Anchor, double[] Offset);
+
+internal sealed record BlockReferenceEntry(string? Name, int Block, double[] Transform) : EntityEntry(Name)
+{
+    /// <summary>True for a group; absent for a component.</summary>
+    public bool? Group { get; init; }
+}
 
 internal sealed record AnimationEntry(string Name, List<ChannelEntry> Channels);
 

@@ -39,7 +39,109 @@ public sealed class Document
     /// </summary>
     public List<Animation> Animations { get; } = [];
 
+    /// <summary>
+    /// The references that follow anchors of others: when a reference of the chain of one is moved, its follower moves
+    /// with it; when the follower is moved alone, it keeps its new place from the anchor.
+    /// </summary>
+    public IReadOnlyList<Attachment> Attachments => _attachments;
+
+    private readonly List<Attachment> _attachments = [];
+    private readonly HashSet<BlockReference> _placing = new(ReferenceEqualityComparer.Instance);
+
     public BoundingBox GetBoundingBox() => Root.GetBoundingBox();
 
-    internal void Raise(DocumentChange change) => Changed?.Invoke(this, change);
+    /// <summary>Makes a reference follow an anchor, from where it is; raises <see cref="AttachmentsChanged"/>.</summary>
+    /// <exception cref="ArgumentException">
+    /// The follower already follows an anchor, or the anchor moves with the follower, through other attachments.
+    /// </exception>
+    public void Attach(Attachment attachment)
+    {
+        ArgumentNullException.ThrowIfNull(attachment);
+        if (_attachments.Exists(other => ReferenceEquals(other.Follower, attachment.Follower)))
+        {
+            throw new ArgumentException("The reference already follows an anchor.", nameof(attachment));
+        }
+        if (DependsOn(attachment.Chain, attachment.Follower, []))
+        {
+            throw new ArgumentException("The anchor moves with the reference that would follow it.", nameof(attachment));
+        }
+        _attachments.Add(attachment);
+        Raise(new AttachmentsChanged(attachment, true));
+    }
+
+    /// <summary>Stops a reference from following its anchor; false when it did not.</summary>
+    public bool Detach(Attachment attachment)
+    {
+        ArgumentNullException.ThrowIfNull(attachment);
+        if (!_attachments.Remove(attachment))
+        {
+            return false;
+        }
+        Raise(new AttachmentsChanged(attachment, false));
+        return true;
+    }
+
+    /// <summary>The attachment by which a reference follows an anchor; null for none.</summary>
+    public Attachment? AttachmentOf(BlockReference follower) =>
+        _attachments.Find(attachment => ReferenceEquals(attachment.Follower, follower));
+
+    // Whether a reference of the chain is, or follows through other attachments, the reference given.
+    private bool DependsOn(IReadOnlyList<BlockReference> chain, BlockReference follower, HashSet<Attachment> seen)
+    {
+        foreach (BlockReference reference in chain)
+        {
+            if (ReferenceEquals(reference, follower))
+            {
+                return true;
+            }
+            if (AttachmentOf(reference) is { } attachment && seen.Add(attachment) &&
+                DependsOn(attachment.Chain, follower, seen))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal void Raise(DocumentChange change)
+    {
+        Changed?.Invoke(this, change);
+        if (_attachments.Count > 0 &&
+            change is PropertyChanged { Target: BlockReference moved, Property: nameof(BlockReference.Transform) })
+        {
+            Follow(moved);
+        }
+    }
+
+    // A follower moved alone keeps its new place from the anchor; the followers of a reference moved go with it.
+    private void Follow(BlockReference moved)
+    {
+        if (_placing.Contains(moved))
+        {
+            return;
+        }
+        foreach (Attachment attachment in _attachments)
+        {
+            if (ReferenceEquals(attachment.Follower, moved) && attachment.IsActive)
+            {
+                attachment.Offset = attachment.AnchorFrame(r => r.Transform).Inverse() * moved.Transform;
+            }
+        }
+        foreach (Attachment attachment in _attachments.ToArray())
+        {
+            if (attachment.IsActive && attachment.Chain.Contains(moved, ReferenceEqualityComparer.Instance))
+            {
+                _placing.Add(attachment.Follower);
+                try
+                {
+                    attachment.Follower.Transform = attachment.PlacementOf(r => r.Transform);
+                }
+                finally
+                {
+                    _placing.Remove(attachment.Follower);
+                }
+                Follow(attachment.Follower); // and what follows it
+            }
+        }
+    }
 }
