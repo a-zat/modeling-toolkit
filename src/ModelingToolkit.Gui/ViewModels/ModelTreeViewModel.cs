@@ -199,8 +199,17 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     /// The one command of the menu about groups: with several nodes selected, "Group" puts them in a new group; with
     /// one, it makes it a group, or a component again.
     /// </summary>
-    public string GroupLabel => SelectedNodes.Count > 1 ? "Group"
-        : SelectedNode?.IsGroup == true ? "Convert to component" : "Make group";
+    public string GroupLabel
+    {
+        get
+        {
+            ModelNodeViewModel? first = SelectedNode ?? SelectedNodes.OfType<ModelNodeViewModel>().FirstOrDefault();
+            List<ModelNodeViewModel> targets = first is null ? [] : TargetsOf(first);
+            return targets.Any(n => n.IsLoose) ? "Make component"
+                : targets.Count > 1 ? "Group"
+                : first?.IsGroup == true ? "Convert to component" : "Make group";
+        }
+    }
 
     [RelayCommand]
     private void GroupOrToggle(ModelNodeViewModel? node)
@@ -209,7 +218,12 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         {
             return;
         }
-        if (TargetsOf(node).Count > 1)
+        List<ModelNodeViewModel> targets = TargetsOf(node);
+        if (targets.Any(n => n.IsLoose))
+        {
+            MakeComponent(node);
+        }
+        else if (targets.Count > 1)
         {
             Group(node);
         }
@@ -218,6 +232,39 @@ public sealed partial class ModelTreeViewModel : ObservableObject
             ToggleGroup(node);
         }
         OnPropertyChanged(nameof(GroupLabel));
+    }
+
+    /// <summary>
+    /// Puts the meshes and shapes of a node, and of the nodes selected with it in the same block, with any references
+    /// among them, into a new component placed there at the origin, where they stay in the project; it is selected.
+    /// </summary>
+    private void MakeComponent(ModelNodeViewModel node)
+    {
+        if (node.Entity is not { Owner: { } owner } || Model?.Document is not { } document)
+        {
+            return;
+        }
+        List<ModelNodeViewModel> made = [.. TargetsOf(node)
+            .Where(n => n.Entity is { } entity && ReferenceEquals(entity.Owner, owner) &&
+                        (n.IsLoose || n.Entity is BlockReference))];
+        if (made.Count == 0)
+        {
+            return;
+        }
+        IReadOnlyList<Entity> into = [.. node.Path.Take(node.Path.Count - 1)];
+        var component = new NewBlockCommand(document, owner, "Component");
+        // Taken out from the last to the first, and put in from the first to the last, so that the order is kept.
+        List<ModelNodeViewModel> inOrder = [.. made.OrderBy(n => owner.Entities.IndexOf(n.Entity!))];
+        List<IEditCommand> commands =
+        [
+            component,
+            .. InBlockOrder(made).Select(n => (IEditCommand)new DeleteCommand(n.Entity!)),
+            .. inOrder.Select(n => new AddEntityCommand("Make component", component.Reference.Block, n.Entity!)),
+        ];
+        if (Edit?.Invoke(new CompositeCommand("Make component", commands)) == true)
+        {
+            Select([.. into, component.Reference]);
+        }
     }
 
     partial void OnSelectedNodeChanged(ModelNodeViewModel? value) => OnPropertyChanged(nameof(GroupLabel));

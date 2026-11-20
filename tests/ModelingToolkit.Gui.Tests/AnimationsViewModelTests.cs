@@ -131,6 +131,29 @@ public sealed class AnimationsViewModelTests
     }
 
     [Fact]
+    public void The_switch_for_all_leaves_out_a_movement_that_moves_more_than_the_selection()
+    {
+        var cabinet = (BlockReference)_document.Root.Entities[0];
+        var table = (BlockReference)_document.Root.Entities[1];
+        var everything = new Animation("Move_everything", [Slide(cabinet), Slide(table)]);
+        _document.Animations.Add(everything);
+        var animations = new AnimationsViewModel(useTimer: false);
+        animations.Show(_document);
+
+        animations.Filter([cabinet]);
+        Assert.Contains(animations.Items, item => item.Animation == everything); // it moves the cabinet, so it is listed
+        Assert.DoesNotContain(animations.All.Items, item => item.Animation == everything);
+        Assert.Equal(3, animations.All.Items.Count); // the door, the drawer and both together
+
+        animations.All.IsOpen = true;
+        animations.Advance(10);
+        Assert.False(animations.Items.Single(item => item.Animation == everything).IsOpen);
+
+        animations.Filter(null); // the model: all of them
+        Assert.Contains(animations.All.Items, item => item.Animation == everything);
+    }
+
+    [Fact]
     public void Starting_a_movement_stops_another_that_shares_a_part_without_holding_it_all()
     {
         // Open door and slide a pair of the door and the table share the door, and neither holds the other's parts.

@@ -294,16 +294,29 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
         {
             host.SelectEntity(null);
             host.Elements.Clear();
-            host.Context.LeaveAll();
+            if (input.ClickCount == 2 && !host.Context.IsModel)
+            {
+                host.Context.Leave(); // a double click outside the block leaves it, as one on it entered
+            }
             return;
         }
 
+        int clicks = input.ClickCount;
+        if (host.Context.Within(path) is null)
+        {
+            // Outside the block being edited: only a double click leaves it, to select there, not to enter.
+            if (clicks != 2)
+            {
+                return;
+            }
+            clicks = 1;
+        }
         IReadOnlyList<Entity> within = LeaveTo(path);
         if (within[0] is BlockReference)
         {
             // Past the groups, to the component inside them.
             int first = path.Count - within.Count, chosen = Groups.Through(path, first);
-            if (input.ClickCount == 2)
+            if (clicks == 2)
             {
                 host.SelectEntity(null);
                 for (int i = first; i <= chosen; i++)
@@ -335,7 +348,7 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
                 host.SelectEntity(path.Take(chosen + 1).ToArray());
             }
         }
-        else if (input.ClickCount > 1)
+        else if (clicks > 1)
         {
             // The first click selected it.
         }
@@ -408,13 +421,13 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
         EditContext context = Host.Context;
         if (pick.Path is not { Count: > 0 } path)
         {
-            return context.IsModel ? "Click an object to select it" : "Click outside the block or press Esc to leave it";
+            return context.IsModel ? "Click an object to select it" : "Double click outside the block or press Esc to leave it";
         }
 
         IReadOnlyList<Entity>? within = context.Within(path);
         if (within is null)
         {
-            return "Click to leave the block and select there";
+            return "Double click to leave the block and select there";
         }
         if (within[0] is BlockReference)
         {

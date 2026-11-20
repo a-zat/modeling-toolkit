@@ -85,16 +85,22 @@ public sealed class SelectToolTests
     }
 
     [Fact]
-    public void A_click_outside_the_block_leaves_it_and_one_on_nothing_goes_back_to_the_model()
+    public void Only_a_double_click_outside_the_block_leaves_it()
     {
         _host.Context.Enter(_left);
 
         _tool.Click(On(Face(_right)));
+        Assert.False(_host.Context.IsModel); // a single click outside does nothing
+        Assert.Null(_host.SelectedEntity);
+
+        _tool.Click(On(Face(_right), clicks: 2));
         Assert.True(_host.Context.IsModel);
         Assert.Equal([_right], _host.SelectedEntity);
 
         _host.Context.Enter(_right);
         _tool.Click(new ToolInput(ToolPick.Nothing));
+        Assert.False(_host.Context.IsModel);
+        _tool.Click(new ToolInput(ToolPick.Nothing, ClickCount: 2));
         Assert.True(_host.Context.IsModel);
         Assert.Null(_host.SelectedEntity);
     }
@@ -132,8 +138,8 @@ public sealed class SelectToolTests
         [
             "Click to select Left, double-click to edit its block",
             "Click to select the vertex, Shift-click to add or remove it",
-            "Click to leave the block and select there",
-            "Click outside the block or press Esc to leave it",
+            "Double click to leave the block and select there",
+            "Double click outside the block or press Esc to leave it",
         ], hints);
     }
 

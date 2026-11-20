@@ -109,6 +109,12 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     /// <summary>The detail after the name, with the space between them; empty for none.</summary>
     public string DetailSpaced => string.IsNullOrEmpty(Detail) ? string.Empty : "  " + Detail;
 
+    /// <summary>Whether the node is a mesh or a shape, which can be made a component with others.</summary>
+    public bool IsLoose => Entity is MeshEntity or BrepEntity;
+
+    /// <summary>Whether the menu offers to group it or make it a component: a reference, a mesh or a shape.</summary>
+    public bool CanGroup => IsReference || IsLoose;
+
     public bool IsMesh => Entity is MeshEntity;
 
     public bool IsBrep => Entity is BrepEntity;

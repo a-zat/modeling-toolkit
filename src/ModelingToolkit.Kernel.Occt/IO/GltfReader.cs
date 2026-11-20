@@ -63,6 +63,10 @@ public sealed class GltfReader : IDocumentReader
             ReadAnimations(fullPath, document, warnings);
             ReadExtras(fullPath, document);
             ReadAnchors(fullPath, document, warnings);
+            if (Core.Editing.Groups.Repair(document) is > 0 and int repaired)
+            {
+                warnings.Add($"{repaired} group(s) hold geometry of their own: they are components here.");
+            }
             return document;
         }
     }

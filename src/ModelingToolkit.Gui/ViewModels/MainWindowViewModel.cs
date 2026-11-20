@@ -295,8 +295,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<Entity>? EmphasizedPath => IsLookOnly
         ? null
-        : (SelectedInView ? null : ModelTree.SelectedNode?.Path) ??
+        : (FramedByBox ? null : ModelTree.SelectedNode?.Path) ??
           (Context is { IsModel: false } context ? context.Path : null);
+
+    // Whether the node selected in the 3D view is a component or a group, which it frames by its box and handles; a
+    // mesh or a shape that was picked is shown in front of the rest instead, as one selected in the outline is.
+    private bool FramedByBox => SelectedInView &&
+        (ModelTree.SelectedNode is { Entity: BlockReference } || ActiveTool is SelectTool { IsPlacing: true });
 
     /// <summary>
     /// Whether the selected node was picked in the 3D view, which frames it by its box, rather than in the outline, which
@@ -343,7 +348,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 SelectedInView = ModelTree.SelectedNode is not null;
                 ShowOverlay();
                 Entity entity = target[^1];
-                if (entity is BlockReference && ModelTree.SelectedNode is { } node)
+                if (entity is BlockReference { IsGroup: false } && ModelTree.SelectedNode is { } node)
                 {
                     actions.Add(new("Edit block", EnterNodeCommand, node));
                 }
@@ -905,7 +910,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void EnterNode(ModelNodeViewModel? node)
     {
-        if (Context is not { } context || node?.Entity is not BlockReference || IsBusy)
+        // A group is a container only: it is converted to a component to be edited.
+        if (Context is not { } context || node?.Entity is not BlockReference { IsGroup: false } || IsBusy)
         {
             return;
         }
@@ -2247,7 +2253,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     // The handles of the entity selected in the 3D view, when the select tool can drag them.
     private SelectionHandles? ShownHandles() =>
-        SelectedInView && IsEditable && ActiveTool is SelectTool { IsActive: true, IsDraggingHandle: false } select
+        FramedByBox && IsEditable && ActiveTool is SelectTool { IsActive: true, IsDraggingHandle: false } select
             ? select.Handles
             : null;
 
@@ -2277,7 +2283,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // The box of the entity selected in the 3D view, turned with it: its twelve edges.
     private List<OverlayLine>? SelectionBox()
     {
-        if (!SelectedInView || IsLookOnly || ActiveTool is SelectTool { IsDraggingHandle: true } ||
+        if (!FramedByBox || IsLookOnly || ActiveTool is SelectTool { IsDraggingHandle: true } ||
             ModelTree.SelectedNode is not { Entity: { } entity, Path: { } path })
         {
             return null;

@@ -51,13 +51,15 @@ public sealed class EditContextTests : IDisposable
     }
 
     [Fact]
-    public async Task AClickOutsideTheBlockLeavesItAndSelectsWhatWasClicked()
+    public async Task ADoubleClickOutsideTheBlockLeavesItAndSelectsWhatWasClicked()
     {
         await OpenParts();
         _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
         _viewModel.ViewInputCommand.Execute(Click(_left));
 
         _viewModel.ViewInputCommand.Execute(Click(_right));
+        Assert.True(_viewModel.IsEditingBlock); // one click is not enough
+        _viewModel.ViewInputCommand.Execute(Click(_right, clicks: 2));
 
         Assert.False(_viewModel.IsEditingBlock);
         Assert.Empty(_viewModel.SelectedElements);
@@ -65,11 +67,13 @@ public sealed class EditContextTests : IDisposable
     }
 
     [Fact]
-    public async Task AClickOnNothingOrEscapeLeavesTheBlock()
+    public async Task ADoubleClickOnNothingOrEscapeLeavesTheBlock()
     {
         await OpenParts();
         _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));
         _viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None));
+        Assert.True(_viewModel.IsEditingBlock);
+        _viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, default, KeyModifiers.None, 2));
         Assert.False(_viewModel.IsEditingBlock);
 
         _viewModel.ViewInputCommand.Execute(Click(_left, clicks: 2));

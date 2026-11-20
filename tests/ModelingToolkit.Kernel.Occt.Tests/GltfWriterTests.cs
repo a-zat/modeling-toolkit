@@ -178,6 +178,26 @@ public sealed class GltfWriterTests : IDisposable
         Assert.Equal(once.Blocks.Count, thrice.Blocks.Count);
     }
 
+    [Fact]
+    public void A_group_with_geometry_of_its_own_is_read_as_a_component_with_a_warning()
+    {
+        var document = new Document();
+        var room = new Block("Room")
+        {
+            Entities = { new MeshEntity([new(0, 0, 0), new(100, 0, 0), new(0, 100, 0)], [new(0, 1, 2)]) },
+        };
+        document.Blocks.Add(room);
+        document.Root.Entities.Add(new BlockReference(room, Transform.Identity) { Name = "Room", IsGroup = true });
+        string path = Path.Combine(_folder, "room.glb");
+        _writer.Write(document, path);
+        var warnings = new List<string>();
+
+        Document copy = _reader.Read(path, warnings);
+
+        Assert.False(copy.Root.Entities.OfType<BlockReference>().Single(reference => reference.Name == "Room").IsGroup);
+        Assert.Contains(warnings, warning => warning.Contains("group", StringComparison.Ordinal));
+    }
+
     private Document RoundTrip(Document document)
     {
         string path = Path.Combine(_folder, Guid.NewGuid() + ".glb");

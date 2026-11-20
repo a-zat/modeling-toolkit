@@ -394,7 +394,15 @@ public sealed class SetGroupCommand(BlockReference reference, bool group) : IEdi
 
     public string Name => group ? "Make group" : "Convert to component";
 
-    public void Apply() => _reference.IsGroup = group;
+    /// <exception cref="EditRefusedException">The block holds geometry of its own, which a group does not.</exception>
+    public void Apply()
+    {
+        if (group && !Groups.HoldsOnlyComponents(_reference.Block))
+        {
+            throw new EditRefusedException("A group holds components only: this one has geometry of its own.");
+        }
+        _reference.IsGroup = group;
+    }
 
     public void Revert() => _reference.IsGroup = !group;
 }

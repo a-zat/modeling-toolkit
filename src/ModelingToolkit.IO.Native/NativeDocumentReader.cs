@@ -91,6 +91,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             {
                 document.Attach(ToAttachment(entry, document));
             }
+            Core.Editing.Groups.Repair(document); // a group holds components only
             return document;
         }
 

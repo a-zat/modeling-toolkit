@@ -219,7 +219,6 @@ public sealed class NativeFormatTests : IDisposable
         document.Root.Entities.Add(leafReference);
         document.Root.Entities.Add(chair);
         document.Attach(new Attachment(chair, [leafReference], anchor, Transform.Translation(150, 0, 0)));
-        leafReference.IsGroup = true;
         string path = PathOf("anchors.mtk");
 
         _writer.Write(document, path);
@@ -233,6 +232,27 @@ public sealed class NativeFormatTests : IDisposable
         Assert.Same(copy.Root.Entities[0], Assert.Single(attachment.Chain));
         Assert.Same(copiedAnchor, attachment.Anchor);
         Assert.Equal(Transform.Translation(150, 0, 0), attachment.Offset);
+    }
+
+    [Fact]
+    public void A_group_is_kept_and_one_that_holds_geometry_of_its_own_is_read_as_a_component()
+    {
+        var document = new Document();
+        var inner = new Block("Inner") { Entities = { new MeshEntity([new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)], [new(0, 1, 2)]) } };
+        var room = new Block("Room");
+        var withGeometry = new Block("Mixed")
+        {
+            Entities = { new MeshEntity([new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)], [new(0, 1, 2)]) },
+        };
+        document.Blocks.AddRange([inner, room, withGeometry]);
+        room.Entities.Add(new BlockReference(inner, Transform.Identity));
+        document.Root.Entities.Add(new BlockReference(room, Transform.Identity) { IsGroup = true });
+        document.Root.Entities.Add(new BlockReference(withGeometry, Transform.Identity) { IsGroup = true });
+        string path = PathOf("groups.mtk");
+
+        _writer.Write(document, path);
+        Document copy = _reader.Read(path, []);
+
         Assert.True(((BlockReference)copy.Root.Entities[0]).IsGroup);
         Assert.False(((BlockReference)copy.Root.Entities[1]).IsGroup);
     }

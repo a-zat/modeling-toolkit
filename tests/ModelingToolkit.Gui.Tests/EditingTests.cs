@@ -1,6 +1,11 @@
+using Avalonia.Input;
+using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.IO;
 using ModelingToolkit.Core.Model;
 using ModelingToolkit.Gui.ViewModels;
+using ModelingToolkit.Gui.Viewport;
+using ModelingToolkit.IO.Native;
+using ModelingToolkit.Kernel.Occt;
 using ModelingToolkit.Kernel.Occt.IO;
 
 namespace ModelingToolkit.Gui.Tests;
@@ -51,6 +56,46 @@ public sealed class EditingTests
 
         Assert.Equal("Flat", viewModel.Document!.Root.Name);
         Assert.Equal("Flat", model.Name);
+    }
+
+    [Fact]
+    public async Task ALooseMeshPickedInTheViewIsShownInFrontNotFramedByABoxWithHandles()
+    {
+        string folder = Directory.CreateTempSubdirectory("mtk-loose-").FullName;
+        try
+        {
+            var document = new Document();
+            var mesh = new MeshEntity([new(0, 0, 0), new(100, 0, 0), new(0, 100, 0)], [new(0, 1, 2)]) { Name = "Wall" };
+            document.Root.Entities.Add(mesh);
+            var part = new Block("Part");
+            part.Entities.Add(new MeshEntity([new(0, 0, 0), new(100, 0, 0), new(0, 100, 0)], [new(0, 1, 2)]));
+            document.Blocks.Add(part);
+            var reference = new BlockReference(part, Transform.Translation(500, 0, 0)) { Name = "Chair" };
+            document.Root.Entities.Add(reference);
+            string path = Path.Combine(folder, "loose.mtk");
+            new NativeDocumentWriter().Write(document, path);
+            var viewModel = new MainWindowViewModel(
+                new DocumentFormats([new NativeDocumentReader(new OcctKernel())], [new NativeDocumentWriter()]),
+                new NoAppearance());
+            await viewModel.LoadAsync(path);
+            Entity loose = viewModel.Document!.Root.Entities.First(entity => entity.Name == "Wall");
+            Entity component = viewModel.Document.Root.Entities.First(entity => entity.Name == "Chair");
+
+            void Pick(IReadOnlyList<Entity> picked) => viewModel.ViewInputCommand.Execute(
+                new ViewportPick(picked, null, default, new System.Numerics.Vector3(0, 0, 1), KeyModifiers.None));
+
+            Pick([loose]);
+            Assert.True(viewModel.SelectedInView);
+            Assert.Equal([loose], viewModel.EmphasizedPath);
+            Assert.Empty(viewModel.Handles);
+
+            Pick([component, ((BlockReference)component).Block.Entities[0]]);
+            Assert.Null(viewModel.EmphasizedPath); // a component is framed by its box instead
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     [Fact]

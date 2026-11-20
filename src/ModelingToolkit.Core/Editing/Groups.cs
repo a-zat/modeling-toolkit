@@ -19,4 +19,31 @@ public static class Groups
         }
         return index;
     }
+
+    /// <summary>
+    /// Whether a block holds only references, as a group does: a group is a container of components, with no geometry
+    /// of its own.
+    /// </summary>
+    public static bool HoldsOnlyComponents(Block block)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+        return block.Entities.All(entity => entity is BlockReference);
+    }
+
+    /// <summary>
+    /// Makes components of the groups of a document that hold geometry of their own, as a file from elsewhere may have
+    /// them, so that a group is only a container of components. Returns how many it made components.
+    /// </summary>
+    public static int Repair(Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        int repaired = 0;
+        foreach (BlockReference group in document.Blocks.Prepend(document.Root).SelectMany(block => block.Entities)
+                     .OfType<BlockReference>().Where(reference => reference.IsGroup && !HoldsOnlyComponents(reference.Block)))
+        {
+            group.IsGroup = false;
+            repaired++;
+        }
+        return repaired;
+    }
 }

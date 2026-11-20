@@ -207,7 +207,7 @@ public sealed partial class AnimationsViewModel : ObservableObject
     public partial bool HasItems { get; private set; }
 
     /// <summary>Whether several animations are shown, so that one switch and slider move them all.</summary>
-    public bool HasSeveral => Items.Count > 1;
+    public bool HasSeveral => All.Items.Count > 1;
 
     /// <summary>Whether an animation is playing, so that the view asks for frames.</summary>
     public bool IsPlaying => _all.Any(item => item.Goal is not null);
@@ -249,7 +249,8 @@ public sealed partial class AnimationsViewModel : ObservableObject
     {
         _selection = path;
         List<AnimationItemViewModel> shown = [.. _all.Where(item => InScene(item) && Concerns(item, path))];
-        if (shown.SequenceEqual(Items))
+        List<AnimationItemViewModel> within = [.. shown.Where(item => Within(item, path))];
+        if (shown.SequenceEqual(Items) && within.SequenceEqual(All.Items))
         {
             return;
         }
@@ -259,9 +260,10 @@ public sealed partial class AnimationsViewModel : ObservableObject
             Items.Add(item);
         }
         HasItems = Items.Count > 0;
-        OnPropertyChanged(nameof(HasSeveral));
 
-        All.Set([.. shown]);
+        // The switch for all moves those that stay within the selection, not one that holds it or moves more.
+        All.Set(within);
+        OnPropertyChanged(nameof(HasSeveral));
     }
 
     /// <summary>
@@ -606,6 +608,29 @@ public sealed partial class AnimationsViewModel : ObservableObject
             return false;
         }
 
+        HashSet<Block> blocks = BlocksOf(selected);
+        return item.Targets.Any(target => target.Owner is { } owner && blocks.Contains(owner));
+    }
+
+    // Whether an animation moves only the node of the path and the parts inside it: all of them for the model.
+    private static bool Within(AnimationItemViewModel item, IReadOnlyList<Entity>? path)
+    {
+        if (path is null || path.Count == 0)
+        {
+            return true;
+        }
+        if (path[^1] is not BlockReference selected)
+        {
+            return false;
+        }
+        HashSet<Block> blocks = BlocksOf(selected);
+        return item.Targets.All(target =>
+            ReferenceEquals(target, selected) || target.Owner is { } owner && blocks.Contains(owner));
+    }
+
+    // The block of a reference and those below it, at any depth.
+    private static HashSet<Block> BlocksOf(BlockReference selected)
+    {
         var blocks = new HashSet<Block>(ReferenceEqualityComparer.Instance);
         var pending = new Stack<Block>([selected.Block]);
         while (pending.TryPop(out Block? block))
@@ -619,7 +644,7 @@ public sealed partial class AnimationsViewModel : ObservableObject
                 pending.Push(reference.Block);
             }
         }
-        return item.Targets.Any(target => target.Owner is { } owner && blocks.Contains(owner));
+        return blocks;
     }
 }
 

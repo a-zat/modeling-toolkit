@@ -123,6 +123,43 @@ public sealed class ModelTreeUpdateTests
     }
 
     [Fact]
+    public void Loose_meshes_selected_are_made_a_component_where_they_were_and_a_component_with_geometry_is_not_made_a_group()
+    {
+        var document = new Document();
+        MeshEntity a = Square(), b = Square(), c = Square();
+        a.Name = "A";
+        b.Name = "B";
+        c.Name = "C";
+        document.Root.Entities.Add(a);
+        document.Root.Entities.Add(b);
+        document.Root.Entities.Add(c);
+        var session = new ModelingToolkit.Core.Editing.EditSession(document);
+        var tree = new ModelTreeViewModel { Edit = command => { session.Execute(command); return true; } };
+        tree.Show(document);
+        // The meshes of the model are listed under one geometry node.
+        IReadOnlyList<ModelNodeViewModel> meshes = tree.Model!.Children.Single(node => node.IsGeometry).Children;
+        tree.SelectedNodes.Add(meshes[0]);
+        tree.SelectedNodes.Add(meshes[2]);
+        tree.SelectedNode = meshes[0];
+
+        Assert.Equal("Make component", tree.GroupLabel);
+        tree.GroupOrToggleCommand.Execute(meshes[0]);
+
+        Assert.Equal([b], document.Root.Entities.OfType<MeshEntity>());
+        var made = document.Root.Entities.OfType<BlockReference>().Single();
+        Assert.False(made.IsGroup);
+        Assert.Equal([a, c], made.Block.Entities);
+        Assert.Same(made, tree.SelectedNode?.Entity);
+
+        // It holds geometry of its own, so it cannot be a group.
+        Assert.Throws<ModelingToolkit.Core.Editing.EditRefusedException>(() =>
+            new ModelingToolkit.Core.Editing.SetGroupCommand(made, group: true).Apply());
+
+        session.Undo();
+        Assert.Equal([a, b, c], document.Root.Entities);
+    }
+
+    [Fact]
     public void A_duplicate_goes_next_to_the_original_placing_the_same_block()
     {
         var chair = new Block("Chair") { Entities = { Square() } };
