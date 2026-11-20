@@ -420,6 +420,27 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task WalkingShowsNothingSelectedAndTheSelectionComesBackAfter()
+    {
+        MainWindowViewModel viewModel = Create();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        ModelNodeViewModel mesh = Flatten(viewModel.ModelTree.Model!).Last();
+        viewModel.ModelTree.SelectedNode = mesh;
+        Assert.NotNull(viewModel.EmphasizedPath);
+
+        viewModel.ToggleWalkCommand.Execute(null);
+        Assert.Null(viewModel.EmphasizedPath);
+        viewModel.ViewInputCommand.Execute(new ViewportPick(mesh.Path, null, new Point3d(1, 2, 3),
+            new System.Numerics.Vector3(0, 0, 1), KeyModifiers.None, 1, ViewportInputKind.Click));
+        Assert.Null(viewModel.EmphasizedPath);
+        Assert.Empty(viewModel.ShownElements);
+        Assert.Empty(viewModel.Overlay.Lines);
+
+        viewModel.EscapeCommand.Execute(null);
+        Assert.NotNull(viewModel.EmphasizedPath);
+    }
+
+    [Fact]
     public async Task TheRenderedViewIsOnlyToLookAtAClickOpensOrClosesAndTheToolsWait()
     {
         MainWindowViewModel viewModel = Create();

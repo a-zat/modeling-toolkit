@@ -72,6 +72,51 @@ internal sealed class WalkCollider
         return Free(eye + along, slide) is { } blocked ? along + blocked.Free : along + slide;
     }
 
+    /// <summary>
+    /// Where the eyes stand when put on a point: moved away from what is nearer than the radius, in any direction, which
+    /// would stop every move towards it, or the walk altogether when it is all around.
+    /// </summary>
+    public Point3d Clear(Point3d eye)
+    {
+        const int Directions = 12;
+        for (int round = 0; round < 6; round++)
+        {
+            Vector3d push = default;
+            foreach (double height in _heights)
+            {
+                for (int k = 0; k < Directions; k++)
+                {
+                    double angle = 2 * Math.PI * k / Directions;
+                    var direction = new Vector3d(Math.Cos(angle), Math.Sin(angle), 0);
+                    if (Cast(eye + new Vector3d(0, 0, height), direction, _radius) is { } hit &&
+                        new Vector3d(hit.Normal.X, hit.Normal.Y, 0).Length > 1e-9)
+                    {
+                        // Away from it, by what lacks to the radius, a little more.
+                        push -= direction * (_radius - hit.Distance + 10);
+                    }
+                }
+            }
+            if (push.Length < 1)
+            {
+                break;
+            }
+            // Every direction counts for a share of the push; a step is never more than the radius.
+            Vector3d step = push / (Directions / 4.0 * _heights.Length);
+            eye += step.Length > _radius ? step.Normalized() * _radius : step;
+        }
+        return eye;
+    }
+
+    /// <summary>
+    /// The height of the ground under a point, as the highest surface that is at or below <paramref name="from"/>, which
+    /// is the height of the feet and of the step they climb; null when there is none.
+    /// </summary>
+    public double? Ground(double x, double y, double from) =>
+        Cast(new Point3d(x, y, from), new Vector3d(0, 0, -1), 1e7) is { } hit ? from - hit.Distance : null;
+
+    /// <summary>How far along a ray, of unit direction, the model is first hit, within a distance; null for not at all.</summary>
+    public double? Hit(Point3d origin, Vector3d direction, double reach) => Cast(origin, direction, reach)?.Distance;
+
     // Null when nothing is in the way of the move; else how far it goes, up to the radius from the plane of what
     // stops it, and the horizontal normal of that plane, facing the eyes.
     private (Vector3d Free, Vector3d Normal)? Free(Point3d eye, Vector3d move)

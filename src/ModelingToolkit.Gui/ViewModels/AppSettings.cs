@@ -54,6 +54,12 @@ public sealed record AppSettings
     /// <summary>Whether walking stops at walls and other parts of the model.</summary>
     public bool Collisions { get; init; } = true;
 
+    /// <summary>Whether, while walking, yellow dots mark what can be used.</summary>
+    public bool ShowUsable { get; init; }
+
+    /// <summary>Whether walking follows the ground: it falls off an edge and rises over a low step.</summary>
+    public bool Gravity { get; init; } = true;
+
     /// <summary>How near the eyes come to what stops the walk, in millimetres.</summary>
     public double CollisionRadius { get; init; } = 250;
 

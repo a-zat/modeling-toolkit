@@ -64,6 +64,35 @@ public sealed class WalkColliderTests
         Assert.Equal(1000 - WalkCollider.Radius, walk.Eye.X, Tolerance);
     }
 
+    [Fact]
+    public void Put_on_a_point_too_near_a_wall_the_eyes_move_out_to_the_radius_and_can_walk_away_or_along()
+    {
+        WalkCollider collider = Of(Wall(x: 1000));
+
+        Point3d cleared = collider.Clear(new Point3d(900, 0, WalkCamera.EyeHeight));
+
+        Assert.True(cleared.X <= 1000 - WalkCollider.Radius + 20, $"stands at {cleared.X}");
+        Assert.True(cleared.X >= 1000 - WalkCollider.Radius - 120, $"stands at {cleared.X}");
+        Assert.Equal(0, cleared.Y, 1);
+        // Far from everything, it stays.
+        Assert.Equal(Eye, collider.Clear(Eye));
+    }
+
+    [Fact]
+    public void The_ground_is_the_highest_surface_under_the_feet_and_a_step_they_can_climb()
+    {
+        // A floor at 0 and a ledge at 1000, which is above the feet and the step of 400.
+        WalkCollider collider = Of(Floor(0, 0, 10000), Floor(1000, 2000, 3000));
+
+        Assert.Equal(0, collider.Ground(0, 0, 400));
+        Assert.Equal(0, collider.Ground(2500, 0, 400)); // the ledge is higher than the step
+        Assert.Equal(1000, collider.Ground(2500, 0, 1400));
+        Assert.Null(collider.Ground(0, 0, -100)); // nothing under what is below the floor
+    }
+
+    private static MeshEntity Floor(double z, double from, double to) => new(
+        [new(from, -5000, z), new(to, -5000, z), new(to, 5000, z), new(from, 5000, z)], [new(0, 1, 2), new(0, 2, 3)]);
+
     private static WalkCollider Of(params MeshEntity[] meshes) =>
         new(meshes.Select(mesh => (mesh, Transform.Identity)));
 

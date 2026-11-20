@@ -158,6 +158,7 @@
                              Pose="{Binding Pose}"
                              Handles="{Binding Handles}"
                              IsWalking="{Binding IsWalking}" IsPlacingWalk="{Binding IsPlacingWalk}" WalkStart="{Binding WalkStart}"
+                             Seat="{Binding Seat}" Beacons="{Binding Beacons}"
                              Environment="{Binding SkyEnvironment}" Collides="{Binding Collisions}"
                              WalkSettings="{Binding WalkSettings}" EdgeWidth="{Binding EdgeWidth}"
                              OutlineWidth="{Binding OutlineWidth}"

@@ -55,6 +55,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (e.PropertyName == nameof(AnimationsViewModel.Pose))
             {
                 UpdatePose();
+                UpdateBeacons();
             }
         };
         Properties.Picker.ChooseImage = () => FileDialogs?.OpenAsync(
@@ -277,7 +278,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public partial IReadOnlyList<ElementReference> SelectedElements { get; private set; } = [];
 
     /// <summary>The elements that the 3D view highlights: those selected, but in the rendered display mode.</summary>
-    public IReadOnlyList<ElementReference> ShownElements => IsRendered ? [] : SelectedElements;
+    public IReadOnlyList<ElementReference> ShownElements => IsLookOnly ? [] : SelectedElements;
 
     /// <summary>Where the edits happen: the model, or the block of a reference entered; null without a document.</summary>
     public EditContext? Context { get; private set; }
@@ -289,7 +290,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// The entities that the 3D view shows in front of the rest, which it fades: the node selected, or else the reference
     /// whose block is being edited; null for none.
     /// </summary>
-    public IReadOnlyList<Entity>? EmphasizedPath => IsRendered
+    public IReadOnlyList<Entity>? EmphasizedPath => IsLookOnly
         ? null
         : (SelectedInView ? null : ModelTree.SelectedNode?.Path) ??
           (Context is { IsModel: false } context ? context.Path : null);
@@ -326,7 +327,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IReadOnlyList<Entity> within = LeaveTo(path);
             if (within.Count > 0)
             {
-                IReadOnlyList<Entity> target = [.. path.Take(path.Count - within.Count + 1)];
+                IReadOnlyList<Entity> target = [.. path.Take(Groups.Through(path, path.Count - within.Count) + 1)];
                 _selectingInView = true;
                 try
                 {
@@ -343,9 +344,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 {
                     actions.Add(new("Edit block", EnterNodeCommand, node));
                 }
-                if (Animations.CanToggleAt(path))
+                if (Animations.CanToggleAt(path, pick.Point))
                 {
                     actions.Add(new("Open or close", ToggleAtCommand, path));
+                }
+                if (entity is BlockReference component && Document is { } document)
+                {
+                    actions.Add(ContextAction.Separator);
+                    actions.Add(new("Add anchor here", AddAnchorCommand, new AnchorRequest(target, pick.Point, AnchorKind.Attach)));
+                    actions.Add(new("Add point of view here", AddAnchorCommand,
+                        new AnchorRequest(target, pick.Point, AnchorKind.PointOfView)));
+                    if (document.AttachmentOf(component) is { } attached)
+                    {
+                        actions.Add(new($"Detach from {attached.Anchor.Name ?? "its anchor"}", DetachFromAnchorCommand, attached));
+                    }
+                    else if (Attachment.Nearest(component, AttachReach) is { } nearest)
+                    {
+                        actions.Add(new($"Attach to {nearest.Anchor.Name ?? "the nearest anchor"}", AttachToAnchorCommand, nearest));
+                    }
                 }
                 actions.Add(ContextAction.Separator);
                 foreach (ToolItemViewModel tool in Tools.Where(item => item.Tool is MoveTool or RotateTool or ScaleTool))
@@ -364,7 +380,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 actions.Add(ContextAction.Separator);
             }
         }
-        else if (pick.Path is { Count: > 0 } walked && Animations.CanToggleAt(walked))
+        else if (pick.Path is { Count: > 0 } walked && Animations.CanToggleAt(walked, pick.Point))
         {
             actions.Add(new("Open or close", ToggleAtCommand, walked));
             actions.Add(ContextAction.Separator);
@@ -401,6 +417,103 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleAt(IReadOnlyList<Entity>? path) => Animations.ToggleAt(path);
 
+    /// <summary>How far from the origin of a component the anchor it is attached to may be, in millimetres.</summary>
+    private const double AttachReach = 3000;
+
+    /// <summary>Of the eyes above the point clicked, for a point of view added there: those of a person sitting.</summary>
+    internal const double SeatedEyeHeight = 750;
+
+    /// <summary>An anchor to add to the component at the end of a path, at a point of the model clicked on it.</summary>
+    public sealed record AnchorRequest(IReadOnlyList<Entity> Target, Point3d Point, AnchorKind Kind);
+
+    // The transform of a reference as the 3D view shows it: moved by the animations, or as in the document.
+    private Transform Shown(BlockReference reference) =>
+        Animations.Pose.TryGetValue(reference, out Transform? posed) ? posed : reference.Transform;
+
+    // From the coordinates of the block of the reference at the end of a path to those of the model, as shown.
+    private Transform PlacementOf(IEnumerable<Entity> path) =>
+        path.OfType<BlockReference>().Aggregate(Transform.Identity, (all, reference) => all * Shown(reference));
+
+    // An anchor in the block of the component, at the point clicked, facing the way the camera looks at it, the Z axis
+    // up; a point of view at the height of the eyes of a person sitting there.
+    [RelayCommand]
+    private void AddAnchor(AnchorRequest request)
+    {
+        if (request.Target is not [.., BlockReference component])
+        {
+            return;
+        }
+        Transform toBlock = PlacementOf(request.Target).Inverse();
+        bool view = request.Kind == AnchorKind.PointOfView;
+        Point3d at = view ? request.Point + new Vector3d(0, 0, SeatedEyeHeight) : request.Point;
+        Vector3d look = ViewEye is { } eye ? request.Point - eye : Vector3d.UnitX;
+        look = new Vector3d(look.X, look.Y, 0);
+        look = look.Length < 1e-9 ? Vector3d.UnitX : look.Normalized();
+        Vector3d x = toBlock.ApplyVector(look).Normalized();
+        Vector3d z = toBlock.ApplyVector(Vector3d.UnitZ);
+        z = (z - x * z.Dot(x)).Normalized();
+        Vector3d y = z.Cross(x);
+        Point3d o = toBlock.Apply(at);
+        var placement = new Transform(x.X, y.X, z.X, o.X, x.Y, y.Y, z.Y, o.Y, x.Z, y.Z, z.Z, o.Z);
+        int count = component.Block.Entities.OfType<AnchorEntity>().Count(anchor => anchor.Kind == request.Kind);
+        string name = (view ? "Point of view" : "Anchor") + (count > 0 ? $" {count + 1}" : string.Empty);
+        if (Edit(new AddEntityCommand(view ? "Add point of view" : "Add anchor", component.Block,
+                new AnchorEntity(placement, request.Kind) { Name = name })))
+        {
+            StatusMessage = view
+                ? $"{name} added to {component.Name ?? component.Block.Name}: click it while walking to look from there."
+                : $"{name} added to {component.Name ?? component.Block.Name}.";
+        }
+    }
+
+    [RelayCommand]
+    private void AttachToAnchor(Attachment attachment)
+    {
+        if (Document is { } document && Edit(new AttachCommand("Attach", document, attachment, attach: true)))
+        {
+            StatusMessage = $"{attachment.Follower.Name ?? attachment.Follower.Block.Name} follows {attachment.Anchor.Name ?? "the anchor"}.";
+        }
+    }
+
+    [RelayCommand]
+    private void DetachFromAnchor(Attachment attachment)
+    {
+        if (Document is { } document)
+        {
+            Edit(new AttachCommand("Detach", document, attachment, attach: false));
+        }
+    }
+
+    private static readonly Avalonia.Media.Color AnchorColor = Avalonia.Media.Color.FromRgb(0xE8, 0x8A, 0x1A);
+
+    // The anchors of the component selected, at any depth, where the 3D view shows them: rings for those to attach to,
+    // crosses for the points of view.
+    private IEnumerable<OverlayMarker> AnchorMarkers()
+    {
+        if (IsLookOnly || ModelTree.SelectedNode is not { Entity: BlockReference selected, Path: { } path })
+        {
+            yield break;
+        }
+        var pending = new Stack<(Block Block, Transform Placement, int Depth)>();
+        pending.Push((selected.Block, PlacementOf(path), 0));
+        while (pending.Count > 0)
+        {
+            (Block block, Transform placement, int depth) = pending.Pop();
+            foreach (Entity entity in block.Entities)
+            {
+                if (entity is AnchorEntity anchor)
+                {
+                    yield return new OverlayMarker(placement.Apply(anchor.Point), AnchorColor,
+                        anchor.Kind == AnchorKind.PointOfView ? MarkerShape.Plus : MarkerShape.Circle);
+                }
+                else if (entity is BlockReference reference && depth < 16)
+                {
+                    pending.Push((reference.Block, placement * Shown(reference), depth + 1));
+                }
+            }
+        }
+    }
+
     [RelayCommand]
     private void SimplifyAt(IReadOnlyList<Entity>? path)
     {
@@ -432,7 +545,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     // The tool that opens and closes what is clicked, as the rendered view and the walk do.
     private ToolItemViewModel Interact() =>
-        new(new InteractTool(Animations.CanToggleAt, Animations.ToggleAt), "Icon.Interact");
+        new(new InteractTool((path, point) => Animations.CanToggleAt(path, point), (path, point) => Animations.ToggleAt(path, point)), "Icon.Interact");
 
     /// <summary>The tools of the tool column.</summary>
     public IReadOnlyList<ToolItemViewModel> Tools { get; }
@@ -553,13 +666,34 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 // On a wall, stands on the floor of the model; on a surface facing up, on it.
                 double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
-                StartWalkAt(input.Normal.Z > 0.5f ? input.Point : new Point3d(input.Point.X, input.Point.Y, floor));
+                // The face as seen from where the click was made, whichever way its triangle is wound.
+                System.Numerics.Vector3 normal = input.Ray is { } ray &&
+                    input.Normal.X * ray.Direction.X + input.Normal.Y * ray.Direction.Y + input.Normal.Z * ray.Direction.Z > 0
+                    ? -input.Normal : input.Normal;
+                StartWalkAt(normal.Z > 0.5f ? input.Point : BeforeWall(input.Point, normal, floor));
             }
             return;
         }
         if (IsWalking || IsRendered)
         {
-            if (input.Kind == ViewportInputKind.Click && !IsBusy && !Animations.ToggleAt(input.Path))
+            if (input.Kind != ViewportInputKind.Click || IsBusy)
+            {
+                return;
+            }
+            // Sitting, a click on the seat stands up; what opens and closes still does.
+            if (Seat is not null && PointOfViewAt(input.Path, input.Point) is { } same && same.Anchor == _seatAnchor)
+            {
+                Seat = null;
+            }
+            else if (Animations.ToggleAt(input.Path, input.Point))
+            {
+                UpdateBeacons(); // what was opened is no longer marked
+            }
+            else if (IsWalking && PointOfViewAt(input.Path, input.Point) is { } view)
+            {
+                SitAt(view);
+            }
+            else
             {
                 StatusMessage = input.Path is null ? string.Empty : "Nothing there opens or closes.";
             }
@@ -612,6 +746,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (IsSettingsOpen)
         {
             IsSettingsOpen = false;
+            return;
+        }
+        if (Seat is not null)
+        {
+            Seat = null;
             return;
         }
         if (IsWalking || IsPlacingWalk)
@@ -870,7 +1009,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (SelectedElements.Count == 0)
         {
-            Edit(new DeleteCommand(ModelTree.SelectedNode!.Entity!));
+            ModelTree.DeleteCommand.Execute(ModelTree.SelectedNode); // with the others selected in the outline
             return;
         }
         try
@@ -998,6 +1137,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial string StatusMessage { get; private set; }
 
+    /// <summary>Tells an error that nothing handled, in the status bar.</summary>
+    public void ReportError(string message) => StatusMessage = message;
+
     /// <summary>All the warnings of the last opened file, one per line, when the status message reports them.</summary>
     [ObservableProperty]
     public partial string? StatusDetails { get; private set; }
@@ -1039,6 +1181,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Whether the tools edit the model through the 3D view: not when it is rendered, nor while walking.</summary>
     public bool IsEditable => !IsRendered && !IsWalking;
+
+    /// <summary>Whether the view is only to look at, rendered or walked through: what is selected is not shown then.</summary>
+    private bool IsLookOnly => IsRendered || IsWalkActive;
 
     // The tool at work stops when the view is only to look at, and starts again after.
     partial void OnDisplayModeChanged(DisplayMode oldValue, DisplayMode newValue)
@@ -1138,19 +1283,167 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// opens or closes the part under the pointer that an animation moves.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ToolHint), nameof(IsEditable), nameof(IsWalkActive))]
+    [NotifyPropertyChangedFor(nameof(ToolHint), nameof(IsEditable), nameof(IsWalkActive), nameof(EmphasizedPath),
+        nameof(ShownElements))]
     public partial bool IsWalking { get; set; }
+
+    partial void OnIsWalkingChanged(bool value)
+    {
+        ShowOverlay(); // the box of the selection goes, and comes back
+        if (!value)
+        {
+            Seat = null;
+        }
+        UpdateBeacons();
+    }
+
+    /// <summary>The point of view taken while walking, as sitting on a chair; null while walking on the floor.</summary>
+    [ObservableProperty]
+    public partial WalkSeat? Seat { get; set; }
+
+    private AnchorEntity? _seatAnchor; // of the point of view taken
+
+    partial void OnSeatChanged(WalkSeat? value)
+    {
+        if (value is null && _seatAnchor is not null)
+        {
+            _seatAnchor = null;
+            StatusMessage = string.Empty; // the hint to stand up
+        }
+        UpdateBeacons();
+    }
+
+    /// <summary>Whether, while walking, a yellow dot marks what can be used: what opens or closes, where to sit.</summary>
+    [ObservableProperty]
+    public partial bool ShowsUsable { get; set; }
+
+    partial void OnShowsUsableChanged(bool value) => UpdateBeacons();
+
+    /// <summary>What can be used, which the 3D view marks while walking: see <see cref="ShowsUsable"/>.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<WalkBeacon> Beacons { get; private set; } = [];
+
+    // What opens or closes, at its start, and the points of view not taken.
+    private void UpdateBeacons()
+    {
+        if (!IsWalking || !ShowsUsable || Document is null)
+        {
+            if (Beacons.Count > 0)
+            {
+                Beacons = [];
+            }
+            return;
+        }
+        var beacons = new List<WalkBeacon>(Animations.Beacons());
+        foreach ((AnchorEntity anchor, BlockReference[] chain) in ViewPoints())
+        {
+            if (anchor != _seatAnchor)
+            {
+                // Over the seat, below the eyes.
+                Point3d eye = PlacementOf(chain).Apply(anchor.Point);
+                beacons.Add(new WalkBeacon(eye - new Vector3d(0, 0, SeatedEyeHeight / 2), 300));
+            }
+        }
+        Beacons = beacons;
+    }
+
+    private List<(AnchorEntity Anchor, BlockReference[] Chain)>? _viewPoints;
+
+    // The points of view of the document, each with the references from the model to the one holding it, once for every
+    // place it is in; found again after a change of the document.
+    private List<(AnchorEntity Anchor, BlockReference[] Chain)> ViewPoints()
+    {
+        if (_viewPoints is not null)
+        {
+            return _viewPoints;
+        }
+        var found = new List<(AnchorEntity, BlockReference[])>();
+        var chain = new List<BlockReference>();
+        void Walk(Block block)
+        {
+            foreach (Entity entity in block.Entities)
+            {
+                if (entity is AnchorEntity { Kind: AnchorKind.PointOfView } anchor)
+                {
+                    found.Add((anchor, [.. chain]));
+                }
+                else if (entity is BlockReference reference && chain.Count < 64)
+                {
+                    chain.Add(reference);
+                    Walk(reference.Block);
+                    chain.RemoveAt(chain.Count - 1);
+                }
+            }
+        }
+        if (Document is { } document)
+        {
+            Walk(document.Root);
+        }
+        return _viewPoints = found;
+    }
+
+    /// <summary>How far from the click a point of view of what was clicked may be, in millimetres.</summary>
+    private const double ViewPointReach = 1500;
+
+    // The point of view of what was clicked: among those inside the components of the path, the innermost, then the
+    // nearest to the point clicked, within reach.
+    private (AnchorEntity Anchor, BlockReference[] Chain)? PointOfViewAt(IReadOnlyList<Entity>? path, Point3d point)
+    {
+        if (path is null || ViewPoints() is not { Count: > 0 } all)
+        {
+            return null;
+        }
+        BlockReference[] references = [.. path.OfType<BlockReference>()];
+        (AnchorEntity, BlockReference[])? best = null;
+        int bestDepth = 0;
+        double bestDistance = double.MaxValue;
+        foreach ((AnchorEntity anchor, BlockReference[] chain) in all)
+        {
+            int depth = 0;
+            while (depth < references.Length && depth < chain.Length && references[depth] == chain[depth])
+            {
+                depth++;
+            }
+            if (depth == 0 || depth < bestDepth)
+            {
+                continue;
+            }
+            Point3d eye = PlacementOf(chain).Apply(anchor.Point);
+            // Across the floor: the eyes are above what is clicked.
+            double distance = Math.Sqrt((eye.X - point.X) * (eye.X - point.X) + (eye.Y - point.Y) * (eye.Y - point.Y));
+            if (distance <= ViewPointReach && (depth > bestDepth || distance < bestDistance))
+            {
+                best = (anchor, chain);
+                bestDepth = depth;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    // Looks from a point of view: the eyes at its origin, the way its X axis faces across the floor.
+    private void SitAt((AnchorEntity Anchor, BlockReference[] Chain) view)
+    {
+        Transform frame = PlacementOf(view.Chain) * view.Anchor.Placement;
+        Vector3d ahead = frame.ApplyVector(Vector3d.UnitX);
+        _seatAnchor = view.Anchor;
+        Seat = new WalkSeat(frame.Apply(Point3d.Origin), Math.Atan2(ahead.Y, ahead.X));
+        StatusMessage = $"{view.Anchor.Name ?? "Point of view"}: click it again, press Escape or walk to stand up.";
+    }
 
     /// <summary>
     /// Whether the next click in the 3D view chooses where to stand, to walk from there: the pointer is a person with a
     /// cross under it. The inspector closes when the walk begins, to see more of the view.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsWalkActive))]
+    [NotifyPropertyChangedFor(nameof(IsWalkActive), nameof(EmphasizedPath), nameof(ShownElements))]
     public partial bool IsPlacingWalk { get; set; }
 
+    partial void OnIsPlacingWalkChanged(bool value) => ShowOverlay();
+
     /// <summary>Where the walk begins, on the floor; null for the middle of what the camera looks at.</summary>
-    public Point3d? WalkStart { get; private set; }
+    [ObservableProperty]
+    public partial Point3d? WalkStart { get; private set; }
 
     /// <summary>Whether the walk is on or waits for the place to stand.</summary>
     public bool IsWalkActive => IsWalking || IsPlacingWalk;
@@ -1166,6 +1459,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         IsPlacingWalk = true;
         StatusMessage = "Click where to stand; Escape cancels.";
+    }
+
+    // On the floor of the model, in front of the wall that was clicked, on the side it faces, rather than in it.
+    private Point3d BeforeWall(Point3d point, System.Numerics.Vector3 normal, double floor)
+    {
+        double x = normal.X, y = normal.Y, length = Math.Sqrt(x * x + y * y);
+        double away = length > 1e-6 ? WalkSettings.CollisionRadius / length : 0;
+        return new Point3d(point.X + x * away, point.Y + y * away, floor);
     }
 
     private void StartWalkAt(Point3d point)
@@ -1340,6 +1641,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             EdgeWidth = Math.Clamp(settings.EdgeWidth, 0.25, 10);
             OutlineWidth = Math.Clamp(settings.OutlineWidth, 0.25, 10);
             Collisions = settings.Collisions;
+            Gravity = settings.Gravity;
+            ShowsUsable = settings.ShowUsable;
             CollisionRadius = Math.Clamp(settings.CollisionRadius, 50, 1000);
             EyeHeight = Math.Clamp(settings.EyeHeight, 500, 3000);
             WalkSpeed = Math.Clamp(settings.WalkSpeed, 100, 10000);
@@ -1360,7 +1663,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (_applyingSettings || _settingsStore is null || e.PropertyName is not (nameof(UseGlb) or nameof(IsDark)
                 or nameof(RenderStyle) or nameof(DisplayMode) or nameof(IsPerspective) or nameof(IsGridVisible)
                 or nameof(HighlightsHover)
-                or nameof(TimeOfDay) or nameof(Latitude) or nameof(NorthAngle) or nameof(Collisions)
+                or nameof(TimeOfDay) or nameof(Latitude) or nameof(NorthAngle) or nameof(Collisions) or nameof(Gravity) or nameof(ShowsUsable)
                 or nameof(SunDate) or nameof(Cloudiness) or nameof(GroundColor) or nameof(EdgeWidth) or nameof(OutlineWidth)
                 or nameof(CollisionRadius) or nameof(EyeHeight) or nameof(WalkSpeed) or nameof(RunFactor)
                 or nameof(WalkFieldOfView) or nameof(LookSensitivity)))
@@ -1371,7 +1674,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             UseGlb = UseGlb, DarkTheme = IsDark, RenderStyle = RenderStyle, DisplayMode = DisplayMode,
             Perspective = IsPerspective, Grid = IsGridVisible, HoverHighlight = HighlightsHover, TimeOfDay = TimeOfDay, Latitude = Latitude,
-            NorthAngle = NorthAngle, Collisions = Collisions, SunDate = SunDate is { } day ? DateOnly.FromDateTime(day) : null,
+            NorthAngle = NorthAngle, Collisions = Collisions, Gravity = Gravity, ShowUsable = ShowsUsable, SunDate = SunDate is { } day ? DateOnly.FromDateTime(day) : null,
             Cloudiness = Cloudiness, GroundColor = $"#{GroundColor.R:X2}{GroundColor.G:X2}{GroundColor.B:X2}",
             EdgeWidth = EdgeWidth, OutlineWidth = OutlineWidth, CollisionRadius = CollisionRadius,
             EyeHeight = EyeHeight, WalkSpeed = WalkSpeed, RunFactor = RunFactor, WalkFieldOfView = WalkFieldOfView,
@@ -1398,6 +1701,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Whether walking stops at walls and other parts of the model, sliding along them.</summary>
     [ObservableProperty]
     public partial bool Collisions { get; set; }
+
+    /// <summary>Whether walking follows the ground: it falls off an edge and rises over a low step.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WalkSettings))]
+    public partial bool Gravity { get; set; }
 
     /// <summary>The day of the sun in the rendered display mode; null for today.</summary>
     [ObservableProperty]
@@ -1452,7 +1760,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>How the 3D view lets a person walk.</summary>
     public WalkSettings WalkSettings => new(
-        EyeHeight, WalkSpeed, RunFactor, WalkFieldOfView, LookSensitivity * Math.PI / 180, CollisionRadius);
+        EyeHeight, WalkSpeed, RunFactor, WalkFieldOfView, LookSensitivity * Math.PI / 180, CollisionRadius,
+        Gravity);
 
     // The initial value is applied by the application, once Avalonia is ready.
     partial void OnIsDarkChanged(bool value)
@@ -1656,6 +1965,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ShowProperties(refresh: true);
         ShowOverlay(); // the box of the selection, moved
         Animations.Refresh();
+        _viewPoints = null;
+        UpdateBeacons();
         if (Document is { } document)
         {
             ShowSummary(DocumentStatistics.Of(document));
@@ -1735,6 +2046,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsWalking = false; // the view turns to the new document
         IsPlacingWalk = false;
         Properties.Know(document, statistics);
+        _viewPoints = null;
         Animations.Show(document);
         ModelTree.Show(document);
         ShowProperties(); // of the model, nothing being selected
@@ -1758,6 +2070,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             .Select(guide => new GuideLine(placement.Apply(guide.Point), placement.ApplyVector(guide.Direction).Normalized()))];
         ViewOverlay overlay = ToolOverlay.Of(_preview, IsDark, RenderStyle == RenderStyle.Cad, guides);
         Overlay = SelectionBox() is { } box ? overlay with { Lines = [.. overlay.Lines, .. box] } : overlay;
+        if (AnchorMarkers().ToList() is { Count: > 0 } anchors)
+        {
+            Overlay = Overlay with { Markers = [.. Overlay.Markers, .. anchors] };
+        }
         // The points to take the selection by, with the move and rotate tools, shown so as not to be looked for: those
         // the box does not hide.
         IReadOnlyList<int>? seen = null;
@@ -1930,7 +2246,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // The box of the entity selected in the 3D view, turned with it: its twelve edges.
     private List<OverlayLine>? SelectionBox()
     {
-        if (!SelectedInView || IsRendered || ActiveTool is SelectTool { IsDraggingHandle: true } ||
+        if (!SelectedInView || IsLookOnly || ActiveTool is SelectTool { IsDraggingHandle: true } ||
             ModelTree.SelectedNode is not { Entity: { } entity, Path: { } path })
         {
             return null;

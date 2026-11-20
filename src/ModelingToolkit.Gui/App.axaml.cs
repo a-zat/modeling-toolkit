@@ -24,6 +24,21 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var viewModel = _services.GetRequiredService<MainWindowViewModel>();
+        // An error that nothing handled in the user interface is logged and told in the status bar, rather than closing
+        // the application with the work in it; one elsewhere is logged before the application ends.
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            ErrorLog.Write(e.Exception, "User interface");
+            viewModel.ReportError($"Something went wrong: {e.Exception.Message} (written to {ErrorLog.Path}).");
+            e.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception exception)
+            {
+                ErrorLog.Write(exception, "Unhandled");
+            }
+        };
         viewModel.ApplyAppearance();
 #if !DEBUG
         viewModel.AsksToSaveOnClose = true;

@@ -27,6 +27,18 @@ public sealed class WalkCamera
     /// <summary>The turn of a drag, in radians per point of the screen.</summary>
     public const double LookSensitivity = 0.004;
 
+    /// <summary>The highest step that is climbed, in millimetres: more than the knees, a stair riser.</summary>
+    public const double StepHeight = 400;
+
+    // A fall speeds up by this, in millimetres per second squared, to a speed that does not grow past the maximum.
+    private const double Gravity = 9800;
+    private const double MaxFall = 20000;
+
+    private (Point3d Eye, double Yaw, double Pitch)? _standing; // where it was before sitting
+
+    private double _fall; // millimetres per second, downwards
+    private bool _grounded;
+
     private const double MaxPitch = 85 * Math.PI / 180;
 
     private WalkCamera(Point3d eye, double yaw, double pitch, WalkSettings settings)
@@ -47,6 +59,18 @@ public sealed class WalkCamera
     /// says; null for all of it.
     /// </summary>
     public Func<Point3d, Vector3d, Vector3d>? Limit { get; set; }
+
+    /// <summary>Where the eyes may stand, given where they are: out of what they would stand in; null for where they are.</summary>
+    public Func<Point3d, Point3d>? Clear { get; set; }
+
+    /// <summary>
+    /// The height of the ground under a place, given it and the height of the feet plus the step that is climbed, as a
+    /// <see cref="WalkCollider"/> says; null for no ground, in which case the eyes keep their height.
+    /// </summary>
+    public Func<double, double, double, double?>? Ground { get; set; }
+
+    /// <summary>Whether the eyes are not yet on the ground, so that <see cref="Gravitate"/> is to be called again.</summary>
+    public bool IsFalling => !_grounded && Settings.Gravity && Ground is not null;
 
     /// <summary>Where it looks around the vertical, in radians, counterclockwise from the X axis.</summary>
     public double Yaw { get; private set; }
@@ -77,6 +101,41 @@ public sealed class WalkCamera
         Pitch = Math.Clamp(Pitch + up * Settings.LookSensitivity, -MaxPitch, MaxPitch);
     }
 
+    /// <summary>Whether it looks from a point of view taken by <see cref="Sit"/>, where it does not walk.</summary>
+    public bool IsSeated => _standing is not null;
+
+    /// <summary>Takes a point of view, as sitting on a chair: the eyes there, looking that way; it does not walk from it.</summary>
+    public void Sit(Point3d eye, double yaw)
+    {
+        _standing ??= (Eye, Yaw, Pitch);
+        Eye = eye;
+        Yaw = Normalized(yaw);
+        Pitch = 0;
+    }
+
+    /// <summary>Back where it was before sitting, looking as it did.</summary>
+    public void Stand()
+    {
+        if (_standing is { } standing)
+        {
+            (Eye, Yaw, Pitch) = standing;
+            _standing = null;
+            _grounded = false;
+        }
+    }
+
+    /// <summary>Turns around the vertical by an angle, in radians, counterclockwise seen from above: left for a positive one.</summary>
+    public void Turn(double angle) => Yaw = Normalized(Yaw + angle);
+
+    /// <summary>Moves the eyes out of what they stand in, where <see cref="Clear"/> knows it, as after being put on a point.</summary>
+    public void Settle()
+    {
+        if (Clear is { } clear)
+        {
+            Eye = clear(Eye);
+        }
+    }
+
     /// <summary>
     /// Walks for a time, in seconds: forward and right between -1 and 1, as given by the keys held, on the floor.
     /// Both together go no faster than one.
@@ -96,7 +155,57 @@ public sealed class WalkCamera
     /// <summary>Steps forward, or back for a negative distance, in millimetres, as the wheel does.</summary>
     public void Step(double distance) => Move(new Vector3d(Math.Cos(Yaw), Math.Sin(Yaw), 0) * distance);
 
-    private void Move(Vector3d move) => Eye += Limit is { } limit ? limit(Eye, move) : move;
+    private void Move(Vector3d move)
+    {
+        if (IsSeated)
+        {
+            return;
+        }
+        Eye += Limit is { } limit ? limit(Eye, move) : move;
+        _grounded = false; // the ground may end there
+    }
+
+    /// <summary>
+    /// Follows the ground for a time, in seconds: up a low step, and down, falling faster as it goes, to what is under
+    /// the feet. The eyes stay where they are with no ground under them. Returns whether they are still falling.
+    /// </summary>
+    public bool Gravitate(double seconds)
+    {
+        if (!Settings.Gravity || Ground is not { } ground || IsSeated)
+        {
+            _grounded = true;
+            return false;
+        }
+        double feet = Eye.Z - Settings.EyeHeight;
+        if (ground(Eye.X, Eye.Y, feet + Settings.StepHeight) is not { } floor)
+        {
+            _grounded = true;
+            return false;
+        }
+        double next;
+        if (floor >= feet)
+        {
+            // Up a step, smoothly, or level.
+            next = feet + (floor - feet) * Math.Min(1, 15 * seconds);
+            if (floor - next < 1)
+            {
+                next = floor;
+            }
+            _fall = 0;
+        }
+        else
+        {
+            _fall = Math.Min(MaxFall, _fall + Gravity * seconds);
+            next = Math.Max(floor, feet - _fall * seconds);
+            if (next <= floor)
+            {
+                _fall = 0;
+            }
+        }
+        Eye = new Point3d(Eye.X, Eye.Y, next + Settings.EyeHeight);
+        _grounded = next == floor;
+        return !_grounded;
+    }
 
     /// <summary>The camera of the view: looking a metre ahead, the vertical up.</summary>
     public ViewCamera ToCamera()

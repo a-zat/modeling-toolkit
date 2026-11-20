@@ -287,7 +287,7 @@
           <ScrollViewer>
             <StackPanel Classes="page">
               <StackPanel Classes="group">
-                <TextBlock Classes="label" Text="COLLISIONS" />
+                <TextBlock Classes="label" Text="WALKING" />
                 <Border Classes="rows"><StackPanel>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
@@ -296,6 +296,22 @@
                                  Text="Walls and the other parts of the model stop the walk, which slides along them; thresholds are stepped over." />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding Collisions}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Gravity" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="The walk follows the ground: it falls off an edge and goes up a low step, as high as the knees." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding Gravity}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Show what can be used" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="Yellow dots mark what opens or closes and where to sit, while it is at rest." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowsUsable}" OnContent="{x:Null}" OffContent="{x:Null}" />
                   </Grid></Border>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">

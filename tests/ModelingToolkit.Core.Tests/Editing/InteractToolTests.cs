@@ -11,7 +11,7 @@ public sealed class InteractToolTests
         var door = new BlockReference(new Block("Door"), Core.Geometry.Transform.Identity);
         var wall = new MeshEntity([], []);
         var worked = new List<IReadOnlyList<Entity>?>();
-        var tool = new InteractTool(path => path?.Contains(door) == true, path =>
+        var tool = new InteractTool((path, _) => path?.Contains(door) == true, (path, _) =>
         {
             worked.Add(path);
             return path?.Contains(door) == true;

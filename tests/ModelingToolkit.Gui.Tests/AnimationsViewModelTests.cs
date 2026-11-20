@@ -150,6 +150,84 @@ public sealed class AnimationsViewModelTests
         Assert.Equal(Transform.Translation(250, 0, 0), animations.Pose[_door]);
     }
 
+    [Fact]
+    public void A_click_on_the_table_opens_the_leaf_hidden_nearest_to_it()
+    {
+        // A table of 1800 mm with a leaf scaled to nothing at each end, which scale up to be seen: nothing to click.
+        var document = new Document();
+        var leaf = new Block("Leaf");
+        leaf.Entities.Add(Plate(0, 450));
+        var top = new Block("Top");
+        top.Entities.Add(Plate(-900, 900));
+        BlockReference right = new(leaf, Transform.Translation(900, 0, 0) * Transform.Scaling(default, 1e-6)) { Name = "Leaf_right" };
+        BlockReference left = new(leaf, Transform.Translation(-900, 0, 0) * Transform.Scaling(default, 1e-6)) { Name = "Leaf_left" };
+        top.Entities.Add(right);
+        top.Entities.Add(left);
+        document.Blocks.AddRange([leaf, top]);
+        var table = new BlockReference(top, Transform.Identity);
+        document.Root.Entities.Add(table);
+        Animation Grow(BlockReference target) => new($"Open_{target.Name}", [new AnimationChannel(
+            target, AnimatedProperty.Scale, AnimationInterpolation.Linear, [0, 1], [1e-6, 1e-6, 1e-6, 1, 1, 1])]);
+        Animation openRight = Grow(right), openLeft = Grow(left);
+        document.Animations.AddRange([openLeft, openRight]);
+        var animations = new AnimationsViewModel(useTimer: false);
+        animations.Show(document);
+        IReadOnlyList<Entity> path = [table, top.Entities[0]];
+
+        // The click on the top near the right end is for the leaf there; near the left end, for the other; far from
+        // both, and with nothing to say where, for none.
+        Assert.True(animations.ToggleAt(path, new Point3d(700, 0, 0)));
+        Assert.True(animations.Items.Single(item => item.Animation == openRight).IsOpen);
+        Assert.False(animations.Items.Single(item => item.Animation == openLeft).IsOpen);
+        Assert.True(animations.ToggleAt(path, new Point3d(-700, 0, 0)));
+        Assert.True(animations.Items.Single(item => item.Animation == openLeft).IsOpen);
+        Assert.False(animations.CanToggleAt(path));
+        Assert.False(animations.CanToggleAt(path, new Point3d(0, 5000, 0)));
+    }
+
+    [Fact]
+    public void A_click_on_what_holds_parts_that_are_not_hidden_opens_nothing_wherever_it_is()
+    {
+        // The body of the cabinet, with its door and drawer at rest, seen: a click on it beside them opens neither.
+        var animations = new AnimationsViewModel(useTimer: false);
+        animations.Show(_document);
+        IReadOnlyList<Entity> body = [_document.Root.Entities[0]];
+
+        Assert.False(animations.CanToggleAt(body, new Point3d(0, 0, 0)));
+        Assert.False(animations.ToggleAt(body, new Point3d(0, 0, 100)));
+        Assert.True(animations.ToggleAt([_document.Root.Entities[0], _door], new Point3d(0, 0, 0)));
+    }
+
+    [Fact]
+    public void What_follows_an_anchor_of_a_part_that_an_animation_moves_goes_with_it_in_the_pose_only()
+    {
+        // A leaf that slides out by 500 mm, with an anchor at its end, and a chair that follows it.
+        var document = new Document();
+        var leafBlock = new Block("Leaf");
+        var anchor = new AnchorEntity(Transform.Translation(450, 0, 0));
+        leafBlock.Entities.Add(anchor);
+        var chairBlock = new Block("Chair");
+        document.Blocks.AddRange([leafBlock, chairBlock]);
+        var leaf = new BlockReference(leafBlock, Transform.Translation(900, 0, 0));
+        var chair = new BlockReference(chairBlock, Transform.Translation(1500, 0, 0));
+        document.Root.Entities.Add(leaf);
+        document.Root.Entities.Add(chair);
+        document.Attach(new Attachment(chair, [leaf], anchor, Attachment.OffsetOf(chair, [leaf], anchor)));
+        var slide = new Animation("Slide", [new AnimationChannel(
+            leaf, AnimatedProperty.Translation, AnimationInterpolation.Linear, [0, 1], [0, 0, 0, 500, 0, 0])]);
+        document.Animations.Add(slide);
+        var animations = new AnimationsViewModel(useTimer: false);
+        animations.Show(document);
+
+        animations.Items.Single().Position = 1;
+
+        Assert.Equal(2000, animations.Pose[chair].Apply(Point3d.Origin).X, 1e-9);
+        Assert.Equal(1500, chair.Transform.Apply(Point3d.Origin).X, 1e-9); // the document as it was
+    }
+
+    private static MeshEntity Plate(double from, double to) => new(
+        [new(from, -450, 0), new(to, -450, 0), new(to, 450, 0), new(from, 450, 0)], [new(0, 1, 2), new(0, 2, 3)]);
+
     // 500 mm along X in two seconds.
     private static AnimationChannel Slide(BlockReference target) => new(
         target, AnimatedProperty.Translation, AnimationInterpolation.Linear, [0, 2], [0, 0, 0, 500, 0, 0]);

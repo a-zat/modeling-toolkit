@@ -85,6 +85,17 @@ public sealed class ViewportView : Border, IViewCamera
     public static readonly StyledProperty<Point3d?> WalkStartProperty =
         AvaloniaProperty.Register<ViewportView, Point3d?>(nameof(WalkStart));
 
+    /// <summary>
+    /// The point of view taken while walking, as sitting on a chair; null for walking. A walk key leaves it, setting it to
+    /// null.
+    /// </summary>
+    public static readonly StyledProperty<WalkSeat?> SeatProperty =
+        AvaloniaProperty.Register<ViewportView, WalkSeat?>(nameof(Seat), defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
+
+    /// <summary>What can be used, marked with a yellow dot while walking where the eyes can see it.</summary>
+    public static readonly StyledProperty<IReadOnlyList<WalkBeacon>> BeaconsProperty =
+        AvaloniaProperty.Register<ViewportView, IReadOnlyList<WalkBeacon>>(nameof(Beacons), []);
+
     /// <summary>Whether walking stops at the parts of the model in the way, sliding along them.</summary>
     public static readonly StyledProperty<bool> CollidesProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(Collides));
@@ -305,6 +316,18 @@ public sealed class ViewportView : Border, IViewCamera
         set => SetValue(WalkStartProperty, value);
     }
 
+    public WalkSeat? Seat
+    {
+        get => GetValue(SeatProperty);
+        set => SetValue(SeatProperty, value);
+    }
+
+    public IReadOnlyList<WalkBeacon> Beacons
+    {
+        get => GetValue(BeaconsProperty);
+        set => SetValue(BeaconsProperty, value);
+    }
+
     public bool IsWalking
     {
         get => GetValue(IsWalkingProperty);
@@ -516,13 +539,30 @@ public sealed class ViewportView : Border, IViewCamera
         {
             UpdateScene();
         }
-        else if (change.Property == OverlayProperty)
+        else if (change.Property == OverlayProperty || change.Property == BeaconsProperty)
         {
+            if (change.Property == BeaconsProperty)
+            {
+                _beaconsSeen = null;
+            }
             Send(viewer =>
             {
-                viewer.SetOverlay(Overlay);
+                viewer.SetOverlay(ShownOverlay());
                 return true;
             });
+        }
+        else if (change.Property == SeatProperty && _walk is { } seated)
+        {
+            if (Seat is { } seat)
+            {
+                seated.Sit(seat.Eye, seat.Yaw);
+            }
+            else
+            {
+                seated.Stand();
+                RequestWalkFrame(); // to the ground, if it is not under the place
+            }
+            PlaceWalkCamera();
         }
         else if (change.Property == RenderStyleProperty)
         {
@@ -723,6 +763,10 @@ public sealed class ViewportView : Border, IViewCamera
         _running = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         if (_walk is not null && IsWalkKey(e.Key))
         {
+            if (_walk.IsSeated && e.Key is not (Key.Q or Key.E))
+            {
+                Seat = null; // up, and the walk goes on
+            }
             _walkKeys.Add(e.Key);
             e.Handled = true; // not to the tools, which take the arrows
             RequestWalkFrame();
@@ -747,7 +791,7 @@ public sealed class ViewportView : Border, IViewCamera
     }
 
     private static bool IsWalkKey(Key key) =>
-        key is Key.W or Key.A or Key.S or Key.D or Key.Up or Key.Down or Key.Left or Key.Right;
+        key is Key.W or Key.A or Key.S or Key.D or Key.Q or Key.E or Key.Up or Key.Down or Key.Left or Key.Right;
 
     private static bool IsGlideKey(Key key) => key is Key.W or Key.A or Key.S or Key.D or Key.Q or Key.E;
 
@@ -799,14 +843,21 @@ public sealed class ViewportView : Border, IViewCamera
                 _orbitCamera = viewer.GetCamera();
                 double floor = Document?.GetBoundingBox() is { IsEmpty: false } box ? box.Min.Z : 0;
                 _walk = WalkCamera.Enter(_orbitCamera, floor, WalkSettings, WalkStart);
+                _beaconsSeen = null;
                 _walk.Limit = LimitWalk;
+                _walk.Clear = ClearWalk;
+                _walk.Ground = GroundOfWalk;
+                _walk.Settle();
                 viewer.SetPerspective(true);
                 viewer.SetCamera(_walk.ToCamera());
                 Focus();
+                RequestWalkFrame(); // the fall to the ground, if the place is above it
             }
             else if (!walking && _walk is not null)
             {
                 _walk = null;
+                _beaconsSeen = null;
+                viewer.SetOverlay(ShownOverlay());
                 _walkKeys.Clear();
                 _lookFrom = null;
                 viewer.SetPerspective(IsPerspective);
@@ -820,11 +871,20 @@ public sealed class ViewportView : Border, IViewCamera
     }
 
     // Walls stop the walk, as the scene places them now: a door opened by an animation lets it through.
-    private Vector3d LimitWalk(Point3d eye, Vector3d move)
+    private Vector3d LimitWalk(Point3d eye, Vector3d move) =>
+        Collides && ColliderOfScene() is { } collider ? collider.Limit(eye, move) : move;
+
+    private Point3d ClearWalk(Point3d eye) => Collides && ColliderOfScene() is { } collider ? collider.Clear(eye) : eye;
+
+    // The ground does not depend on the walls stopping the walk.
+    private double? GroundOfWalk(double x, double y, double from) =>
+        ColliderOfScene() is { } collider ? collider.Ground(x, y, from) : null;
+
+    private WalkCollider? ColliderOfScene()
     {
-        if (!Collides || _shownScene is not { } scene)
+        if (_shownScene is not { } scene)
         {
-            return move;
+            return null;
         }
         WalkSettings settings = WalkSettings;
         if (_collider is not { } collider || !ReferenceEquals(collider.Instances, scene.Instances) ||
@@ -834,7 +894,7 @@ public sealed class ViewportView : Border, IViewCamera
                 new WalkCollider(scene.PlacedMeshes(), settings.CollisionRadius, settings.EyeHeight));
             _collider = collider;
         }
-        return collider.Collider.Limit(eye, move);
+        return collider.Collider;
     }
 
     private void PlaceWalkCamera()
@@ -844,9 +904,54 @@ public sealed class ViewportView : Border, IViewCamera
             Send(viewer =>
             {
                 viewer.SetCamera(walk.ToCamera());
+                if (Beacons.Count > 0 && _beaconClock.Elapsed.TotalSeconds > 0.1)
+                {
+                    _beaconsSeen = null; // seen again from where the eyes are now
+                    viewer.SetOverlay(ShownOverlay());
+                }
                 return true;
             });
         }
+    }
+
+    private static readonly Avalonia.Media.Color BeaconColor = Avalonia.Media.Color.FromRgb(0xFF, 0xC8, 0x1E);
+
+    /// <summary>The beacons further than this are not shown, in millimetres.</summary>
+    private const double BeaconReach = 15000;
+
+    private readonly System.Diagnostics.Stopwatch _beaconClock = System.Diagnostics.Stopwatch.StartNew();
+    private List<OverlayMarker>? _beaconsSeen;
+
+    // The overlay of the tools, with the yellow dots of the beacons that the eyes see, while walking.
+    private ViewOverlay ShownOverlay()
+    {
+        if (_walk is not { } walk || Beacons.Count == 0)
+        {
+            return Overlay;
+        }
+        if (_beaconsSeen is null)
+        {
+            _beaconClock.Restart();
+            Point3d eye = walk.Eye;
+            WalkCollider? collider = ColliderOfScene();
+            var seen = new List<OverlayMarker>();
+            foreach (WalkBeacon beacon in Beacons)
+            {
+                Vector3d toward = beacon.Point - eye;
+                double distance = toward.Length;
+                if (distance > BeaconReach)
+                {
+                    continue;
+                }
+                if (distance > 1 && collider?.Hit(eye, toward / distance, distance) is { } hit && hit < distance - beacon.Size)
+                {
+                    continue; // behind something
+                }
+                seen.Add(new OverlayMarker(beacon.Point, BeaconColor, MarkerShape.Dot));
+            }
+            _beaconsSeen = seen;
+        }
+        return _beaconsSeen.Count == 0 ? Overlay : Overlay with { Markers = [.. Overlay.Markers, .. _beaconsSeen] };
     }
 
     // While walking keys are held, the camera moves on every frame of the window, by the time since the last one.
@@ -866,9 +971,18 @@ public sealed class ViewportView : Border, IViewCamera
             _walkFrameRequested = false;
             double seconds = Math.Min(_walkClock.Elapsed.TotalSeconds, 0.1); // a stall does not leap
             _walkClock.Restart();
-            if (_walkKeys.Count == 0)
+            if (_walkKeys.Count == 0 && _walk?.IsFalling != true)
             {
                 _walkClock.Reset();
+                if (_walk is not null && Beacons.Count > 0)
+                {
+                    _beaconsSeen = null; // from where the walk stopped
+                    Send(viewer =>
+                    {
+                        viewer.SetOverlay(ShownOverlay());
+                        return true;
+                    });
+                }
                 return;
             }
 
@@ -876,7 +990,11 @@ public sealed class ViewportView : Border, IViewCamera
             double right = (Held(Key.D) || Held(Key.Right) ? 1 : 0) - (Held(Key.A) || Held(Key.Left) ? 1 : 0);
             if (_walk is { } walk)
             {
+                // Q turns left, E right, as on the orbit camera.
+                double turn = (Held(Key.Q) ? 1 : 0) - (Held(Key.E) ? 1 : 0);
+                walk.Turn(turn * GlideTurn * (_running ? 2 : 1) * seconds * Math.PI / 180);
                 walk.Walk(forward, right, seconds, _running);
+                walk.Gravitate(seconds);
                 PlaceWalkCamera();
             }
             else
@@ -884,7 +1002,10 @@ public sealed class ViewportView : Border, IViewCamera
                 Glide(forward, right, (Held(Key.Q) ? 1 : 0) - (Held(Key.E) ? 1 : 0), seconds);
             }
             _hoverMoved = true; // what is under the pointer has changed
-            RequestWalkFrame();
+            if (_walkKeys.Count > 0 || _walk?.IsFalling == true)
+            {
+                RequestWalkFrame();
+            }
         });
 
         bool Held(Key key) => _walkKeys.Contains(key);
@@ -1024,7 +1145,7 @@ public sealed class ViewportView : Border, IViewCamera
             {
                 viewer.Clear();
             }
-            viewer.SetOverlay(Overlay); // which clearing the viewer removed
+            viewer.SetOverlay(ShownOverlay()); // which clearing the viewer removed
 
             return true;
         });
@@ -1118,7 +1239,7 @@ public sealed class ViewportView : Border, IViewCamera
         viewer.SetGridVisible(IsGridVisible);
         viewer.SetHoverHighlight(HighlightsHover);
         viewer.SetLineWidths(EdgeWidth, OutlineWidth);
-        viewer.SetOverlay(Overlay);
+        viewer.SetOverlay(ShownOverlay());
         return true;
     }
 

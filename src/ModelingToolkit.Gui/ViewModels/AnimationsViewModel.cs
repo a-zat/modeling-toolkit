@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ModelingToolkit.Core.Geometry;
 using ModelingToolkit.Core.Model;
+using ModelingToolkit.Gui.Viewport;
 
 namespace ModelingToolkit.Gui.ViewModels;
 
@@ -167,6 +168,8 @@ public sealed partial class AnimationsViewModel : ObservableObject
     private DispatcherTimer? _timer;
     private readonly Stopwatch _clock = new();
     private readonly bool _useTimer;
+    private List<HiddenPart>? _hidden; // see FindHidden
+    private List<BeaconPart>? _beaconParts; // see Beacons
 
     public AnimationsViewModel()
         : this(useTimer: true)
@@ -222,6 +225,8 @@ public sealed partial class AnimationsViewModel : ObservableObject
     /// <summary>Follows the animations added to or removed from the document, as by an import or its undoing.</summary>
     public void Refresh()
     {
+        _hidden = null;
+        _beaconParts = null;
         IReadOnlyList<Animation> animations = _document?.Animations ?? [];
         if (!_all.Select(item => item.Animation).SequenceEqual(animations))
         {
@@ -261,11 +266,13 @@ public sealed partial class AnimationsViewModel : ObservableObject
 
     /// <summary>
     /// Opens or closes what was clicked, given the path of the mesh: the animation of the innermost part of the path
-    /// that one moves, the one moving fewest parts if several do. Returns whether there was one.
+    /// that one moves, the one moving fewest parts if several do. When the path moves nothing but holds parts that are
+    /// hidden until an animation shows them, such as the leaves of a table that extends, and the point clicked is near
+    /// where one shows, that one. Returns whether there was one.
     /// </summary>
-    public bool ToggleAt(IReadOnlyList<Entity>? path)
+    public bool ToggleAt(IReadOnlyList<Entity>? path, Point3d? point = null)
     {
-        if (At(path) is not { } item)
+        if (At(path, point) is not { } item)
         {
             return false;
         }
@@ -274,9 +281,9 @@ public sealed partial class AnimationsViewModel : ObservableObject
     }
 
     /// <summary>Whether something at the path of a mesh opens or closes: see <see cref="ToggleAt"/>.</summary>
-    public bool CanToggleAt(IReadOnlyList<Entity>? path) => At(path) is not null;
+    public bool CanToggleAt(IReadOnlyList<Entity>? path, Point3d? point = null) => At(path, point) is not null;
 
-    private AnimationItemViewModel? At(IReadOnlyList<Entity>? path)
+    private AnimationItemViewModel? At(IReadOnlyList<Entity>? path, Point3d? point)
     {
         if (path is null)
         {
@@ -293,7 +300,154 @@ public sealed partial class AnimationsViewModel : ObservableObject
                 return item;
             }
         }
-        return null;
+        return point is { } clicked ? HiddenNear(path, clicked) : null;
+    }
+
+    // A part scaled down to nothing has no surface to click: the animation that shows it, of the part that would be
+    // nearest to the click, within its own size, among those held by the parts of the path, the innermost first.
+    private AnimationItemViewModel? HiddenNear(IReadOnlyList<Entity> path, Point3d point)
+    {
+        IReadOnlyList<HiddenPart> hidden = _hidden ??= FindHidden();
+        if (hidden.Count == 0)
+        {
+            return null; // most models: nothing to look for
+        }
+        List<BlockReference> references = [.. path.OfType<BlockReference>()];
+        AnimationItemViewModel? nearest = null;
+        int nearestDepth = 0;
+        double nearestDistance = double.MaxValue;
+        foreach (HiddenPart part in hidden)
+        {
+            // How deep the path and the chain to the part go together: the part is in the reference clicked there.
+            int depth = 0;
+            while (depth < references.Count && depth < part.Chain.Length &&
+                   ReferenceEquals(references[depth], part.Chain[depth]))
+            {
+                depth++;
+            }
+            if (depth == 0 || depth < nearestDepth ||
+                !part.Item.Animation.PoseAt(part.Item.Animation.Duration).TryGetValue(part.Target, out Transform? shown))
+            {
+                continue;
+            }
+            BoundingBox box = part.Target.Block.GetBoundingBox();
+            if (box.IsEmpty)
+            {
+                continue;
+            }
+            Transform holder = part.Chain.Aggregate(Transform.Identity, (all, r) => all * r.Transform);
+            BoundingBox where = box.Transform(holder * shown);
+            double distance = DistanceTo(where, point);
+            double size = Math.Max(500, Math.Max(where.Max.X - where.Min.X,
+                Math.Max(where.Max.Y - where.Min.Y, where.Max.Z - where.Min.Z)));
+            if (distance <= size && (depth > nearestDepth || distance < nearestDistance))
+            {
+                nearest = part.Item;
+                nearestDepth = depth;
+                nearestDistance = distance;
+            }
+        }
+        return nearest;
+    }
+
+    // The parts hidden at rest that an animation shows, each with the references from the model down to the one holding
+    // it, once for every place it is in: found again after a change of the document, and only when a part is hidden.
+    private List<HiddenPart> FindHidden()
+    {
+        var targets = new Dictionary<BlockReference, AnimationItemViewModel>(ReferenceEqualityComparer.Instance);
+        foreach (AnimationItemViewModel item in _all.OrderByDescending(item => item.Targets.Count))
+        {
+            foreach (BlockReference target in item.Targets.Where(IsHidden))
+            {
+                targets[target] = item; // the one moving fewest parts comes last, and wins
+            }
+        }
+        return [.. ChainsTo(targets.Keys).Select(found => new HiddenPart(targets[found.Target], found.Target, found.Chain))];
+    }
+
+    // Each place of the references given in the document, with the references from the model down to the one holding
+    // it; what a reference given holds is not looked into.
+    private List<(BlockReference Target, BlockReference[] Chain)> ChainsTo(IEnumerable<BlockReference> wanted)
+    {
+        var found = new List<(BlockReference, BlockReference[])>();
+        var targets = new HashSet<BlockReference>(wanted, ReferenceEqualityComparer.Instance);
+        if (targets.Count == 0 || _document is null)
+        {
+            return found;
+        }
+        var chain = new List<BlockReference>();
+        void Walk(Block block)
+        {
+            foreach (BlockReference reference in block.Entities.OfType<BlockReference>())
+            {
+                if (targets.Contains(reference))
+                {
+                    found.Add((reference, [.. chain]));
+                    continue;
+                }
+                chain.Add(reference);
+                Walk(reference.Block);
+                chain.RemoveAt(chain.Count - 1);
+            }
+        }
+        Walk(_document.Root);
+        return found;
+    }
+
+    /// <summary>
+    /// A beacon for each part that an animation of its own moves, while that animation is at its start: in the middle
+    /// of the part, or, for a part hidden until the animation shows it, in the middle of where it shows.
+    /// </summary>
+    public IReadOnlyList<WalkBeacon> Beacons()
+    {
+        _beaconParts ??= [.. ChainsTo(_all.Where(item => item.Targets.Count == 1).Select(item => item.Targets.First()))
+            .Select(found => new BeaconPart(
+                _all.First(item => item.Targets.Count == 1 && item.Targets.Contains(found.Target)),
+                found.Target, found.Chain, found.Target.Block.GetBoundingBox()))];
+        var beacons = new List<WalkBeacon>();
+        foreach (BeaconPart part in _beaconParts)
+        {
+            AnimationItemViewModel item = part.Item;
+            if (item.IsOpen || item.Position > 0 || item.Goal is not null || part.Box.IsEmpty || !InScene(item))
+            {
+                continue;
+            }
+            Transform holder = part.Chain.Aggregate(Transform.Identity, (all, reference) => all * Shown(reference));
+            Transform at = IsHidden(part.Target) &&
+                item.Animation.PoseAt(item.Animation.Duration).TryGetValue(part.Target, out Transform? open)
+                ? open
+                : Shown(part.Target);
+            BoundingBox where = part.Box.Transform(holder * at);
+            var centre = new Point3d((where.Min.X + where.Max.X) / 2, (where.Min.Y + where.Max.Y) / 2,
+                (where.Min.Z + where.Max.Z) / 2);
+            beacons.Add(new WalkBeacon(centre, Math.Clamp((where.Max - where.Min).Length / 2, 50, 400)));
+        }
+        return beacons;
+    }
+
+    private Transform Shown(BlockReference reference) =>
+        Pose.TryGetValue(reference, out Transform? posed) ? posed : reference.Transform;
+
+    private sealed record BeaconPart(
+        AnimationItemViewModel Item, BlockReference Target, BlockReference[] Chain, BoundingBox Box);
+
+    private sealed record HiddenPart(AnimationItemViewModel Item, BlockReference Target, BlockReference[] Chain);
+
+    // Scaled to a point, a line or a plane, which is how a file hides a part until an animation grows it.
+    private static bool IsHidden(BlockReference part)
+    {
+        Transform t = part.Transform;
+        double determinant = t.M00 * (t.M11 * t.M22 - t.M12 * t.M21) - t.M01 * (t.M10 * t.M22 - t.M12 * t.M20) +
+            t.M02 * (t.M10 * t.M21 - t.M11 * t.M20);
+        return Math.Abs(determinant) < 1e-9;
+    }
+
+    private static double DistanceTo(BoundingBox box, Point3d point)
+    {
+        double dx = Math.Max(0, Math.Max(box.Min.X - point.X, point.X - box.Max.X));
+        double dy = Math.Max(0, Math.Max(box.Min.Y - point.Y, point.Y - box.Max.Y));
+        double dz = Math.Max(0, Math.Max(box.Min.Z - point.Z, point.Z - box.Max.Z));
+        return Math.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     /// <summary>Moves the animations that play by the time passed, in seconds.</summary>
@@ -369,6 +523,29 @@ public sealed partial class AnimationsViewModel : ObservableObject
                      item.Animation.PoseAt(item.Position * item.Animation.Duration))
             {
                 pose[target] = transform;
+            }
+        }
+        // What follows an anchor moved by the animations goes with it, and what follows that.
+        if (_document is { Attachments.Count: > 0 } document && pose.Count > 0)
+        {
+            Transform TransformOf(BlockReference reference) =>
+                pose.TryGetValue(reference, out Transform? posed) ? posed : reference.Transform;
+            for (int pass = 0; pass < document.Attachments.Count; pass++)
+            {
+                bool moved = false;
+                foreach (Attachment attachment in document.Attachments)
+                {
+                    if (attachment.IsActive && !pose.ContainsKey(attachment.Follower) &&
+                        attachment.Chain.Any(pose.ContainsKey))
+                    {
+                        pose[attachment.Follower] = attachment.PlacementOf(TransformOf);
+                        moved = true;
+                    }
+                }
+                if (!moved)
+                {
+                    break;
+                }
             }
         }
         Pose = pose;

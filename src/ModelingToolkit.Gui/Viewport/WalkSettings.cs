@@ -7,8 +7,11 @@ namespace ModelingToolkit.Gui.Viewport;
 /// <param name="FieldOfView">Vertical, in degrees.</param>
 /// <param name="LookSensitivity">The turn of a drag, in radians per point of the screen.</param>
 /// <param name="CollisionRadius">How near the eyes come to what they bump into.</param>
+/// <param name="Gravity">Whether the eyes follow the ground: they fall off an edge and rise over a low step.</param>
+/// <param name="StepHeight">Of the highest step that is climbed, in millimetres; what is higher is a wall.</param>
 public sealed record WalkSettings(
-    double EyeHeight, double Speed, double RunFactor, double FieldOfView, double LookSensitivity, double CollisionRadius)
+    double EyeHeight, double Speed, double RunFactor, double FieldOfView, double LookSensitivity, double CollisionRadius,
+    bool Gravity = true, double StepHeight = WalkCamera.StepHeight)
 {
     /// <summary>A person of average height, walking, with the eyes of a room.</summary>
     public static WalkSettings Default { get; } = new(
