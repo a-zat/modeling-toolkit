@@ -207,7 +207,11 @@ public sealed partial class AnimationsViewModel : ObservableObject
     public partial bool HasItems { get; private set; }
 
     /// <summary>Whether several animations are shown, so that one switch and slider move them all.</summary>
-    public bool HasSeveral => Items.Count > 1;
+    public bool HasSeveral => Items.Count > 1 && !_oneMovesAll;
+
+    // Whether one of the movements shown moves all the parts of the others: a movement that opens everything, which
+    // does what the row for all of them would.
+    private bool _oneMovesAll;
 
     /// <summary>Whether an animation is playing, so that the view asks for frames.</summary>
     public bool IsPlaying => _all.Any(item => item.Goal is not null);
@@ -258,6 +262,8 @@ public sealed partial class AnimationsViewModel : ObservableObject
         {
             Items.Add(item);
         }
+        _oneMovesAll = shown.Count > 1 && shown.Any(all => shown.All(other => ReferenceEquals(other, all) ||
+            other.Targets.All(target => all.Targets.Contains(target))));
         HasItems = Items.Count > 0;
         OnPropertyChanged(nameof(HasSeveral));
 

@@ -98,6 +98,10 @@ public sealed partial class PropertiesViewModel : ObservableObject
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void StartRename() => IsRenaming = IsEditable;
 
+    /// <summary>Whether the selection has a Movement section: components and groups, not the project or a mesh.</summary>
+    [ObservableProperty]
+    public partial bool ShowsMovement { get; private set; }
+
     /// <summary>Whether the selection is a reference, whose block has a name of its own to edit.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFields))]
@@ -352,6 +356,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
         IsRenaming = false;
         IsEditable = node?.Entity is not null || node is { IsModel: true };
         HasBlock = node?.Entity is BlockReference;
+        ShowsMovement = node?.Entity is BlockReference;
         OnPropertyChanged(nameof(BlockName));
         ShowAnchors(node);
         ShowMaterials(node?.Entity switch

@@ -114,7 +114,9 @@ public sealed class AnimationsViewModelTests
         var animations = new AnimationsViewModel(useTimer: false);
         animations.Show(_document);
         animations.Filter([_document.Root.Entities[0]]);
-        Assert.True(animations.HasSeveral);
+        // Open_all moves the door and the drawer already: a row for all of them would do the same.
+        Assert.False(animations.HasSeveral);
+        Assert.Equal(3, animations.Items.Count);
 
         animations.All.Position = 0.5;
         Assert.All(animations.Items, item => Assert.Equal(0.5, item.Position));
@@ -128,6 +130,21 @@ public sealed class AnimationsViewModelTests
         animations.Filter([_document.Root.Entities[1]]);
         Assert.Equal("Table", Assert.Single(animations.Items).Name);
         Assert.False(animations.HasSeveral);
+    }
+
+    [Fact]
+    public void A_row_for_all_the_movements_is_shown_only_when_none_of_them_moves_the_others()
+    {
+        var table = (BlockReference)_document.Root.Entities[1];
+        _document.Animations.Remove(_openAll);
+        _document.Animations.Add(new Animation("Move_table", [Slide(table)]));
+        var animations = new AnimationsViewModel(useTimer: false);
+        animations.Show(_document);
+
+        animations.Filter([_document.Root.Entities[0]]);
+        Assert.True(animations.HasSeveral); // the door and the drawer, each on its own
+        animations.Filter(null);
+        Assert.True(animations.HasSeveral);
     }
 
     [Fact]
