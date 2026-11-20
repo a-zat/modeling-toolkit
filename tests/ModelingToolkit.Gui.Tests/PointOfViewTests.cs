@@ -104,6 +104,25 @@ public sealed class PointOfViewTests : IDisposable
     }
 
     [Fact]
+    public async Task A_click_on_nothing_while_seated_stands_up_back_where_the_walk_was()
+    {
+        MainWindowViewModel viewModel = await OpenRoomAsync();
+        viewModel.ToggleWalkCommand.Execute(null);
+        Click(viewModel, MeshOf(viewModel, "Door"), new Point3d(500, 500, 0));
+        Point3d? walkedFrom = viewModel.WalkStart;
+        Click(viewModel, MeshOf(viewModel, "Chair"), new Point3d(2000, 0, 450));
+        Assert.NotNull(viewModel.Seat);
+
+        // Nothing under the pointer: the sky.
+        viewModel.ViewInputCommand.Execute(new ViewportPick(null, null, default, new System.Numerics.Vector3(0, 0, 1),
+            KeyModifiers.None, 1, ViewportInputKind.Click));
+
+        Assert.Null(viewModel.Seat);
+        Assert.True(viewModel.IsWalking);
+        Assert.Equal(walkedFrom, viewModel.WalkStart);
+    }
+
+    [Fact]
     public async Task A_click_on_a_chair_while_walking_looks_from_its_seat_and_a_click_escape_or_a_new_walk_stands_up()
     {
         MainWindowViewModel viewModel = await OpenRoomAsync();

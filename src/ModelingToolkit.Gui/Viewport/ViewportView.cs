@@ -86,8 +86,8 @@ public sealed class ViewportView : Border, IViewCamera
         AvaloniaProperty.Register<ViewportView, Point3d?>(nameof(WalkStart));
 
     /// <summary>
-    /// The point of view taken while walking, as sitting on a chair; null for walking. A walk key leaves it, setting it to
-    /// null.
+    /// The point of view taken while walking, as sitting on a chair; null for walking. The walk keys do nothing
+    /// then, but Q and E turn; Escape or a click on nothing leaves it, setting it to null.
     /// </summary>
     public static readonly StyledProperty<WalkSeat?> SeatProperty =
         AvaloniaProperty.Register<ViewportView, WalkSeat?>(nameof(Seat), defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
@@ -535,7 +535,7 @@ public sealed class ViewportView : Border, IViewCamera
         {
             SetWalking(IsWalking);
         }
-        else if (change.Property == PoseProperty && _shownScene is not null)
+        else if ((change.Property == PoseProperty || change.Property == EditPathProperty) && _shownScene is not null)
         {
             UpdateScene();
         }
@@ -763,7 +763,8 @@ public sealed class ViewportView : Border, IViewCamera
         {
             if (_walk.IsSeated && e.Key is not (Key.Q or Key.E))
             {
-                Seat = null; // up, and the walk goes on
+                e.Handled = true; // seated, it does not walk: Escape or a click stands up
+                return;
             }
             _walkKeys.Add(e.Key);
             e.Handled = true; // not to the tools, which take the arrows
@@ -1209,6 +1210,7 @@ public sealed class ViewportView : Border, IViewCamera
         }
 
         scene.SetPose(Pose ?? new Dictionary<BlockReference, Transform>());
+        scene.SetIsolated(EditPath);
         Send(viewer =>
         {
             scene.Update();

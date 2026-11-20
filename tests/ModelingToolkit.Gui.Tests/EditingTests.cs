@@ -39,6 +39,21 @@ public sealed class EditingTests
     }
 
     [Fact]
+    public async Task TheModelIsRenamedFromTheOutline()
+    {
+        MainWindowViewModel viewModel = await OpenBox();
+        ModelNodeViewModel model = viewModel.ModelTree.Model!;
+
+        viewModel.ModelTree.StartRenameCommand.Execute(model);
+        Assert.True(model.IsRenaming);
+        model.EditedName = "Flat";
+        viewModel.ModelTree.CommitRenameCommand.Execute(model);
+
+        Assert.Equal("Flat", viewModel.Document!.Root.Name);
+        Assert.Equal("Flat", model.Name);
+    }
+
+    [Fact]
     public async Task ClosingAsksToSaveOnlyChangesNotSaved()
     {
         MainWindowViewModel viewModel = await OpenBox();

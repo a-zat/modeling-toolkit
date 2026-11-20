@@ -264,7 +264,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     [RelayCommand]
     private void StartRename(ModelNodeViewModel? node)
     {
-        if (node is { HasEntity: true } && Edit is not null)
+        if (node is { HasEntity: true } or { IsModel: true } && Edit is not null)
         {
             node.EditedName = node.Name;
             node.IsRenaming = true;
@@ -275,13 +275,21 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     [RelayCommand]
     private void CommitRename(ModelNodeViewModel? node)
     {
-        if (node is not { IsRenaming: true, Entity: { } entity })
+        if (node is not { IsRenaming: true })
         {
             return;
         }
         node.IsRenaming = false;
         string name = node.EditedName.Trim();
-        if (name.Length > 0 && name != node.Name)
+        if (name.Length == 0 || name == node.Name)
+        {
+            return;
+        }
+        if (node.IsModel && node.Document is { } model)
+        {
+            Edit?.Invoke(new RenameBlockCommand(model.Root, name)); // the name of the model
+        }
+        else if (node.Entity is { } entity)
         {
             Edit?.Invoke(new RenameCommand(entity, name, _document));
         }

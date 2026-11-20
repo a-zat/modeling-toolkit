@@ -1,6 +1,6 @@
 <!-- The movements of the selection, in its properties: each is named after the component it moves, with a switch that
-     opens or closes it and a slider that shows it at any point; when there are several, one more at the top moves them
-     all. -->
+     opens or closes it and a slider that shows it at any point; when there are several, a small switch at the top opens
+     or closes all of them. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
@@ -22,13 +22,18 @@
 
   <StackPanel Spacing="8">
     <Border Height="1" Background="{DynamicResource Mtk.Separator}" />
-    <TextBlock Classes="label" Text="MOVEMENT" />
-    <!-- All of them at once. -->
-    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" IsVisible="{Binding HasSeveral}">
-      <TextBlock Text="All" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-      <ToggleSwitch Grid.Column="1" IsChecked="{Binding All.IsOpen}" OnContent="{x:Null}" OffContent="{x:Null}"
-                    MinWidth="0" ToolTip.Tip="Open or close all" />
-      <Slider Grid.Row="1" Grid.ColumnSpan="2" Minimum="0" Maximum="1" Value="{Binding All.Position}" Margin="0,-6" />
+    <!-- With several movements, one small switch at the top opens or closes all of them, as a command of its own. -->
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Classes="label" Text="MOVEMENT" VerticalAlignment="Center" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasSeveral}"
+                  ToolTip.Tip="Open or close all the movements below">
+        <TextBlock Classes="secondary" FontSize="11" Text="All" VerticalAlignment="Center" />
+        <ToggleSwitch IsChecked="{Binding All.IsOpen}" OnContent="{x:Null}" OffContent="{x:Null}" MinWidth="0">
+          <ToggleSwitch.RenderTransform>
+            <ScaleTransform ScaleX="0.8" ScaleY="0.8" />
+          </ToggleSwitch.RenderTransform>
+        </ToggleSwitch>
+      </StackPanel>
     </Grid>
     <ItemsControl ItemsSource="{Binding Items}" />
   </StackPanel>

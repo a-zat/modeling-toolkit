@@ -224,6 +224,18 @@ internal sealed class ViewportScene
         _pose = pose;
     }
 
+    private IReadOnlyList<Entity> _isolated = [];
+
+    /// <summary>
+    /// Shows only the block that a path of references leads to, in its place, from the next <see cref="Update"/>, as
+    /// when it is edited on its own: nothing of the rest of the model. The empty path shows everything.
+    /// </summary>
+    public void SetIsolated(IReadOnlyList<Entity> path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        _isolated = path;
+    }
+
     /// <summary>
     /// The instances that a node of the model tree places, given its path: the entities from the model to the node.
     /// All of them for the empty path, the model; none for a path that is not in the document.
@@ -399,9 +411,9 @@ internal sealed class ViewportScene
     {
         foreach (Entity entity in block.Entities)
         {
-            if (entity.IsHidden)
+            if (entity.IsHidden || path.Count < _isolated.Count && !ReferenceEquals(entity, _isolated[path.Count]))
             {
-                continue;
+                continue; // hidden, or not on the way to the block shown alone
             }
             path.Add(entity);
             switch (entity)

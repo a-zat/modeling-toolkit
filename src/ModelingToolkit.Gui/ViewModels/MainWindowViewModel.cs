@@ -716,6 +716,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 SitAt(view);
             }
+            else if (Seat is not null)
+            {
+                Seat = null; // a click on nothing stands up, back where the walk was
+            }
             else
             {
                 StatusMessage = input.Path is null ? string.Empty : "Nothing there to interact with.";
@@ -1458,7 +1462,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Vector3d ahead = frame.ApplyVector(Vector3d.UnitX);
         _seatAnchor = view.Anchor;
         Seat = new WalkSeat(frame.Apply(Point3d.Origin), Math.Atan2(ahead.Y, ahead.X));
-        StatusMessage = $"{view.Anchor.Name ?? "Point of view"}: click it again, press Escape or walk to stand up.";
+        StatusMessage = $"{view.Anchor.Name ?? "Point of view"}: click or press Escape to stand up.";
     }
 
     /// <summary>
