@@ -346,7 +346,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 }
                 if (Animations.CanToggleAt(path, pick.Point))
                 {
-                    actions.Add(new("Use", ToggleAtCommand, path));
+                    actions.Add(new("Interact", ToggleAtCommand, path));
                 }
                 if (entity is BlockReference component && Document is { } document)
                 {
@@ -382,7 +382,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         else if (pick.Path is { Count: > 0 } walked && Animations.CanToggleAt(walked, pick.Point))
         {
-            actions.Add(new("Use", ToggleAtCommand, walked));
+            actions.Add(new("Interact", ToggleAtCommand, walked));
             actions.Add(ContextAction.Separator);
         }
         if (editable && CanPaste)
@@ -695,7 +695,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
             else
             {
-                StatusMessage = input.Path is null ? string.Empty : "Nothing there can be used.";
+                StatusMessage = input.Path is null ? string.Empty : "Nothing there to interact with.";
             }
             return;
         }
@@ -1326,7 +1326,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // What opens or closes, at its start, and the points of view not taken.
     private void UpdateBeacons()
     {
-        if (!IsWalking || !ShowsUsable || Document is null)
+        if (!ShowsUsable || Document is null)
         {
             if (Beacons.Count > 0)
             {
@@ -1335,7 +1335,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
         var beacons = new List<WalkBeacon>(Animations.Beacons());
-        foreach ((AnchorEntity anchor, BlockReference[] chain) in ViewPoints())
+        // Where to sit is of the walk.
+        foreach ((AnchorEntity anchor, BlockReference[] chain) in IsWalking ? ViewPoints() : [])
         {
             if (anchor != _seatAnchor)
             {
@@ -2051,6 +2052,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ModelTree.Show(document);
         ShowProperties(); // of the model, nothing being selected
         Document = document;
+        UpdateBeacons();
         OnEditingChanged();
     }
 

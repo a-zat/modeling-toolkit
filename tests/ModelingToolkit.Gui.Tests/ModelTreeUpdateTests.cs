@@ -114,7 +114,7 @@ public sealed class ModelTreeUpdateTests
 
         tree.SelectedNodes.Clear(); // as the outline leaves the group alone selected
         // One menu item: "Group" with several selected, else making the one a group or a component.
-        Assert.Equal("Make component", tree.GroupLabel);
+        Assert.Equal("Convert to component", tree.GroupLabel);
         tree.GroupOrToggleCommand.Execute(tree.SelectedNode);
         Assert.False(group.IsGroup);
         session.Undo(); // a group again

@@ -4,14 +4,14 @@ using ModelingToolkit.Core.Model;
 namespace ModelingToolkit.Core.Editing.Tools;
 
 /// <summary>
-/// Works what can be worked in the model, as a person would: a click on a door opens it, or closes it if open. What can
+/// Works what can be worked in the model, as a person would: a click on an object that has an interaction works it, as a door that opens or closes. What can
 /// be worked, and how, is given: <paramref name="canWork"/> tells whether something can be worked at a path, from the
 /// model, and <paramref name="work"/> works it, telling whether it did; both are given the path and the point clicked.
 /// </summary>
 public sealed class InteractTool(Func<IReadOnlyList<Entity>?, Point3d, bool> canWork, Func<IReadOnlyList<Entity>?, Point3d, bool> work) : Tool
 {
-    private const string StartHint = "Click what opens or closes, such as a door, to work it";
-    private const string OverHint = "Click to open or close it";
+    private const string StartHint = "Click an object to interact with it";
+    private const string OverHint = "Click to interact";
 
     private readonly Func<IReadOnlyList<Entity>?, Point3d, bool> _canWork = canWork ?? throw new ArgumentNullException(nameof(canWork));
     private readonly Func<IReadOnlyList<Entity>?, Point3d, bool> _work = work ?? throw new ArgumentNullException(nameof(work));
@@ -31,7 +31,7 @@ public sealed class InteractTool(Func<IReadOnlyList<Entity>?, Point3d, bool> can
         ArgumentNullException.ThrowIfNull(input);
         if (input.Pick.Path is not null && !_work(input.Pick.Path, input.Pick.Point))
         {
-            Host.Report("Nothing there can be used.");
+            Host.Report("Nothing there to interact with.");
         }
     }
 }

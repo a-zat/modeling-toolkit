@@ -95,9 +95,6 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     /// <summary>A reference that is a component, not a group.</summary>
     public bool IsComponent => Entity is BlockReference { IsGroup: false };
 
-    /// <summary>The command that makes a reference a group, or a component again.</summary>
-    public string GroupToggleLabel => IsGroup ? "Make component" : "Make group";
-
     /// <summary>Whether the node is a reference inside the block of another one, which it can be moved out of.</summary>
     public bool CanMoveOut => ModelTreeViewModel.CanMoveOut(this);
 
@@ -163,7 +160,6 @@ public sealed partial class ModelNodeViewModel : ObservableObject
             OnPropertyChanged(nameof(IsVisible));
             OnPropertyChanged(nameof(IsGroup));
             OnPropertyChanged(nameof(IsComponent));
-            OnPropertyChanged(nameof(GroupToggleLabel));
         }
         if (IsGeometry && ReferenceEquals(changed, _block))
         {

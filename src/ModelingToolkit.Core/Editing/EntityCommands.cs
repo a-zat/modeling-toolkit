@@ -361,7 +361,7 @@ public sealed class SetGroupCommand(BlockReference reference, bool group) : IEdi
 {
     private readonly BlockReference _reference = reference ?? throw new ArgumentNullException(nameof(reference));
 
-    public string Name => group ? "Make group" : "Make component";
+    public string Name => group ? "Make group" : "Convert to component";
 
     public void Apply() => _reference.IsGroup = group;
 

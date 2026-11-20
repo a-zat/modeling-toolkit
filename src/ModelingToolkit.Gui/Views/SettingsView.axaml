@@ -102,7 +102,7 @@
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
                       <TextBlock Text="Open and save glTF directly" />
                       <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                                 Text="Save writes the .glb opened, with warnings for what glTF cannot hold; its root node is the model." />
+                                 Text="Opens and saves .glb files as they are, instead of converting them to the native format. Saving warns about what glTF cannot hold." />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding UseGlb}" OnContent="{x:Null}" OffContent="{x:Null}" />
                   </Grid></Border>
@@ -190,7 +190,7 @@
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
                       <TextBlock Text="Show the grid" />
                       <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                                 Text="The grid on the ground and the axes through the origin, in the modes other than rendered." />
+                                 Text="Shows the grid on the ground and the axes through the origin." />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsGridVisible}" OnContent="{x:Null}" OffContent="{x:Null}" />
                   </Grid></Border>
@@ -198,15 +198,23 @@
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
                       <TextBlock Text="Highlight what the pointer is on" />
                       <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                                 Text="Tints the face or the part under the pointer, in the modes other than rendered. What it points at is used by the tools either way." />
+                                 Text="Highlights the element under the pointer. Tools use it whether or not it is highlighted." />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding HighlightsHover}" OnContent="{x:Null}" OffContent="{x:Null}" />
                   </Grid></Border>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                      <TextBlock Text="Show interactive objects" />
+                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
+                                 Text="Marks with a dot what can be interacted with while it is at rest." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowsUsable}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                  </Grid></Border>
+                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
                       <TextBlock Text="Perspective" />
                       <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                                 Text="Perspective projection; off, parallel (orthographic)." />
+                                 Text="Uses a perspective projection; off, a parallel (orthographic) one." />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsPerspective}" OnContent="{x:Null}" OffContent="{x:Null}" />
                   </Grid></Border>
@@ -250,8 +258,8 @@
                 <Border Classes="rows"><StackPanel>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                      <TextBlock Text="Day" />
-                      <TextBlock Classes="secondary" FontSize="11" Text="Of the course of the sun; today when none is chosen." />
+                      <TextBlock Text="Date" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="Sets the course of the sun; today when none is chosen." />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                       <CalendarDatePicker SelectedDate="{Binding SunDate}" Width="150" />
@@ -287,13 +295,13 @@
           <ScrollViewer>
             <StackPanel Classes="page">
               <StackPanel Classes="group">
-                <TextBlock Classes="label" Text="WALKING" />
+                <TextBlock Classes="label" Text="BEHAVIOUR" />
                 <Border Classes="rows"><StackPanel>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                      <TextBlock Text="Stop at walls" />
+                      <TextBlock Text="Collisions" />
                       <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                                 Text="Walls and the other parts of the model stop the walk, which slides along them; thresholds are stepped over." />
+                                 Text="Solid parts of the model stop the walk, which slides along them; low obstacles are stepped over." />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding Collisions}" OnContent="{x:Null}" OffContent="{x:Null}" />
                   </Grid></Border>
@@ -301,22 +309,14 @@
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
                       <TextBlock Text="Gravity" />
                       <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                                 Text="The walk follows the ground: it falls off an edge and goes up a low step, as high as the knees." />
+                                 Text="The walk follows the ground: it falls off an edge and steps up low obstacles." />
                     </StackPanel>
                     <ToggleSwitch Grid.Column="1" IsChecked="{Binding Gravity}" OnContent="{x:Null}" OffContent="{x:Null}" />
                   </Grid></Border>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                      <TextBlock Text="Show what can be used" />
-                      <TextBlock Classes="secondary" FontSize="11" TextWrapping="Wrap"
-                                 Text="Yellow dots mark what opens or closes and where to sit, while it is at rest." />
-                    </StackPanel>
-                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowsUsable}" OnContent="{x:Null}" OffContent="{x:Null}" />
-                  </Grid></Border>
-                  <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
-                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                      <TextBlock Text="Distance kept" />
-                      <TextBlock Classes="secondary" FontSize="11" Text="How near the eyes come to a wall, in millimetres." />
+                      <TextBlock Text="Clearance" />
+                      <TextBlock Classes="secondary" FontSize="11" Text="How near the camera comes to a solid part, in millimetres." />
                     </StackPanel>
                     <NumericUpDown Grid.Column="1" Value="{Binding CollisionRadius}" Minimum="50" Maximum="1000" Increment="25"
                                    FormatString="0" />
@@ -325,11 +325,11 @@
               </StackPanel>
 
               <StackPanel Classes="group">
-                <TextBlock Classes="label" Text="PERSON" />
+                <TextBlock Classes="label" Text="CAMERA" />
                 <Border Classes="rows"><StackPanel>
                   <Border Classes="row"><Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                      <TextBlock Text="Eye height" />
+                      <TextBlock Text="Camera height" />
                       <TextBlock Classes="secondary" FontSize="11" Text="Above the floor, in millimetres." />
                     </StackPanel>
                     <NumericUpDown Grid.Column="1" Value="{Binding EyeHeight}" Minimum="500" Maximum="3000" Increment="50"

@@ -71,7 +71,7 @@ public sealed class ViewportView : Border, IViewCamera
 
     /// <summary>
     /// Whether the camera walks through the model at the height of the eyes (<see cref="WalkCamera"/>): the keys W, A,
-    /// S, D and the arrows walk, Shift runs, a drag looks around, the wheel steps, and a click raises a
+    /// S, D and the arrows walk, Q and E turn, Shift runs, a drag looks around, the wheel does nothing, and a click raises a
     /// <see cref="ViewportInputKind.Click"/> on what is under the pointer, without orbiting the view.
     /// </summary>
     public static readonly StyledProperty<bool> IsWalkingProperty =
@@ -746,11 +746,9 @@ public sealed class ViewportView : Border, IViewCamera
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        if (_walk is { } walk)
+        if (_walk is not null)
         {
-            walk.Step(e.Delta.Y * 250);
-            PlaceWalkCamera();
-            e.Handled = true;
+            e.Handled = true; // a person does not zoom: the view stays as it is
             return;
         }
         Send(viewer => viewer.Scroll(Position(e), e.Delta.Y));
@@ -919,20 +917,33 @@ public sealed class ViewportView : Border, IViewCamera
     /// <summary>The beacons further than this are not shown, in millimetres.</summary>
     private const double BeaconReach = 15000;
 
+    private Avalonia.Threading.DispatcherTimer? _beaconTimer;
+
+    private void OnBeaconTimer(object? sender, EventArgs e)
+    {
+        _beaconTimer?.Stop();
+        _beaconsSeen = null;
+        Send(viewer =>
+        {
+            viewer.SetOverlay(ShownOverlay());
+            return true;
+        });
+    }
+
     private readonly System.Diagnostics.Stopwatch _beaconClock = System.Diagnostics.Stopwatch.StartNew();
     private List<OverlayMarker>? _beaconsSeen;
 
-    // The overlay of the tools, with the yellow dots of the beacons that the eyes see, while walking.
+    // The overlay of the tools, with the yellow dots of the beacons that the camera sees.
     private ViewOverlay ShownOverlay()
     {
-        if (_walk is not { } walk || Beacons.Count == 0)
+        Point3d? camera = _walk?.Eye ?? Eye;
+        if (camera is not { } eye || Beacons.Count == 0)
         {
             return Overlay;
         }
         if (_beaconsSeen is null)
         {
             _beaconClock.Restart();
-            Point3d eye = walk.Eye;
             WalkCollider? collider = ColliderOfScene();
             var seen = new List<OverlayMarker>();
             foreach (WalkBeacon beacon in Beacons)
@@ -1073,6 +1084,15 @@ public sealed class ViewportView : Border, IViewCamera
             if (eye is { } seen && seen != Eye)
             {
                 Eye = seen;
+                // Out of the walk, the dots are seen again once the camera has stopped.
+                if (_walk is null && Beacons.Count > 0)
+                {
+                    _beaconTimer ??= new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                    _beaconTimer.Tick -= OnBeaconTimer;
+                    _beaconTimer.Tick += OnBeaconTimer;
+                    _beaconTimer.Stop();
+                    _beaconTimer.Start();
+                }
             }
             if (hovered is { } hover)
             {

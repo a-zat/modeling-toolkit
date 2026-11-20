@@ -139,9 +139,6 @@ public sealed class WalkCameraTests
         double moved = Math.Sqrt(walk.Eye.X * walk.Eye.X + walk.Eye.Y * walk.Eye.Y);
         Assert.Equal(WalkCamera.Speed, moved, Tolerance);
 
-        WalkCamera stepping = Facing(Math.PI / 2);
-        stepping.Step(-500);
-        AssertPoint(new Point3d(0, -500, WalkCamera.EyeHeight), stepping.Eye);
     }
 
     [Fact]

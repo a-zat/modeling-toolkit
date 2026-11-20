@@ -406,7 +406,7 @@ public sealed class MainWindowViewModelTests
         viewModel.ViewInputCommand.Execute(new ViewportPick(mesh, null, default, default, KeyModifiers.None, 1,
             ViewportInputKind.Click));
         Assert.Null(viewModel.ModelTree.SelectedNode);
-        Assert.Equal("Nothing there can be used.", viewModel.StatusMessage);
+        Assert.Equal("Nothing there to interact with.", viewModel.StatusMessage);
 
         viewModel.EscapeCommand.Execute(null);
         Assert.False(viewModel.IsWalking);
@@ -457,7 +457,7 @@ public sealed class MainWindowViewModelTests
         Assert.Null(viewModel.EmphasizedPath); // nothing highlighted
         viewModel.ViewInputCommand.Execute(new ViewportPick(mesh, null, default, default, KeyModifiers.None, 1,
             ViewportInputKind.Click));
-        Assert.Equal("Nothing there can be used.", viewModel.StatusMessage);
+        Assert.Equal("Nothing there to interact with.", viewModel.StatusMessage);
 
         viewModel.SetDisplayModeCommand.Execute(DisplayMode.Shaded);
         Assert.True(viewModel.IsEditable);

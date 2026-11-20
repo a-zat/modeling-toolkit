@@ -152,9 +152,6 @@ public sealed class WalkCamera
         Move((ahead * forward + side * right) * step);
     }
 
-    /// <summary>Steps forward, or back for a negative distance, in millimetres, as the wheel does.</summary>
-    public void Step(double distance) => Move(new Vector3d(Math.Cos(Yaw), Math.Sin(Yaw), 0) * distance);
-
     private void Move(Vector3d move)
     {
         if (IsSeated)

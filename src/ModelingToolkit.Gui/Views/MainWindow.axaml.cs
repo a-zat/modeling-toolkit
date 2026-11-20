@@ -14,6 +14,7 @@ public partial class MainWindow : Window
         // Digits typed outside the fields go to the measurement field, as the value of the active tool.
         AddHandler(TextInputEvent, OnTextTyped, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnKeyPressed, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnQuitPressed, RoutingStrategies.Tunnel);
         AddHandler(GotFocusEvent, (_, e) => Typing(e.Source is TextBox), RoutingStrategies.Bubble);
         AddHandler(LostFocusEvent, (_, _) => Typing(false), RoutingStrategies.Bubble);
     }
@@ -83,6 +84,17 @@ public partial class MainWindow : Window
     }
 
     private bool _closeConfirmed;
+
+    // Control and Q leave at once, without waiting for what is open or asking to save: the key of a quick exit.
+    private void OnQuitPressed(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Q && e.KeyModifiers == KeyModifiers.Control)
+        {
+            _closeConfirmed = true;
+            e.Handled = true;
+            Close();
+        }
+    }
 
     // Closing while a file is opened or saved waits for it (see WhenIdleAsync), then asks to save the changes.
     protected override void OnClosing(WindowClosingEventArgs e)

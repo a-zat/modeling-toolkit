@@ -200,7 +200,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     /// one, it makes it a group, or a component again.
     /// </summary>
     public string GroupLabel => SelectedNodes.Count > 1 ? "Group"
-        : SelectedNode?.IsGroup == true ? "Make component" : "Make group";
+        : SelectedNode?.IsGroup == true ? "Convert to component" : "Make group";
 
     [RelayCommand]
     private void GroupOrToggle(ModelNodeViewModel? node)
@@ -232,7 +232,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         }
         List<IEditCommand> commands = [.. TargetsOf(node).Select(n => n.Entity).OfType<BlockReference>()
             .Select(target => (IEditCommand)new SetGroupCommand(target, !reference.IsGroup))];
-        Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand(reference.IsGroup ? "Make component" : "Make group", commands));
+        Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand(reference.IsGroup ? "Convert to component" : "Make group", commands));
     }
 
     /// <summary>Whether a node is a reference in the block of another reference, which it can be moved out of.</summary>
