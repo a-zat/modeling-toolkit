@@ -11,7 +11,7 @@ public sealed class InteropLayoutTests
     {
         Assert.Equal(24, Unsafe.SizeOf<SceneInfo>());
         Assert.Equal(24, Unsafe.SizeOf<BlockInfo>());
-        Assert.Equal(48, Unsafe.SizeOf<MeshInfo>());
+        Assert.Equal(56, Unsafe.SizeOf<MeshInfo>());
         Assert.Equal(112, Unsafe.SizeOf<ReferenceInfo>());
         Assert.Equal(40, Unsafe.SizeOf<MaterialInfo>());
         Assert.Equal(32, Unsafe.SizeOf<TextureInfo>());

@@ -118,6 +118,25 @@ public sealed class GltfWriterTests : IDisposable
     }
 
     [Fact]
+    public void The_names_of_nodes_that_hold_only_geometry_survive_a_round_trip()
+    {
+        var document = new Document();
+        MeshEntity Triangle(string name, double x) => new(
+            [new(x, 0, 0), new(x + 100, 0, 0), new(x, 100, 0)], [new(0, 1, 2)]) { Name = name };
+        document.Root.Entities.Add(Triangle("Sconce", 0));
+        var part = new Block("Fittings") { Entities = { Triangle("Vent", 300), Triangle("Grille", 600) } };
+        document.Blocks.Add(part);
+        document.Root.Entities.Add(new BlockReference(part, Transform.Translation(0, 500, 0)) { Name = "Fittings" });
+
+        Document copy = RoundTrip(document);
+        DocumentRoot.Unwrap(copy);
+
+        string?[] names = [.. copy.Blocks.Prepend(copy.Root).SelectMany(block => block.Entities).OfType<MeshEntity>()
+            .Select(mesh => mesh.Name)];
+        Assert.Equal(["Grille", "Sconce", "Vent"], names.Order());
+    }
+
+    [Fact]
     public void What_glTF_cannot_hold_is_reported()
     {
         var document = new Document();

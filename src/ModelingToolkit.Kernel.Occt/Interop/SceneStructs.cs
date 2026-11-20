@@ -36,6 +36,7 @@ internal unsafe struct MeshInfo
     public float* Normals;
     public float* TextureCoordinates;
     public int* Triangles;
+    public nint Name;
 }
 
 [StructLayout(LayoutKind.Sequential)]

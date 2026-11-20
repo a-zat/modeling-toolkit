@@ -87,6 +87,10 @@ internal sealed unsafe class SceneConverter(SceneHandle scene)
         NativeMethods.SceneGetMesh(scene, index, out MeshInfo mesh).ThrowIfFailed();
         MeshEntity entity = mesh.ToMeshEntity();
         entity.Material = mesh.Material >= 0 ? materials[mesh.Material] : null;
+        if (mesh.Name != 0 && NativeMethods.ToManagedString(mesh.Name) is { Length: > 0 } name)
+        {
+            entity.Name = name;
+        }
         return entity;
     }
 

@@ -40,6 +40,7 @@ struct mtk_scene {
     };
 
     struct Mesh {
+        std::string name;
         int32_t material = -1;
         std::vector<double> vertices;
         std::vector<float> normals;
@@ -79,7 +80,7 @@ struct mtk_scene {
 static_assert(sizeof(void*) == 8, "Only 64-bit platforms are supported.");
 static_assert(sizeof(mtk_scene_info) == 24);
 static_assert(sizeof(mtk_block_info) == 24);
-static_assert(sizeof(mtk_mesh_info) == 48);
+static_assert(sizeof(mtk_mesh_info) == 56);
 static_assert(sizeof(mtk_reference_info) == 112);
 static_assert(sizeof(mtk_material_info) == 40);
 static_assert(sizeof(mtk_texture_info) == 32);
@@ -259,7 +260,16 @@ private:
             reference.transform = to_matrix(occurrence.Location().Transformation());
             scene_->references.push_back(std::move(reference));
         } else if (occurrence.ShapeType() == TopAbs_FACE) {
+            const size_t before = scene_->meshes.size();
             add_mesh(TopoDS::Face(occurrence), occurrence.Location().Transformation());
+            if (scene_->meshes.size() > before) {
+                // The name of the node that holds only this geometry.
+                std::string name = name_of(occurrence);
+                if (name.empty()) {
+                    name = name_of(occurrence.Located(TopLoc_Location()));
+                }
+                scene_->meshes.back().name = std::move(name);
+            }
         } else {
             ++skipped_shapes_;
         }
@@ -519,7 +529,8 @@ mtk_status mtk_scene_get_mesh(const mtk_scene* scene, int32_t index, mtk_mesh_in
                      data_or_null(mesh.vertices),
                      data_or_null(mesh.normals),
                      data_or_null(mesh.texture_coordinates),
-                     data_or_null(mesh.triangles)};
+                     data_or_null(mesh.triangles),
+                     mesh.name.empty() ? nullptr : mesh.name.c_str()};
         return MTK_STATUS_OK;
     });
 }

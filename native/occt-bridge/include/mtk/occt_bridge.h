@@ -290,6 +290,7 @@ typedef struct mtk_mesh_info {
     const float* normals;              /* x, y, z per vertex, or null */
     const float* texture_coordinates;  /* u, v per vertex, or null; (0, 0) is the bottom-left corner of the image */
     const int32_t* triangles;          /* three vertex indices per triangle, counter-clockwise seen from the front */
+    const char* name;                  /* the name of the node of the file it was read from, or null */
 } mtk_mesh_info;
 
 typedef struct mtk_reference_info {
