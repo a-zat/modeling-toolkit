@@ -91,4 +91,29 @@ public sealed class EditContextTests
         Assert.True(_context.IsModel);
         Assert.Equal(4, _changes);
     }
+    [Fact]
+    public void Leaving_a_block_entered_through_groups_goes_past_them()
+    {
+        _carReference.IsGroup = true;
+        _context.Enter(_carReference);
+        _context.Enter(_frontWheel);
+
+        _context.Leave();
+
+        Assert.True(_context.IsModel);
+    }
+
+    [Fact]
+    public void An_entity_in_groups_of_the_block_being_edited_is_reached_with_the_placement_of_its_group()
+    {
+        Assert.Null(_context.Reach([_carReference, _frontWheel])); // the car is a component: its wheel is inside it
+
+        _carReference.IsGroup = true;
+
+        Assert.Equal((_frontWheel, Transform.Translation(100, 0, 0)), _context.Reach([_carReference, _frontWheel]));
+        Assert.Equal((_carReference, Transform.Identity), _context.Reach([_carReference]));
+        _context.Enter(_carReference);
+        _context.Enter(_frontWheel);
+        Assert.Equal((_tyre, Transform.Translation(100, 10, 0)), _context.Reach([_carReference, _frontWheel, _tyre]));
+    }
 }

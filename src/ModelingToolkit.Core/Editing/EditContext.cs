@@ -50,12 +50,19 @@ public sealed class EditContext
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Goes back to the block the current one was entered from; nothing in the model.</summary>
+    /// <summary>
+    /// Goes back to the block the current one was entered from, past the groups it was entered through, which are
+    /// containers only; nothing in the model.
+    /// </summary>
     public void Leave()
     {
         if (_path.Count > 0)
         {
             _path.RemoveAt(_path.Count - 1);
+            while (_path.Count > 0 && _path[^1].IsGroup)
+            {
+                _path.RemoveAt(_path.Count - 1);
+            }
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -89,6 +96,28 @@ public sealed class EditContext
             }
         }
         return path.Skip(_path.Count).ToArray();
+    }
+
+    /// <summary>
+    /// The entity a path from the model ends with, when it is in the block being edited or in groups of it, which the
+    /// edits go through as the clicks do, with the placement in the model of the block holding it; null otherwise.
+    /// </summary>
+    public (Entity Entity, Transform Placement)? Reach(IReadOnlyList<Entity> path)
+    {
+        if (Within(path) is not { Count: > 0 } within)
+        {
+            return null;
+        }
+        Transform placement = Placement;
+        foreach (Entity entity in within.Take(within.Count - 1))
+        {
+            if (entity is not BlockReference { IsGroup: true } group)
+            {
+                return null;
+            }
+            placement *= group.Transform;
+        }
+        return (within[^1], placement);
     }
 
     // The references that remain, each in the block of the one before it, the first in the model.

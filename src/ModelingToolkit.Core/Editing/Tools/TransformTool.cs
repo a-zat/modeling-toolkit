@@ -34,16 +34,17 @@ public abstract class TransformTool : DrawingTool
     // Once taken, what is moved has no points to snap to: they would be where it was.
     protected override IEnumerable<Inference> Grips() => Target is null ? GripsFor(Selected) : [];
 
-    private Entity? Selected =>
-        Host.SelectedEntity is { } path && Host.Context.Within(path) is [{ } selected] ? selected : null;
+    // The entity selected, in the block being edited or in groups of it, with the placement of its block.
+    private (Entity Entity, Transform Placement)? Selected =>
+        Host.SelectedEntity is { } path ? Host.Context.Reach(path) : null;
 
-    private IReadOnlyList<Inference> GripsFor(Entity? entity)
+    private IReadOnlyList<Inference> GripsFor((Entity Entity, Transform Placement)? of)
     {
-        if (entity is null)
+        if (of is not var (entity, placement))
         {
             return [];
         }
-        (Entity, Transform, int) key = (entity, Host.Context.Placement, Host.Session.Revision);
+        (Entity, Transform, int) key = (entity, placement, Host.Session.Revision);
         if (_grippedFor is not { } made || !ReferenceEquals(made.Item1, entity) || made.Item2 != key.Item2 ||
             made.Item3 != key.Item3)
         {
@@ -57,7 +58,7 @@ public abstract class TransformTool : DrawingTool
     protected bool IsEdgeGrip(Inference point)
     {
         ArgumentNullException.ThrowIfNull(point);
-        return point.Kind == InferenceKind.Midpoint && GripsFor(Target ?? Selected).Any(grip =>
+        return point.Kind == InferenceKind.Midpoint && GripsFor(Target is { } target ? (target, TargetPlacement) : Selected).Any(grip =>
             grip.Kind == InferenceKind.Midpoint && grip.Point.DistanceTo(point.Point) < 1e-9);
     }
 
@@ -88,12 +89,15 @@ public abstract class TransformTool : DrawingTool
         {
             Host.PreviewPlacement(reference, inModel is null
                 ? null
-                : Host.Context.Placement.Inverse() * inModel * Host.Context.Placement * reference.Transform);
+                : TargetPlacement.Inverse() * inModel * TargetPlacement * reference.Transform);
         }
     }
 
     /// <summary>The entity taken; null before.</summary>
     protected Entity? Target { get; private set; }
+
+    /// <summary>The placement in the model of the block holding the target: the block being edited, or a group of it.</summary>
+    protected Transform TargetPlacement { get; private set; } = Transform.Identity;
 
     /// <summary>The edges of the box of the target, in the model space.</summary>
     protected IReadOnlyList<PreviewLine> Box { get; private set; } = [];
@@ -112,8 +116,14 @@ public abstract class TransformTool : DrawingTool
     protected bool TakeTarget(ToolPick pick)
     {
         ArgumentNullException.ThrowIfNull(pick);
-        IReadOnlyList<Entity>? path = Host.SelectedEntity ?? pick.Path;
-        Target = path is not null && Host.Context.Within(path) is { Count: > 0 } within ? within[0] : null;
+        // What is clicked is taken as a click selects it: past the groups, to the component inside them.
+        IReadOnlyList<Entity>? path = Host.SelectedEntity ??
+            (pick.Path is { } picked && Host.Context.Within(picked) is { Count: > 0 } within
+                ? [.. picked.Take(Groups.Through(picked, picked.Count - within.Count) + 1)]
+                : null);
+        (Target, TargetPlacement) = path is not null && Host.Context.Reach(path) is var (entity, placement)
+            ? (entity, placement)
+            : ((Entity?)null, Transform.Identity);
         if (Target is null)
         {
             Host.Report($"Select an object, or click on one, to {Name.ToLowerInvariant()} it.");
@@ -130,6 +140,7 @@ public abstract class TransformTool : DrawingTool
             ShowTransformed(null);
         }
         Target = null;
+        TargetPlacement = Transform.Identity;
         Box = [];
     }
 
@@ -157,7 +168,7 @@ public abstract class TransformTool : DrawingTool
         {
             return false;
         }
-        Transform placement = Host.Context.Placement;
+        Transform placement = TargetPlacement;
         try
         {
             Host.Session.Execute(TransformCommands.Of(
@@ -182,7 +193,7 @@ public abstract class TransformTool : DrawingTool
         {
             return [];
         }
-        Transform placement = Host.Context.Placement;
+        Transform placement = TargetPlacement;
         Point3d Corner(int i) => placement.Apply(new Point3d(
             (i & 1) == 0 ? box.Min.X : box.Max.X, (i & 2) == 0 ? box.Min.Y : box.Max.Y, (i & 4) == 0 ? box.Min.Z : box.Max.Z));
         var lines = new List<PreviewLine>();

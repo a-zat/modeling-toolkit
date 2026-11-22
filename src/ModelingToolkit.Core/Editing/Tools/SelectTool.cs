@@ -33,14 +33,14 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
     {
         get
         {
-            if (!IsActive || Host.SelectedEntity is not { } path || Host.Context.Within(path) is not [{ } entity])
+            if (!IsActive || Host.SelectedEntity is not { } path || Host.Context.Reach(path) is not var (entity, placement))
             {
                 return null;
             }
-            (Transform, int) madeFor = (Host.Context.Placement, Host.Session.Revision);
+            (Transform, int) madeFor = (placement, Host.Session.Revision);
             if (_handles is not { } handles || !ReferenceEquals(handles.Entity, entity) || _handlesFor != madeFor)
             {
-                _handles = new SelectionHandles(entity, Host.Context.Placement);
+                _handles = new SelectionHandles(entity, placement);
                 _handlesFor = madeFor;
             }
             return _handles.IsEmpty ? null : _handles;

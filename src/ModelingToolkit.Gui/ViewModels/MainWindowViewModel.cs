@@ -2208,15 +2208,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private SelectionHandles? SelectedHandles()
     {
         if (Context is not { } context || ModelTree.SelectedNode?.Path is not { } path ||
-            context.Within(path) is not [{ } entity])
+            context.Reach(path) is not var (entity, placement))
         {
             return null;
         }
         if (_selectedHandles is not { } made || !ReferenceEquals(made.Entity, entity) ||
-            _selectedHandlesFor != (context.Placement, Session?.Revision ?? 0))
+            _selectedHandlesFor != (placement, Session?.Revision ?? 0))
         {
-            _selectedHandles = new SelectionHandles(entity, context.Placement);
-            _selectedHandlesFor = (context.Placement, Session?.Revision ?? 0);
+            _selectedHandles = new SelectionHandles(entity, placement);
+            _selectedHandlesFor = (placement, Session?.Revision ?? 0);
         }
         return _selectedHandles;
     }

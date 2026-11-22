@@ -147,7 +147,7 @@ public sealed class RotateTool(IGeometryKernel kernel) : TransformTool(kernel)
         {
             return;
         }
-        double? heading = Target is { } target ? Heading(target, Host.Context.Placement, _plane.Normal) : null;
+        double? heading = Target is { } target ? Heading(target, TargetPlacement, _plane.Normal) : null;
         _angle = Snap(Math.Atan2(from.Cross(to).Dot(_plane.Normal), from.Dot(to)) * 180 / Math.PI, heading) * Math.PI / 180;
     }
 
