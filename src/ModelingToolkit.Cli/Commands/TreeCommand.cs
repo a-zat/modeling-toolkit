@@ -57,7 +57,8 @@ internal static class TreeCommand
                         AnchorEntity anchor => Anchored(anchor, placement),
                         _ => entity.GetType().Name,
                     };
-                    console.WriteLine($"{new string(' ', 2 * level)}{path}  ({kind}{(entity.IsHidden ? ", hidden" : "")})");
+                    string layer = entity.Layer is { } on ? $", on {on.Name}" : "";
+                    console.WriteLine($"{new string(' ', 2 * level)}{path}  ({kind}{layer}{(entity.IsHidden ? ", hidden" : "")})");
                     if (entity is BlockReference inner && level + 1 < maxDepth)
                     {
                         Write(inner.Block, path, level + 1, placement * inner.Transform);

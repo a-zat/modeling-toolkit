@@ -119,8 +119,11 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsExpanded { get; set; }
 
-    /// <summary>Whether the 3D view shows the entity; the project and the geometries are always shown.</summary>
-    public bool IsVisible => Entity is not { IsHidden: true };
+    /// <summary>
+    /// Whether the 3D view shows the entity, hidden neither itself nor by its layer; the project and the geometries are
+    /// always shown.
+    /// </summary>
+    public bool IsVisible => Entity is not ({ IsHidden: true } or { Layer.IsHidden: true });
 
     /// <summary>Whether the node can be renamed, and shown or hidden: one of an entity.</summary>
     public bool HasEntity => Entity is not null;
@@ -161,6 +164,10 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         {
             (Name, Detail) = Label(Entity);
             OnPropertyChanged(nameof(IsVisible));
+        }
+        else if (change is Core.Model.PropertyChanged { Target: Layer layer } && ReferenceEquals(Entity?.Layer, layer))
+        {
+            OnPropertyChanged(nameof(IsVisible)); // its layer shown or hidden
         }
         else if (IsModel && change is Core.Model.PropertyChanged { Target: Block block } && ReferenceEquals(block, _block))
         {

@@ -213,7 +213,24 @@
             <TextBlock Classes="label" Text="OUTLINE" />
           </DockPanel>
         </Button>
-        <views:ModelTreeView Grid.Row="1" DataContext="{Binding ModelTree}" />
+        <!-- The outline of the structure, or of the layers. -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Margin="0,0,34,0" Spacing="2" IsVisible="{Binding IsOutlineExpanded}">
+          <ToggleButton Classes="tool" Padding="6,0" Height="22" FontSize="11" Content="Structure"
+                        IsChecked="{Binding !ShowsLayers, Mode=OneWay}" Command="{Binding ShowStructureCommand}"
+                        ToolTip.Tip="The components and entities, as the file holds them" />
+          <ToggleButton Classes="tool" Padding="6,0" Height="22" FontSize="11" Content="Layers"
+                        IsChecked="{Binding ShowsLayers, Mode=OneWay}" Command="{Binding ShowLayersCommand}"
+                        ToolTip.Tip="What is on each layer, each shown or hidden" />
+        </StackPanel>
+        <Panel Grid.Row="1">
+          <Border IsVisible="{Binding !ShowsLayers}">
+            <views:ModelTreeView DataContext="{Binding ModelTree}" />
+          </Border>
+          <Border IsVisible="{Binding ShowsLayers}">
+            <views:LayersView DataContext="{Binding Layers}" />
+          </Border>
+        </Panel>
         <GridSplitter Grid.Row="2" Classes="horizontal" ResizeDirection="Rows"
                       IsVisible="{Binding IsOutlineExpanded}" />
         <!-- The properties of the selection, with the movements of what it holds. -->

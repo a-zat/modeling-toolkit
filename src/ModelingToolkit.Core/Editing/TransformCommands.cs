@@ -39,13 +39,16 @@ public static class TransformCommands
         return copy ? new AddEntityCommand(name, block, made) : new ReplaceEntityCommand(name, entity, made);
     }
 
-    /// <summary>A new entity, in no block, like another but transformed, with its name, materials and geometry.</summary>
+    /// <summary>
+    /// A new entity, in no block, like another but transformed, with its name, layer, materials and geometry.
+    /// </summary>
     public static Entity Duplicate(Entity entity, Transform transform)
     {
         ArgumentNullException.ThrowIfNull(entity);
         ArgumentNullException.ThrowIfNull(transform);
         Entity made = Transformed(entity, transform);
         made.Name = entity.Name;
+        made.Layer = entity.Layer;
         return made;
     }
 

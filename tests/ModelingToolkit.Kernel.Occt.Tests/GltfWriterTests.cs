@@ -175,6 +175,37 @@ public sealed class GltfWriterTests : IDisposable
         Assert.Equal(once.Blocks.Count, thrice.Blocks.Count);
     }
 
+    [Fact]
+    public void Layers_survive_a_round_trip_with_the_references_and_meshes_on_them()
+    {
+        var document = new Document();
+        var living = new Layer("Living room");
+        var systems = new Layer("Systems") { IsHidden = true };
+        document.AddLayer(living);
+        document.AddLayer(systems);
+        var table = new Block("Table")
+        {
+            Entities = { new MeshEntity([new(0, 0, 0), new(100, 0, 0), new(0, 100, 0)], [new(0, 1, 2)]) { Name = "Top" } },
+        };
+        document.Blocks.Add(table);
+        document.Root.Entities.Add(new BlockReference(table, Transform.Identity) { Name = "Table", Layer = living });
+        document.Root.Entities.Add(new BlockReference(table, Transform.Translation(500, 0, 0)) { Name = "Table" });
+        document.Root.Entities.Add(new MeshEntity([new(0, 0, 0), new(10, 0, 0), new(0, 10, 0)], [new(0, 1, 2)])
+        {
+            Name = "Socket",
+            Layer = systems,
+        });
+
+        Document copy = RoundTrip(document);
+
+        Assert.Equal(["Living room", "Systems"], copy.Layers.Select(layer => layer.Name));
+        Assert.Equal([false, true], copy.Layers.Select(layer => layer.IsHidden));
+        BlockReference[] tables = [.. copy.Root.Entities.OfType<BlockReference>().Where(reference => reference.Name == "Table")];
+        Assert.Equal(["Living room", null], tables.Select(reference => reference.Layer?.Name));
+        Entity socket = copy.Blocks.Prepend(copy.Root).SelectMany(block => block.Entities).Single(entity => entity.Name == "Socket");
+        Assert.Same(copy.Layers[1], socket.Layer);
+    }
+
     private Document RoundTrip(Document document)
     {
         string path = Path.Combine(_folder, Guid.NewGuid() + ".glb");

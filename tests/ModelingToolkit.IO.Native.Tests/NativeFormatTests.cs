@@ -127,7 +127,7 @@ public sealed class NativeFormatTests : IDisposable
         using Stream stream = archive.GetEntry("manifest.json")!.Open();
         using JsonDocument manifest = JsonDocument.Parse(stream);
         Assert.Equal("modeling-toolkit", manifest.RootElement.GetProperty("format").GetString());
-        Assert.Equal(6, manifest.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(7, manifest.RootElement.GetProperty("version").GetInt32());
         Assert.Equal("mm", manifest.RootElement.GetProperty("units").GetString());
     }
 
@@ -232,6 +232,25 @@ public sealed class NativeFormatTests : IDisposable
         Assert.Same(copy.Root.Entities[0], Assert.Single(attachment.Chain));
         Assert.Same(copiedAnchor, attachment.Anchor);
         Assert.Equal(Transform.Translation(150, 0, 0), attachment.Offset);
+    }
+
+    [Fact]
+    public void Layers_survive_a_round_trip_with_the_entities_on_them()
+    {
+        var document = new Document();
+        var living = new Layer("Living room") { IsHidden = true };
+        document.AddLayer(new Layer("Kitchen"));
+        document.AddLayer(living);
+        document.Root.Entities.Add(new MeshEntity([new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)], [new(0, 1, 2)]) { Layer = living });
+        document.Root.Entities.Add(new MeshEntity([new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)], [new(0, 1, 2)]));
+        string path = PathOf("layers.mtk");
+
+        _writer.Write(document, path);
+        Document copy = _reader.Read(path, []);
+
+        Assert.Equal(["Kitchen", "Living room"], copy.Layers.Select(layer => layer.Name));
+        Assert.True(copy.Layers[1].IsHidden);
+        Assert.Equal([copy.Layers[1], null], copy.Root.Entities.Select(entity => entity.Layer));
     }
 
     [Fact]
@@ -360,7 +379,7 @@ public sealed class NativeFormatTests : IDisposable
     }
 
     [Theory]
-    [InlineData(7)] // newer than this reader
+    [InlineData(8)] // newer than this reader
     [InlineData(0)]
     [InlineData(-1)]
     public void Versions_that_this_reader_does_not_know_are_rejected(int version)

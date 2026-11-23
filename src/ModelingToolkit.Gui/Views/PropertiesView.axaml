@@ -24,7 +24,7 @@
             </StackPanel>
             <Border Height="1" Background="{DynamicResource Mtk.Separator}" />
             <!-- An edit is made when the field loses the focus, or with Enter: one command, not one per key. -->
-            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="6" ColumnSpacing="14"
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="14"
                   IsVisible="{Binding HasFields}">
               <!-- The name of the block, which the references to it without a name of their own show. -->
               <TextBlock Text="Block" Classes="secondary" FontSize="12" VerticalAlignment="Center"
@@ -42,6 +42,32 @@
                   <Border Classes="swatch" Background="{Binding MaterialBrush}" />
                   <TextBlock Text="{Binding MaterialName}" FontSize="12" VerticalAlignment="Center" />
                 </StackPanel>
+              </Button>
+              <!-- The layer of the selection: a menu of choices, as the anchor followed. -->
+              <TextBlock Grid.Row="2" Text="Layer" Classes="secondary" FontSize="12" VerticalAlignment="Center"
+                         IsVisible="{Binding HasLayer}" />
+              <Button Grid.Row="2" Grid.Column="1" Classes="field" FontSize="12" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Left" IsVisible="{Binding HasLayer}"
+                      ToolTip.Tip="The layer the selection is on, shown or hidden with it; on none, it is on that of the component holding it">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding LayerName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <PathIcon Grid.Column="1" Width="10" Height="10" Margin="6,0,0,0"
+                            Data="{StaticResource Icon.ChevronDown}" />
+                </Grid>
+                <Button.Flyout>
+                  <MenuFlyout ItemsSource="{Binding LayerChoices}" Placement="BottomEdgeAlignedLeft">
+                    <MenuFlyout.ItemContainerTheme>
+                      <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                    x:DataType="vm:LayerChoice">
+                        <Setter Property="Header" Value="{Binding Label}" />
+                        <Setter Property="Command" Value="{Binding Choose}" />
+                        <Setter Property="CommandParameter" Value="{Binding}" />
+                        <Setter Property="ToggleType" Value="Radio" />
+                        <Setter Property="IsChecked" Value="{Binding IsChosen, Mode=OneWay}" />
+                      </ControlTheme>
+                    </MenuFlyout.ItemContainerTheme>
+                  </MenuFlyout>
+                </Button.Flyout>
               </Button>
               <Popup Grid.Row="1" IsOpen="{Binding Picker.IsOpen, Mode=TwoWay}"
                      PlacementTarget="{Binding #MaterialButton}" Placement="LeftEdgeAlignedTop"

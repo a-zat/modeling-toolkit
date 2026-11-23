@@ -78,6 +78,10 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             document.Textures.AddRange(manifest.Textures.Select(ReadTexture));
             document.Materials.AddRange(manifest.Materials.Select(entry => ToMaterial(entry, document.Textures)));
 
+            foreach (LayerEntry entry in manifest.Layers ?? [])
+            {
+                document.AddLayer(new Layer(entry.Name) { IsHidden = entry.Hidden == true });
+            }
             // Every block exists before any is filled, so that references can point to all of them.
             document.Blocks.AddRange(manifest.Blocks.Select(entry => new Block(entry.Name)));
             document.Root.Name = manifest.Root.Name;
@@ -189,6 +193,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 };
                 entity.Name = entityEntry.Name;
                 entity.IsHidden = entityEntry.Hidden == true;
+                entity.Layer = entityEntry.Layer is { } layer ? At(document.Layers.ToList(), layer, "layer") : null;
                 block.Entities.Add(entity);
             }
         }

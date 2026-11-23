@@ -10,9 +10,10 @@ using ModelingToolkit.Core.Model;
 namespace ModelingToolkit.Kernel.Occt.IO;
 
 /// <summary>
-/// Writes documents as binary glTF (<c>.glb</c>), in metres and Y up: the model space as the root node, named after it,
+/// Writes documents as binary glTF (<c>.glb</c>), in metres and Y up: the model space as the scene, named after it,
 /// each block reference as a node holding the entities of its block, meshes shared by the references to a block,
-/// materials with their textures, the animations, and the hidden entities, in the extras of their nodes.
+/// materials with their textures, the animations, and the hidden entities and the layers, in the extras of the nodes and
+/// of the scene.
 /// </summary>
 /// <remarks>
 /// What glTF cannot hold is reported as warnings: B-rep shapes are written as their tessellation, and guides are left
@@ -113,11 +114,22 @@ public sealed class GltfWriter : IDocumentWriter
             WriteAttachments();
             JsonArray animations = Animations();
 
+            var scene = new JsonObject { ["name"] = document.Root.Name, ["nodes"] = roots };
+            if (document.Layers.Count > 0)
+            {
+                // The layers, in their order, each node naming its own.
+                scene["extras"] = new JsonObject
+                {
+                    ["layers"] = new JsonArray([.. document.Layers.Select(layer => (JsonNode)(layer.IsHidden
+                        ? new JsonObject { ["name"] = layer.Name, ["hidden"] = true }
+                        : new JsonObject { ["name"] = layer.Name }))]),
+                };
+            }
             var json = new JsonObject
             {
                 ["asset"] = new JsonObject { ["version"] = "2.0", ["generator"] = "Modeling Toolkit" },
                 ["scene"] = 0,
-                ["scenes"] = new JsonArray(new JsonObject { ["name"] = document.Root.Name, ["nodes"] = roots }),
+                ["scenes"] = new JsonArray(scene),
                 ["nodes"] = _nodes,
             };
             AddIfAny(json, "meshes", _meshes);
@@ -208,6 +220,7 @@ public sealed class GltfWriter : IDocumentWriter
             {
                 node["name"] = name;
             }
+            MarkExtras(node, anchor);
             int index = AddNode(node);
             if (!_anchorNodes.TryGetValue(anchor, out List<int>? nodes))
             {
@@ -258,15 +271,28 @@ public sealed class GltfWriter : IDocumentWriter
             {
                 node["name"] = name;
             }
-            MarkHidden(node, entity);
+            MarkExtras(node, entity);
             return AddNode(node);
         }
 
-        private static void MarkHidden(JsonObject node, Entity entity)
+        // Whether the entity is hidden, and its layer, in the extras of its node.
+        private static void MarkExtras(JsonObject node, Entity entity)
         {
+            if (!entity.IsHidden && entity.Layer is null)
+            {
+                return;
+            }
+            if (node["extras"] is not JsonObject extras)
+            {
+                node["extras"] = extras = [];
+            }
             if (entity.IsHidden)
             {
-                node["extras"] = new JsonObject { ["hidden"] = true };
+                extras["hidden"] = true;
+            }
+            if (entity.Layer is { } layer)
+            {
+                extras["layer"] = layer.Name;
             }
         }
 
@@ -300,7 +326,7 @@ public sealed class GltfWriter : IDocumentWriter
                     transform.M02, transform.M12, transform.M22, 0,
                     transform.M03, transform.M13, transform.M23, 1);
             }
-            MarkHidden(node, reference);
+            MarkExtras(node, reference);
             int index = AddNode(node);
             if (!_referenceNodes.TryGetValue(reference, out List<int>? nodes))
             {

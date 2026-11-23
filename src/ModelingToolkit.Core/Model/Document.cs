@@ -46,6 +46,41 @@ public sealed class Document
     public IReadOnlyList<Attachment> Attachments => _attachments;
 
     private readonly List<Attachment> _attachments = [];
+
+    /// <summary>The layers of the model, in the order they are listed; see <see cref="Entity.Layer"/>.</summary>
+    public IReadOnlyList<Layer> Layers => _layers;
+
+    private readonly List<Layer> _layers = [];
+
+    /// <summary>Lists a layer, at an index or after the others; raises <see cref="LayersChanged"/>.</summary>
+    /// <exception cref="ArgumentException">The layer is already listed by a document.</exception>
+    public void AddLayer(Layer layer, int? index = null)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        if (layer.Document is not null)
+        {
+            throw new ArgumentException("The layer is already in a document.", nameof(layer));
+        }
+        _layers.Insert(index ?? _layers.Count, layer);
+        layer.Document = this;
+        Raise(new LayersChanged(layer, Added: true));
+    }
+
+    /// <summary>
+    /// Takes a layer out of the list, leaving the entities on it as they are; whether it was listed. Raises
+    /// <see cref="LayersChanged"/>.
+    /// </summary>
+    public bool RemoveLayer(Layer layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        if (!_layers.Remove(layer))
+        {
+            return false;
+        }
+        layer.Document = null;
+        Raise(new LayersChanged(layer, Added: false));
+        return true;
+    }
     private readonly HashSet<BlockReference> _placing = new(ReferenceEqualityComparer.Instance);
 
     public BoundingBox GetBoundingBox() => Root.GetBoundingBox();

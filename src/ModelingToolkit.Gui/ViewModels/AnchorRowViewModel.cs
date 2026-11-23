@@ -155,3 +155,20 @@ public sealed record AttachChoice(string Label, Attachment? Attachment)
 
     public override string ToString() => Label;
 }
+
+/// <summary>A layer that the selection can be put on, as the list of the layer offers it.</summary>
+/// <param name="Label">The name of the layer, "None", or "New layer".</param>
+/// <param name="Layer">The layer; null for none, and for a new one.</param>
+public sealed record LayerChoice(string Label, Layer? Layer)
+{
+    /// <summary>Puts the selection on this layer; set by the properties that offer it.</summary>
+    public System.Windows.Input.ICommand? Choose { get; init; }
+
+    /// <summary>Whether it is the layer of the selection now.</summary>
+    public bool IsChosen { get; init; }
+
+    /// <summary>Whether it makes a new layer, which the selection goes on.</summary>
+    public bool IsNew { get; init; }
+
+    public override string ToString() => Label;
+}

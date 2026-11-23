@@ -97,7 +97,20 @@ public sealed class GltfReader : IDocumentReader
         }
     }
 
-    // The name of the scene, when it has one, is the name of the model.
+    // The layer of the model of that name, listed when it is not yet.
+    private static Layer LayerNamed(Document document, string name)
+    {
+        if (document.Layers.FirstOrDefault(layer => layer.Name == name) is { } known)
+        {
+            return known;
+        }
+        var layer = new Layer(name);
+        document.AddLayer(layer);
+        return layer;
+    }
+
+    // The name of the scene, when it has one, is the name of the model; the layers the toolkit lists in its extras are
+    // those of the model.
     private static void ReadSceneName(string path, Document document)
     {
         try
@@ -114,6 +127,20 @@ public sealed class GltfReader : IDocumentReader
                     name.ValueKind == JsonValueKind.String && name.GetString() is { Length: > 0 } text)
                 {
                     document.Root.Name = text;
+                }
+                if (scene.ValueKind == JsonValueKind.Object && scene.TryGetProperty("extras", out JsonElement extras) &&
+                    extras.ValueKind == JsonValueKind.Object && extras.TryGetProperty("layers", out JsonElement layers) &&
+                    layers.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement layer in layers.EnumerateArray())
+                    {
+                        if (layer.ValueKind == JsonValueKind.Object && layer.TryGetProperty("name", out JsonElement layerName) &&
+                            layerName.ValueKind == JsonValueKind.String && LayerNamed(document, layerName.GetString()!) is { } made)
+                        {
+                            made.IsHidden = layer.TryGetProperty("hidden", out JsonElement hidden) &&
+                                hidden.ValueKind == JsonValueKind.True;
+                        }
+                    }
                 }
             }
         }
@@ -162,6 +189,11 @@ public sealed class GltfReader : IDocumentReader
                 if (Extra(node, "hidden") is { ValueKind: JsonValueKind.True })
                 {
                     entity.IsHidden = true;
+                }
+                // The references are found by their place among the nodes, as the anchors are.
+                if (entity is not BlockReference && Extra(node, "layer") is { ValueKind: JsonValueKind.String } layer)
+                {
+                    entity.Layer = LayerNamed(document, layer.GetString()!);
                 }
             }
             var materials = document.Materials.ToLookup(material => material.Name);
@@ -300,8 +332,20 @@ public sealed class GltfReader : IDocumentReader
                 }
                 var anchor = new AnchorEntity(FromGltf(Matrix(nodes[index])),
                     kind.GetString() == "pointOfView" ? AnchorKind.PointOfView : AnchorKind.Attach) { Name = Name(nodes[index]) };
+                if (Extra(nodes[index], "layer") is { ValueKind: JsonValueKind.String } anchorLayer)
+                {
+                    anchor.Layer = LayerNamed(document, anchorLayer.GetString()!);
+                }
                 holder.Block.Entities.Add(anchor);
                 anchors[index] = anchor;
+            }
+            for (int index = 0; index < nodes.Length; index++)
+            {
+                if (Extra(nodes[index], "layer") is { ValueKind: JsonValueKind.String } layer &&
+                    Extra(nodes[index], "anchor") is null && ReferenceOf(index) is { } onLayer)
+                {
+                    onLayer.Layer = LayerNamed(document, layer.GetString()!);
+                }
             }
             for (int index = 0; index < nodes.Length; index++)
             {

@@ -40,6 +40,23 @@ public abstract class Entity
         }
     }
 
+    /// <summary>
+    /// The layer the entity is on, with all it places that is on none of its own; null for none. See
+    /// <see cref="Model.Layer.Of"/>.
+    /// </summary>
+    public Layer? Layer
+    {
+        get;
+        set
+        {
+            if (!ReferenceEquals(field, value))
+            {
+                field = value;
+                Raise(new PropertyChanged(this, nameof(Layer)));
+            }
+        }
+    }
+
     /// <summary>The block that contains the entity; null for none.</summary>
     public Block? Owner { get; internal set; }
 

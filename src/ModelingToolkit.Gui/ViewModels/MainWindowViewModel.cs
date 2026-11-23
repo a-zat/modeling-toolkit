@@ -52,6 +52,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Properties.PlaceAnchor = PlaceAnchor;
         Properties.LookFrom = row => LookFrom(row.Anchor, row.Path);
         ModelTree.Edit = Edit;
+        Layers.Edit = Edit;
+        Layers.Select = path => ModelTree.SelectCommand.Execute(path);
+        Properties.SelectedEntities = () =>
+            [.. ModelTree.SelectedNodes.OfType<ModelNodeViewModel>().Select(node => node.Entity).OfType<Entity>()];
+        ModelTree.SelectedNodes.CollectionChanged += (_, _) => ShowProperties(refresh: true);
         Pose = Animations.Pose;
         Animations.PropertyChanged += (_, e) =>
         {
@@ -153,6 +158,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ModelTreeViewModel ModelTree { get; } = new();
 
     public PropertiesViewModel Properties { get; } = new();
+
+    /// <summary>The outline by layer, shown in place of the outline of the structure.</summary>
+    public LayersViewModel Layers { get; } = new();
+
+    /// <summary>Whether the outline shows the layers rather than the structure of the model.</summary>
+    [ObservableProperty]
+    public partial bool ShowsLayers { get; set; }
+
+    partial void OnShowsLayersChanged(bool value) => Layers.IsShown = value;
+
+    [RelayCommand]
+    private void ShowStructure() => ShowsLayers = false;
+
+    [RelayCommand]
+    private void ShowLayers() => ShowsLayers = true;
 
     /// <summary>The animations of the document, which the properties of what they move play and the 3D view shows.</summary>
     public AnimationsViewModel Animations { get; } = new();
@@ -2084,6 +2104,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _viewPoints = null;
         Animations.Show(document);
         ModelTree.Show(document);
+        Layers.Show(document);
         ShowProperties(); // of the model, nothing being selected
         Document = document;
         UpdateBeacons();

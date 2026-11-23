@@ -63,7 +63,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
     public partial bool HasMaterial { get; private set; }
 
     /// <summary>Whether the selection has a field to edit: the name of its block or its material.</summary>
-    public bool HasFields => HasBlock || HasMaterial;
+    public bool HasFields => HasBlock || HasMaterial || HasLayer;
 
     private Surfaces[] _surfaces = [];
 
@@ -183,6 +183,77 @@ public sealed partial class PropertiesViewModel : ObservableObject
         {
             Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand("Attach", commands));
         }
+    }
+
+    /// <summary>
+    /// The entities selected in the outline, which a layer chosen goes to when the one shown is among them; null for the
+    /// one shown alone.
+    /// </summary>
+    public Func<IReadOnlyList<Entity>>? SelectedEntities { get; set; }
+
+    /// <summary>Whether the selection is an entity, which is on a layer or on none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFields))]
+    public partial bool HasLayer { get; private set; }
+
+    /// <summary>
+    /// The layer of the selection: its own, the one it is on from a component above it, "None", or "Mixed" for entities
+    /// selected on different layers.
+    /// </summary>
+    [ObservableProperty]
+    public partial string LayerName { get; private set; } = string.Empty;
+
+    /// <summary>The layers to put the selection on: none, each layer of the model, and a new one.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<LayerChoice> LayerChoices { get; private set; } = [];
+
+    // The entities a layer chosen goes to: those selected with the one shown, or it alone.
+    private List<Entity> LayerTargets(Entity shown) =>
+        SelectedEntities?.Invoke() is { Count: > 1 } selected && selected.Contains(shown) ? [.. selected] : [shown];
+
+    private void ShowLayer(ModelNodeViewModel? node)
+    {
+        if (node is not { Entity: { } entity, Path: { } path } || _document is not { } document)
+        {
+            HasLayer = false;
+            LayerChoices = [];
+            return;
+        }
+        HasLayer = true;
+        List<Entity> targets = LayerTargets(entity);
+        Layer? own = entity.Layer;
+        bool mixed = targets.Exists(target => !ReferenceEquals(target.Layer, own));
+        LayerName = mixed ? "Mixed"
+            : own?.Name ?? (Layer.Of(path) is { } above ? $"{above.Name} (from above)" : "None");
+        LayerChoices =
+        [
+            new LayerChoice("None", null) { Choose = ChooseLayerCommand, IsChosen = !mixed && own is null },
+            .. document.Layers.Select(layer => new LayerChoice(layer.Name, layer)
+            {
+                Choose = ChooseLayerCommand,
+                IsChosen = !mixed && ReferenceEquals(own, layer),
+            }),
+            new LayerChoice("New layer", null) { Choose = ChooseLayerCommand, IsNew = true },
+        ];
+    }
+
+    // Puts the selection on the layer chosen, or on a new one, as one command.
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void ChooseLayer(LayerChoice? choice)
+    {
+        if (choice is null || choice.IsChosen || _node?.Entity is not { } entity || _document is not { } document)
+        {
+            return;
+        }
+        List<Entity> targets = LayerTargets(entity);
+        if (!choice.IsNew)
+        {
+            Edit?.Invoke(new SetLayerCommand(targets, choice.Layer));
+            return;
+        }
+        var layer = new Layer(LayersViewModel.NewName(document));
+        Edit?.Invoke(new CompositeCommand("New layer",
+            [new AddLayerCommand(document, layer), new SetLayerCommand(targets, layer)]));
     }
 
     [CommunityToolkit.Mvvm.Input.RelayCommand]
@@ -358,6 +429,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
         ShowsMovement = node?.Entity is BlockReference;
         OnPropertyChanged(nameof(BlockName));
         ShowAnchors(node);
+        ShowLayer(node);
         ShowMaterials(node?.Entity switch
         {
             MeshEntity mesh => [new Surfaces(mesh, null, [])],

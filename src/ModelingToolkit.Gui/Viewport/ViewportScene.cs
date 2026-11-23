@@ -411,9 +411,10 @@ internal sealed class ViewportScene
     {
         foreach (Entity entity in block.Entities)
         {
-            if (entity.IsHidden || path.Count < _isolated.Count && !ReferenceEquals(entity, _isolated[path.Count]))
+            if (entity.IsHidden || entity.Layer is { IsHidden: true } ||
+                path.Count < _isolated.Count && !ReferenceEquals(entity, _isolated[path.Count]))
             {
-                continue; // hidden, or not on the way to the block shown alone
+                continue; // hidden, on a hidden layer, or not on the way to the block shown alone
             }
             path.Add(entity);
             switch (entity)

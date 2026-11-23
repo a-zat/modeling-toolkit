@@ -67,6 +67,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
         private readonly Dictionary<Texture, int> _textures = IndexOf(document.Textures);
         private readonly Dictionary<Material, int> _materials = IndexOf(document.Materials);
         private readonly Dictionary<Block, int> _blocks = IndexOf(document.Blocks);
+        private readonly Dictionary<Layer, int> _layers = IndexOf(document.Layers.ToList());
         private int _meshCount;
         private int _shapeCount;
 
@@ -82,7 +83,10 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                 ToEntry(document.Root),
                 document.Blocks.Select(ToEntry).ToList(),
                 AnimationEntries(),
-                AttachmentEntries());
+                AttachmentEntries(),
+                document.Layers.Count == 0
+                    ? null
+                    : [.. document.Layers.Select(layer => new LayerEntry(layer.Name, layer.IsHidden ? true : null))]);
 
             using Stream stream = archive.CreateEntry(NativeFormat.ManifestEntry, CompressionLevel.Optimal).Open();
             JsonSerializer.Serialize(stream, manifest, ManifestContext.Default.Manifest);
@@ -177,7 +181,11 @@ public sealed class NativeDocumentWriter : IDocumentWriter
         private BlockEntry ToEntry(Block block) => new(block.Name, block.Entities.Select(ToEntry).ToList());
 
         private EntityEntry ToEntry(Entity entity) =>
-            ToEntryOf(entity) with { Hidden = entity.IsHidden ? true : null };
+            ToEntryOf(entity) with
+            {
+                Hidden = entity.IsHidden ? true : null,
+                Layer = entity.Layer is { } layer ? Find(_layers, layer, "layer") : null,
+            };
 
         private EntityEntry ToEntryOf(Entity entity)
         {

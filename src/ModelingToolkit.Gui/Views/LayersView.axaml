@@ -1,0 +1,81 @@
+<!-- The outline by layer: each layer, shown or hidden by its eye, renamed by a double click on its name or from its
+     menu, with the entities on it; last the entities of the model space on no layer. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ModelingToolkit.Gui.ViewModels"
+             x:Class="ModelingToolkit.Gui.Views.LayersView"
+             x:DataType="vm:LayersViewModel">
+
+  <DockPanel>
+    <Button DockPanel.Dock="Top" Classes="field" FontSize="11" Height="24" Padding="8,0" Margin="10,2,10,6"
+            HorizontalAlignment="Left" VerticalContentAlignment="Center" Content="+ Layer"
+            Command="{Binding AddLayerCommand}" IsVisible="{Binding !IsEmpty}"
+            ToolTip.Tip="A new layer; put things on it from their properties" />
+    <Panel>
+      <TreeView x:Name="Tree" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <TreeView.Styles>
+          <Style Selector="TreeViewItem" x:DataType="vm:LayerRowViewModel">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+          </Style>
+          <!-- The entities on no layer, which is not a layer. -->
+          <Style Selector="TextBlock.none">
+            <Setter Property="FontStyle" Value="Italic" />
+          </Style>
+          <Style Selector="Button.eye">
+            <Setter Property="Opacity" Value="0" />
+          </Style>
+          <Style Selector="TreeViewItem:pointerover > :is(Control) Button.eye, Button.eye.hidden">
+            <Setter Property="Opacity" Value="1" />
+          </Style>
+        </TreeView.Styles>
+        <TreeView.DataTemplates>
+          <TreeDataTemplate DataType="vm:LayerRowViewModel" ItemsSource="{Binding Items}">
+            <Grid ColumnDefinitions="*,Auto" Background="Transparent" ContextRequested="OnRowContextRequested">
+              <Grid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="Rename"
+                            Command="{Binding $parent[TreeView].((vm:LayersViewModel)DataContext).StartRenameCommand}"
+                            CommandParameter="{Binding}" />
+                  <MenuItem Header="Delete layer"
+                            Command="{Binding $parent[TreeView].((vm:LayersViewModel)DataContext).DeleteCommand}"
+                            CommandParameter="{Binding}" />
+                </ContextMenu>
+              </Grid.ContextMenu>
+              <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}"
+                         Classes.none="{Binding !IsLayer}"
+                         Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}"
+                         ToolTip.Tip="{Binding Name}">
+                <Run Text="{Binding Name}" FontWeight="SemiBold" />
+                <Run Text="{Binding Detail, StringFormat='  {0}'}" Foreground="{DynamicResource Mtk.ForegroundSecondary}" />
+              </TextBlock>
+              <TextBox Classes="rename" Text="{Binding EditedName}" IsVisible="{Binding IsRenaming}"
+                       AttachedToVisualTree="OnRenameBoxAttached" PropertyChanged="OnRenameBoxChanged"
+                       MinWidth="0" Padding="4,1" MinHeight="0" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="tool eye" Classes.hidden="{Binding !IsVisible}" Width="22" Height="22"
+                      Margin="6,0,4,0" IsVisible="{Binding IsLayer}"
+                      Command="{Binding $parent[TreeView].((vm:LayersViewModel)DataContext).ToggleVisibleCommand}"
+                      CommandParameter="{Binding}" ToolTip.Tip="Show or hide the layer">
+                <Panel>
+                  <PathIcon Data="{StaticResource Icon.Eye}" Width="14" Height="14" IsVisible="{Binding IsVisible}" />
+                  <PathIcon Data="{StaticResource Icon.EyeOff}" Width="14" Height="14" IsVisible="{Binding !IsVisible}" />
+                </Panel>
+              </Button>
+            </Grid>
+          </TreeDataTemplate>
+          <DataTemplate DataType="vm:LayerItemViewModel">
+            <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}"
+                       ToolTip.Tip="{Binding Name}">
+              <Run Text="{Binding Name}" />
+              <Run Text="{Binding WhereSpaced}" Foreground="{DynamicResource Mtk.ForegroundSecondary}" />
+            </TextBlock>
+          </DataTemplate>
+        </TreeView.DataTemplates>
+      </TreeView>
+      <TextBlock Classes="placeholder" Text="Nothing in the project yet: draw, open or import a model."
+                 IsVisible="{Binding IsEmpty}" />
+    </Panel>
+  </DockPanel>
+
+</UserControl>

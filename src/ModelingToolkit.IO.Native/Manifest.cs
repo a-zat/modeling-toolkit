@@ -14,7 +14,11 @@ internal sealed record Manifest(
     BlockEntry Root,
     List<BlockEntry> Blocks,
     List<AnimationEntry>? Animations = null,
-    List<AttachmentEntry>? Attachments = null);
+    List<AttachmentEntry>? Attachments = null,
+    List<LayerEntry>? Layers = null);
+
+/// <param name="Hidden">True for a hidden layer; absent otherwise.</param>
+internal sealed record LayerEntry(string Name, bool? Hidden = null);
 
 internal sealed record TextureEntry(string Name, string MediaType, string Path);
 
@@ -39,6 +43,9 @@ internal abstract record EntityEntry(string? Name)
 {
     /// <summary>True for a hidden entity; absent otherwise.</summary>
     public bool? Hidden { get; init; }
+
+    /// <summary>The index of the layer of the entity in the layers of the manifest; absent for none.</summary>
+    public int? Layer { get; init; }
 }
 
 internal sealed record MeshEntry(

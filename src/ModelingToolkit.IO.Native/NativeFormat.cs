@@ -13,7 +13,8 @@ namespace ModelingToolkit.IO.Native;
 /// one, and only files of that version are read. A change that older readers would misread needs a new version.
 /// Version 2 added the shapes; version 3 moved the materials to the surfaces, a mesh having one and each face of a
 /// shape its own, references having none; version 4 added the guides, version 5 the animations, version 6 the anchors, the
-/// attachments and the groups; versions 3 to 5 are still read, as they lack only what came after.
+/// attachments and the groups, version 7 the layers, in place of the groups; versions 3 to 6 are still read, as they lack
+/// only what came after, the groups of version 6 being read as components.
 /// </para>
 /// </remarks>
 public static class NativeFormat
@@ -21,7 +22,7 @@ public static class NativeFormat
     public const string Extension = ".mtk";
 
     internal const string FormatId = "modeling-toolkit";
-    internal const int Version = 6;
+    internal const int Version = 7;
 
     /// <summary>The oldest version still read.</summary>
     internal const int OldestVersion = 3;

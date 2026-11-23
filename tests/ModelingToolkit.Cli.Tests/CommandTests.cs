@@ -41,7 +41,7 @@ public sealed class CommandTests : IDisposable
         (int exitCode, string output, string error) = Run("edit", Asset("CesiumMilkTruck.glb"), edited,
             "rename=Cesium_Milk_Truck/Cesium_Milk_Truck@Truck", "move=Cesium_Milk_Truck/Truck@0,1000,0",
             "hide=Cesium_Milk_Truck/Node", "delete=Cesium_Milk_Truck/Node.001",
-            "simplify=Cesium_Milk_Truck/Truck/truck@clean-up");
+            "simplify=Cesium_Milk_Truck/Truck/truck@clean-up", "layer=Cesium_Milk_Truck/Truck@Vehicles");
         Assert.True(exitCode == 0, error);
         Assert.Contains("Wrote edited.mtk.", output, StringComparison.Ordinal);
 
@@ -51,7 +51,7 @@ public sealed class CommandTests : IDisposable
             [
                 "Cesium_Milk_Truck  (component of Cesium_Milk_Truck, at 0, 0, 0)",
                 "  Cesium_Milk_Truck/Node  (component of Node, at 0, -1432.7, 427.7, hidden)",
-                "  Cesium_Milk_Truck/Truck  (component of Truck, at 0, 1000, 0)",
+                "  Cesium_Milk_Truck/Truck  (component of Truck, at 0, 1000, 0, on Vehicles)",
             ],
             lines);
     }

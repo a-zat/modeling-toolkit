@@ -23,6 +23,8 @@ internal static class EditCommand
           rotate=PATH@DEGREES      turn an entity around the vertical through the middle of its bottom
           rename=PATH@NAME         rename an entity
           hide=PATH  show=PATH     hide or show an entity
+          layer=PATH@NAME          put an entity on a layer, made if the model has none of that name; an empty
+                                   NAME puts it on none
           delete=PATH              delete an entity
           anchor=PATH@NAME,X,Y,Z[,DEGREES][,local]
                                    add an anchor to a component, at a point of the model, facing a direction
@@ -133,6 +135,18 @@ internal static class EditCommand
             case "rename":
                 session.Execute(new RenameCommand(entity, value ?? throw new ArgumentException("rename needs @NAME."), document));
                 return $"Renamed {target} to {value}.";
+            case "layer":
+            {
+                string name = (value ?? throw new ArgumentException("layer needs @NAME.")).Trim();
+                Layer? layer = name.Length == 0 ? null : document.Layers.FirstOrDefault(known => known.Name == name);
+                if (name.Length > 0 && layer is null)
+                {
+                    layer = new Layer(name);
+                    session.Execute(new AddLayerCommand(document, layer));
+                }
+                session.Execute(new SetLayerCommand([entity], layer));
+                return layer is null ? $"Put {target} on no layer." : $"Put {target} on {layer.Name}.";
+            }
             case "hide" or "show":
                 session.Execute(new SetHiddenCommand([entity], verb == "hide"));
                 return $"{(verb == "hide" ? "Hid" : "Showed")} {target}.";

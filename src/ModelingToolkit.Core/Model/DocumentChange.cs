@@ -36,12 +36,16 @@ public sealed record BlockAdded(Block Block) : DocumentChange;
 public sealed record BlockRemoved(Block Block) : DocumentChange;
 
 /// <summary>
-/// A property of an entity or a block changed: <see cref="Entity.Name"/>, <see cref="MeshEntity.Material"/>,
-/// <see cref="BrepEntity.FaceMaterials"/>, <see cref="BlockReference.Transform"/> or <see cref="Block.Name"/>.
+/// A property of an entity, a block or a layer changed: <see cref="Entity.Name"/>, <see cref="Entity.Layer"/>,
+/// <see cref="MeshEntity.Material"/>, <see cref="BrepEntity.FaceMaterials"/>, <see cref="BlockReference.Transform"/>,
+/// <see cref="Block.Name"/>, <see cref="Layer.Name"/> or <see cref="Layer.IsHidden"/>.
 /// </summary>
-/// <param name="Target">The entity or the block.</param>
+/// <param name="Target">The entity, the block or the layer.</param>
 /// <param name="Property">The name of the property, as <c>nameof</c> gives it.</param>
 public sealed record PropertyChanged(object Target, string Property) : DocumentChange;
+
+/// <summary>A layer was added to <see cref="Document.Layers"/>, or removed from it.</summary>
+public sealed record LayersChanged(Layer Layer, bool Added) : DocumentChange;
 
 /// <summary>An attachment was added to <see cref="Document.Attachments"/>, or removed from it.</summary>
 public sealed record AttachmentsChanged(Attachment Attachment, bool Added) : DocumentChange;
