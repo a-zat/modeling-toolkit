@@ -55,14 +55,35 @@ public readonly record struct GuideLine(Point3d Point, Vector3d Direction);
 /// <summary>A point inferred from the pointer, in the model space.</summary>
 /// <param name="Plane">The plane drawn on: of the face, or the ground; null elsewhere.</param>
 /// <param name="Direction">For the kinds along a direction (axes, parallel, perpendicular), of unit length.</param>
-/// <param name="Edge">The edge of a mesh that the point is on or an end or the middle of, to show it; null elsewhere.</param>
+/// <param name="Edges">
+/// The edges that the point is on, or an end or the middle of, as polylines in the model space, to show what it snaps
+/// to: all those that meet at a corner; null for none.
+/// </param>
 public sealed record Inference(InferenceKind Kind, Point3d Point, Plane? Plane = null, Vector3d? Direction = null,
-    (Point3d Start, Point3d End)? Edge = null)
+    IReadOnlyList<IReadOnlyList<Point3d>>? Edges = null)
 {
     public static Inference Nothing { get; } = new(InferenceKind.None, default);
 
     /// <summary>Whether the point is on something, so that drawing to it snaps.</summary>
     public bool IsSnapped => Kind is not (InferenceKind.None or InferenceKind.Ground or InferenceKind.OnFace);
+
+    /// <summary>
+    /// For the axes, whether it is one of the object moved, turned from those of the edit context: see
+    /// <see cref="InferenceEngine.ObjectAxes"/>.
+    /// </summary>
+    public bool OfObject { get; init; }
+
+    /// <summary>The edges of a point on a single segment.</summary>
+    public static IReadOnlyList<IReadOnlyList<Point3d>> Segment(Point3d start, Point3d end) => [[start, end]];
+
+    // The edges are compared by their points.
+    public bool Equals(Inference? other) =>
+        other is not null && Kind == other.Kind && Point == other.Point && Plane == other.Plane &&
+        Direction == other.Direction && OfObject == other.OfObject &&
+        (Edges is null ? other.Edges is null : other.Edges is not null && Edges.Count == other.Edges.Count &&
+            Edges.Zip(other.Edges).All(pair => pair.First.SequenceEqual(pair.Second)));
+
+    public override int GetHashCode() => HashCode.Combine(Kind, Point, Plane, Direction, Edges?.Count ?? -1);
 }
 
 /// <summary>
@@ -92,6 +113,12 @@ public sealed class InferenceEngine
     /// object, rather than only along the face drawn on, as when drawing on it.
     /// </summary>
     public bool AnyDirection { get; set; }
+
+    /// <summary>
+    /// The axes of the object moved, X, Y and Z in the model space, when it is turned from the edit context: the point
+    /// snaps along them from the point drawn from as along the axes of the edit context; null for none.
+    /// </summary>
+    public IReadOnlyList<Vector3d>? ObjectAxes { get; set; }
 
     /// <summary>The guide lines to snap to, in the model space.</summary>
     public IReadOnlyList<GuideLine> Guides { get; set; } = [];
@@ -270,20 +297,35 @@ public sealed class InferenceEngine
     // Along an axis, the reference line or its perpendicular in the plane, from a point, if the ray passes close.
     private Inference? Along(PointerRay ray, Point3d from, Vector3d[] axes, Plane plane, bool inPlaneOnly)
     {
-        var directions = new List<(InferenceKind Kind, Vector3d Direction)>
+        var directions = new List<(InferenceKind Kind, Vector3d Direction, bool OfObject)>
         {
-            (InferenceKind.AxisX, axes[0]), (InferenceKind.AxisY, axes[1]), (InferenceKind.AxisZ, axes[2]),
+            (InferenceKind.AxisX, axes[0], false), (InferenceKind.AxisY, axes[1], false),
+            (InferenceKind.AxisZ, axes[2], false),
         };
-        if (_reference is { } reference && !axes.Any(axis => Parallel(axis, reference)))
+        // The axes of the object moved, those not along the axes of the edit context.
+        if (ObjectAxes is [var objectX, var objectY, var objectZ])
         {
-            directions.Add((InferenceKind.Parallel, reference));
+            foreach ((InferenceKind kind, Vector3d axis) in
+                     (ReadOnlySpan<(InferenceKind, Vector3d)>)
+                     [(InferenceKind.AxisX, objectX), (InferenceKind.AxisY, objectY), (InferenceKind.AxisZ, objectZ)])
+            {
+                Vector3d unit = axis.Normalized();
+                if (unit.Length > 0 && !axes.Any(other => Parallel(other, unit)))
+                {
+                    directions.Add((kind, unit, true));
+                }
+            }
+        }
+        if (_reference is { } reference && !directions.Any(entry => Parallel(entry.Direction, reference)))
+        {
+            directions.Add((InferenceKind.Parallel, reference, false));
         }
         if (_reference is { } line)
         {
             Vector3d perpendicular = plane.Normal.Cross(line).Normalized();
-            if (perpendicular.Length > 0 && !axes.Any(axis => Parallel(axis, perpendicular)))
+            if (perpendicular.Length > 0 && !directions.Any(entry => Parallel(entry.Direction, perpendicular)))
             {
-                directions.Add((InferenceKind.Perpendicular, perpendicular));
+                directions.Add((InferenceKind.Perpendicular, perpendicular, false));
             }
         }
 
@@ -294,7 +336,7 @@ public sealed class InferenceEngine
 
         Inference? best = null;
         double bestDistance = double.MaxValue;
-        foreach ((InferenceKind kind, Vector3d direction) in directions)
+        foreach ((InferenceKind kind, Vector3d direction, bool ofObject) in directions)
         {
             (Point3d point, double distance) = ClosestOnLine(ray, from, direction);
             if (point.DistanceTo(from) < 1e-9)
@@ -307,7 +349,7 @@ public sealed class InferenceEngine
                 distance < Math.Tan(AxisAngle * Math.PI / 180) * point.DistanceTo(from);
             if ((units < SnapDistance || aligned) && units < bestDistance)
             {
-                best = new Inference(kind, point, null, direction);
+                best = new Inference(kind, point, null, direction) { OfObject = ofObject };
                 bestDistance = units;
             }
         }

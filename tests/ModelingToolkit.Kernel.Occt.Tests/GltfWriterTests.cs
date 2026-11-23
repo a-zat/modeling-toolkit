@@ -176,6 +176,31 @@ public sealed class GltfWriterTests : IDisposable
     }
 
     [Fact]
+    public void A_component_of_a_single_mesh_placed_once_stays_a_component_turned_as_it_was()
+    {
+        // As a model imported from a file of a single mesh: its block, placed once, turned.
+        var document = new Document();
+        var chair = new Block("Chair");
+        chair.Entities.Add(new MeshEntity([new(0, 0, 0), new(100, 0, 0), new(0, 100, 0)], [new(0, 1, 2)]) { Name = "Seat" });
+        document.Blocks.Add(chair);
+        Transform turned = Transform.Translation(500, 0, 0) * Transform.Rotation(Point3d.Origin, Vector3d.UnitZ, Math.PI / 4);
+        document.Root.Entities.Add(new BlockReference(chair, turned));
+
+        Document once = RoundTrip(document);
+        Document twice = RoundTrip(once);
+
+        foreach (Document copy in new[] { once, twice })
+        {
+            BlockReference reference = Assert.IsType<BlockReference>(Assert.Single(copy.Root.Entities));
+            Assert.Equal("Chair", reference.Name ?? reference.Block.Name);
+            Assert.Equal("Seat", Assert.IsType<MeshEntity>(Assert.Single(reference.Block.Entities)).Name);
+            Point3d corner = reference.Transform.Apply(new Point3d(100, 0, 0));
+            Assert.Equal(500 + 100 / Math.Sqrt(2), corner.X, 1e-3);
+            Assert.Equal(100 / Math.Sqrt(2), corner.Y, 1e-3);
+        }
+    }
+
+    [Fact]
     public void Layers_survive_a_round_trip_with_the_references_and_meshes_on_them()
     {
         var document = new Document();

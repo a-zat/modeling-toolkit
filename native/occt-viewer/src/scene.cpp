@@ -203,6 +203,16 @@ void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode m
     apply_display_mode_to(*aspects.faded, mode, faded, edges.triangle_edges);
     apply_display_mode_to(*aspects.shaded_faces, mode, shaded, false);
     apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
+    // The faces are drawn deeper than they are by as much as their depth changes over the pixels that the edges they
+    // bound cover beside them, half their width across and as much beyond their ends, so that they do not hide half
+    // of those edges; and by two steps of the depth more, for the edges on faces turned to the camera. A face turned
+    // to the camera is thus hardly moved, and what is behind it, however close, stays hidden; a face seen edge-on is
+    // moved by a few pixels of its slope, as little as the edges need.
+    const float width = edges.outlines ? edges.outline_width : 1.0f;
+    for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect :
+         {aspects.shaded, aspects.faded, aspects.shaded_faces, aspects.faded_faces}) {
+        aspect->SetPolygonOffsets(Aspect_POM_Fill, 0.75f * width + 1.0f, 2.0f);
+    }
 }
 
 // The edges of meshes, as quads made by edge_quads_of(): each vertex is an end of a segment, its normal the other end
@@ -220,9 +230,7 @@ occ::handle<Graphic3d_ShaderProgram> make_edge_program(float width) {
                                   R"(
 uniform vec4 occViewport;
 vec4 project(vec4 point) {
-    vec4 position = occWorldViewMatrix * occModelWorldMatrix * point;
-    position.z += 0.002 * abs(position.z);
-    return occProjectionMatrix * position;
+    return occProjectionMatrix * occWorldViewMatrix * occModelWorldMatrix * point;
 }
 void main() {
     vec4 here = project(occVertex);
@@ -280,6 +288,10 @@ void mtk::apply_display_mode(EdgeAspects& aspects, const EdgeStyle& edges) {
     for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect : {aspects.shaded, aspects.faded}) {
         aspect->SetInteriorStyle(edges.own_edges ? Aspect_IS_SOLID : Aspect_IS_EMPTY);
         aspect->SetShaderProgram(program);
+    }
+    for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect :
+         {aspects.shaded, aspects.faded, aspects.lines, aspects.faded_lines}) {
+        aspect->SetPolygonOffsets(Aspect_POM_None, 0.0f, 0.0f); // at their depth: the faces go deeper instead
     }
     for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect : {aspects.lines, aspects.faded_lines}) {
         aspect->SetInteriorStyle(edges.lines ? Aspect_IS_SOLID : Aspect_IS_EMPTY);

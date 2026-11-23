@@ -2160,9 +2160,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Overlay = Overlay with { Markers = [.. Overlay.Markers, .. anchors] };
         }
         // The points to take the selection by, with the move and rotate tools, shown so as not to be looked for: those
-        // the box does not hide.
+        // the box does not hide; with the box only.
         IReadOnlyList<int>? seen = null;
-        if (SelectedInView && IsEditable && ActiveTool is TransformTool { IsActive: true } transform &&
+        if (FramedByBox && IsEditable && ActiveTool is TransformTool { IsActive: true } transform &&
             transform.GripPoints is { Count: > 0 } grips && SelectedHandles() is { } selectedBox)
         {
             seen = Seen(selectedBox);

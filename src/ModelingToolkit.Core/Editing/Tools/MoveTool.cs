@@ -108,23 +108,25 @@ public sealed class MoveTool(IGeometryKernel kernel) : TransformTool(kernel)
         return point;
     }
 
-    // The point brought onto the axis of the edit context nearest to the way it is from the start.
+    // The point brought onto the axis nearest to the way it is from the start: of the component moved, those of its box
+    // whose handle took it, else of the edit context.
     private Inference AlongAxis(Point3d start, Inference point)
     {
         Transform placement = Host.Context.Placement;
         Vector3d offset = point.Point - start;
-        (InferenceKind Kind, Vector3d Axis)[] axes =
+        IReadOnlyList<Vector3d> frame = ObjectAxes ??
         [
-            (InferenceKind.AxisX, placement.ApplyVector(Vector3d.UnitX).Normalized()),
-            (InferenceKind.AxisY, placement.ApplyVector(Vector3d.UnitY).Normalized()),
-            (InferenceKind.AxisZ, placement.ApplyVector(Vector3d.UnitZ).Normalized()),
+            placement.ApplyVector(Vector3d.UnitX).Normalized(), placement.ApplyVector(Vector3d.UnitY).Normalized(),
+            placement.ApplyVector(Vector3d.UnitZ).Normalized(),
         ];
+        (InferenceKind Kind, Vector3d Axis)[] axes =
+            [(InferenceKind.AxisX, frame[0]), (InferenceKind.AxisY, frame[1]), (InferenceKind.AxisZ, frame[2])];
         (InferenceKind kind, Vector3d axis) = axes.MaxBy(entry => Math.Abs(entry.Axis.Dot(offset)));
         Point3d along = start + axis * axis.Dot(offset);
         // A point snapped to keeps its kind, and the edge it is on, where it is on the axis.
         return point.IsSnapped && along.DistanceTo(point.Point) < 1e-6
             ? point
-            : new Inference(kind, along, null, axis);
+            : new Inference(kind, along, null, axis) { OfObject = !IsContextAxis(axis) };
     }
 
     public override bool Key(ToolKey key, ToolModifiers modifiers)

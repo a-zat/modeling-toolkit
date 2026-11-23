@@ -98,6 +98,29 @@ public sealed class MoveToolTests
     }
 
     [Fact]
+    public void A_component_turned_moves_along_its_own_axes_too()
+    {
+        var block = new Block("Armchair");
+        block.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10)));
+        _document.Blocks.Add(block);
+        var reference = new BlockReference(block, Transform.Rotation(Point3d.Origin, Vector3d.UnitZ, Math.PI / 4));
+        _document.Root.Entities.Add(reference);
+        _host.SelectedPath = [reference];
+
+        _tool.Click(Ground(0, 0));
+        // 1 m along its X axis, 30 mm off it: between the axes of the model, far from both.
+        double d = 1000 / Math.Sqrt(2);
+        _tool.Hover(Ground(d - 21, d + 21));
+        Inference along = _host.Preview.Inference!;
+        Assert.Equal((InferenceKind.AxisX, true), (along.Kind, along.OfObject));
+        _tool.Click(Ground(d - 21, d + 21));
+
+        Point3d moved = reference.Transform.Apply(Point3d.Origin);
+        Assert.Equal(d, moved.X, 1e-6);
+        Assert.Equal(d, moved.Y, 1e-6);
+    }
+
+    [Fact]
     public void The_pointer_snaps_to_the_edges_and_corners_of_meshes()
     {
         var floor = new MeshEntity([new(0, 0, 0), new(1000, 0, 0), new(1000, 1000, 0), new(0, 1000, 0)],
@@ -106,12 +129,15 @@ public sealed class MoveToolTests
 
         _tool.Hover(On(floor, new Point3d(996, 300, 0)));
         Assert.Equal(new Inference(InferenceKind.OnEdge, new Point3d(1000, 300, 0), null, Vector3d.UnitY,
-            (new Point3d(1000, 0, 0), new Point3d(1000, 1000, 0))), _host.Preview.Inference);
+            Inference.Segment(new Point3d(1000, 0, 0), new Point3d(1000, 1000, 0))), _host.Preview.Inference);
 
         _tool.Hover(On(floor, new Point3d(997, 996, 0)));
         Inference corner = _host.Preview.Inference!;
         Assert.Equal((InferenceKind.Endpoint, new Point3d(1000, 1000, 0)), (corner.Kind, corner.Point));
-        Assert.NotNull(corner.Edge); // the edge it is an end of is shown
+        // Both edges it is an end of are shown, whole.
+        Assert.Equal(2, corner.Edges!.Count);
+        Assert.All(corner.Edges, edge => Assert.Contains(new Point3d(1000, 1000, 0), edge));
+        Assert.All(corner.Edges, edge => Assert.Equal(1000, edge[0].DistanceTo(edge[^1]), 6));
     }
 
     [Fact]

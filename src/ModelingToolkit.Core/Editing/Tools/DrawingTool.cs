@@ -102,7 +102,7 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
     private readonly Dictionary<MeshEntity, Polylines> _meshEdges = [];
 
     // A point of the mesh under the pointer that the pointer passes near: an end of its edges, the middle of one, or a
-    // point along one; the edges are those drawn, its sharp ones.
+    // point along one; the edges are those drawn, its sharp ones. It comes with the edges it is on, or an end of.
     private Inference? OnMeshEdge(ToolPick pick)
     {
         if (pick is not { Path: [.., MeshEntity mesh], Element: null, Ray: { } ray } || pick.Normal.Length == 0)
@@ -122,6 +122,7 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
         double snap = Inference.SnapDistance;
         double reach = 3 * snap * unit; // the edges near the point hit
         Inference? best = null;
+        (int Line, int Segment, int End) bestAt = default; // End: 0 or 1 for the end of the segment snapped to
         double bestUnits = snap;
         int rank = int.MaxValue; // ends before middles before points along
         for (int index = 0; index < edges.Count; index++)
@@ -136,14 +137,16 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
                     continue;
                 }
                 Point3d middle = Point3d.Origin + ((a - Point3d.Origin) + (b - Point3d.Origin)) / 2;
-                foreach ((Point3d point, InferenceKind kind, int order) in
-                         (ReadOnlySpan<(Point3d, InferenceKind, int)>)
-                         [(a, InferenceKind.Endpoint, 0), (b, InferenceKind.Endpoint, 0), (middle, InferenceKind.Midpoint, 1)])
+                foreach ((Point3d point, InferenceKind kind, int order, int end) in
+                         (ReadOnlySpan<(Point3d, InferenceKind, int, int)>)
+                         [(a, InferenceKind.Endpoint, 0, 0), (b, InferenceKind.Endpoint, 0, 1),
+                          (middle, InferenceKind.Midpoint, 1, 0)])
                 {
                     double units = RayDistance(ray, point) / ray.UnitSizeAt(point);
                     if (units < snap && (order < rank || order == rank && units < bestUnits))
                     {
-                        best = new Inference(kind, point, Edge: (a, b));
+                        best = new Inference(kind, point);
+                        bestAt = (index, i, end);
                         bestUnits = units;
                         rank = order;
                     }
@@ -156,13 +159,78 @@ public abstract class DrawingTool(IGeometryKernel kernel) : Tool
                 double alongUnits = RayDistance(ray, along) / ray.UnitSizeAt(along);
                 if (alongUnits < bestUnits)
                 {
-                    best = new Inference(InferenceKind.OnEdge, along, null, (b - a).Normalized(), (a, b));
+                    best = new Inference(InferenceKind.OnEdge, along, null, (b - a).Normalized());
+                    bestAt = (index, i, 0);
                     bestUnits = alongUnits;
                     rank = 2;
                 }
             }
         }
-        return best;
+        if (best is null)
+        {
+            return null;
+        }
+        // A corner shows all the edges that meet there, a point on an edge or its middle the one edge.
+        IReadOnlyList<IReadOnlyList<Point3d>> shown = best.Kind == InferenceKind.Endpoint
+            ? EdgesAt(edges, edges[bestAt.Line][bestAt.Segment + bestAt.End], placement)
+            : [EdgeOf(edges[bestAt.Line], bestAt.Segment, placement)];
+        return best with { Edges = shown };
+    }
+
+    // How much a polyline may turn from one segment to the next, as the cosine of the angle, and still be the same edge.
+    private const double EdgeTurn = 0.866; // 30°
+
+    // The edges of a mesh that have an end at a point, or pass through it, in its coordinates.
+    private static List<IReadOnlyList<Point3d>> EdgesAt(Polylines edges, Point3d point, Transform placement)
+    {
+        var found = new List<IReadOnlyList<Point3d>>();
+        var seen = new HashSet<(int Line, int First)>();
+        for (int index = 0; index < edges.Count; index++)
+        {
+            ReadOnlySpan<Point3d> line = edges[index];
+            for (int i = 0; i + 1 < line.Length; i++)
+            {
+                if ((line[i] == point || line[i + 1] == point) &&
+                    seen.Add((index, RunStart(line, i))))
+                {
+                    found.Add(EdgeOf(line, i, placement));
+                }
+            }
+        }
+        return found;
+    }
+
+    // The edge a segment of a polyline is part of: the segments before and after it as long as the polyline goes on
+    // without turning sharply, in the model space.
+    private static Point3d[] EdgeOf(ReadOnlySpan<Point3d> line, int segment, Transform placement)
+    {
+        int first = RunStart(line, segment), last = segment;
+        while (last + 2 < line.Length && Smooth(line[last], line[last + 1], line[last + 2]))
+        {
+            last++;
+        }
+        var points = new Point3d[last - first + 2];
+        for (int i = 0; i < points.Length; i++)
+        {
+            points[i] = placement.Apply(line[first + i]);
+        }
+        return points;
+    }
+
+    private static int RunStart(ReadOnlySpan<Point3d> line, int segment)
+    {
+        int first = segment;
+        while (first > 0 && Smooth(line[first - 1], line[first], line[first + 1]))
+        {
+            first--;
+        }
+        return first;
+    }
+
+    private static bool Smooth(Point3d a, Point3d b, Point3d c)
+    {
+        Vector3d before = (b - a).Normalized(), after = (c - b).Normalized();
+        return before.Length > 0 && after.Length > 0 && before.Dot(after) > EdgeTurn;
     }
 
     private static Point3d Closest(Point3d point, Point3d a, Point3d b)

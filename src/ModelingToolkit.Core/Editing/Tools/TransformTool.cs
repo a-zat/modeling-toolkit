@@ -130,8 +130,30 @@ public abstract class TransformTool : DrawingTool
             return false;
         }
         Box = BoxOf(Target);
+        // A component turned is moved along its own axes too, as along those of the block being edited.
+        ObjectAxes = Target is BlockReference reference && AxesOf(TargetPlacement * reference.Transform) is var own &&
+            own.Any(axis => !IsContextAxis(axis))
+            ? own
+            : null;
+        Inference.ObjectAxes = ObjectAxes;
         return true;
     }
+
+    /// <summary>The axes of the component taken, X, Y and Z in the model space, of unit length; null for none.</summary>
+    protected IReadOnlyList<Vector3d>? ObjectAxes { get; private set; }
+
+    /// <summary>Whether a direction is along one of the axes of the edit context.</summary>
+    protected bool IsContextAxis(Vector3d direction)
+    {
+        Vector3d unit = direction.Normalized();
+        return AxesOf(Host.Context.Placement).Any(axis => Math.Abs(Math.Abs(axis.Dot(unit)) - 1) < 1e-9);
+    }
+
+    private static Vector3d[] AxesOf(Transform frame) =>
+    [
+        frame.ApplyVector(Vector3d.UnitX).Normalized(), frame.ApplyVector(Vector3d.UnitY).Normalized(),
+        frame.ApplyVector(Vector3d.UnitZ).Normalized(),
+    ];
 
     protected void ReleaseTarget()
     {
@@ -142,6 +164,8 @@ public abstract class TransformTool : DrawingTool
         Target = null;
         TargetPlacement = Transform.Identity;
         Box = [];
+        ObjectAxes = null;
+        Inference.ObjectAxes = null;
     }
 
     protected override void OnDeactivated()

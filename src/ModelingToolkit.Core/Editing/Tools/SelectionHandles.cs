@@ -139,7 +139,7 @@ public sealed class SelectionHandles
             Point3d middle = Middle(edge);
             _faceMasks.Add(MaskOf(edge));
             yield return new SelectionHandle(HandleKind.Slide, middle,
-                new Inference(InferenceKind.Midpoint, middle, Edge: (a, b)));
+                new Inference(InferenceKind.Midpoint, middle, Edges: Inference.Segment(a, b)));
         }
         for (int f = 0; f < Faces.Length; f++)
         {

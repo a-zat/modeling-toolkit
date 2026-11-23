@@ -101,6 +101,44 @@ public sealed class GltfWriter : IDocumentWriter
             new(document.Animations.SelectMany(animation => animation.Targets), ReferenceEqualityComparer.Instance);
         private int _guides;
         private int _shapes;
+        private Dictionary<Block, int>? _placements;
+
+        // How many times a block is placed in the scene: by each reference to it, as many times as the block holding
+        // that reference is.
+        private int Placements(Block block)
+        {
+            if (_placements is null)
+            {
+                var holders = new Dictionary<Block, List<Block>>(ReferenceEqualityComparer.Instance);
+                foreach (Block holder in document.Blocks.Prepend(document.Root))
+                {
+                    foreach (BlockReference placed in holder.Entities.OfType<BlockReference>())
+                    {
+                        if (!holders.TryGetValue(placed.Block, out List<Block>? list))
+                        {
+                            holders[placed.Block] = list = [];
+                        }
+                        list.Add(holder);
+                    }
+                }
+                _placements = new Dictionary<Block, int>(ReferenceEqualityComparer.Instance) { [document.Root] = 1 };
+                int Count(Block of, int depth)
+                {
+                    if (_placements.TryGetValue(of, out int known))
+                    {
+                        return known;
+                    }
+                    int count = depth > 64 ? 0 : holders.GetValueOrDefault(of)?.Sum(holder => Count(holder, depth + 1)) ?? 0;
+                    _placements[of] = count;
+                    return count;
+                }
+                foreach (Block each in document.Blocks)
+                {
+                    Count(each, 0);
+                }
+            }
+            return _placements.GetValueOrDefault(block);
+        }
 
         public List<string> Warnings { get; } = [];
 
@@ -300,8 +338,11 @@ public sealed class GltfWriter : IDocumentWriter
         {
             // A placement of a mesh alone, as the reading makes of a mesh used in several places, is one node holding
             // the mesh: a node of its block, holding a node of the mesh, would be read back as one more level each time.
+            // A component of a mesh alone placed once keeps its node: the mesh of a node alone would be read back in
+            // place, as a mesh of the block above.
             bool meshOnly = reference is { Name: null } &&
-                reference.Block.Entities is [MeshEntity { Triangles.Length: > 0, IsHidden: false }];
+                reference.Block.Entities is [MeshEntity { Triangles.Length: > 0, IsHidden: false }] &&
+                Placements(reference.Block) > 1;
             var node = meshOnly
                 ? new JsonObject { ["mesh"] = MeshOf((MeshEntity)reference.Block.Entities[0]) }
                 : new JsonObject { ["name"] = reference.Name ?? reference.Block.Name };

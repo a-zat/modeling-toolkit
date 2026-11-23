@@ -17,6 +17,9 @@ internal static class ToolOverlay
     private static readonly Color Magenta = Color.FromRgb(0xC2, 0x38, 0xC2);
     private static readonly Color Cyan = Color.FromRgb(0x14, 0xA3, 0xB8);
     private static readonly Color Gold = Color.FromRgb(0xE0, 0xA8, 0x16);
+
+    // The edges snapped to, in a colour of no axis, so as not to be taken for one.
+    private static readonly Color Snapped = Color.FromRgb(0xF2, 0x7A, 0x1A);
     private const double GuideReach = 100_000;
     private const int GuidePieces = 100;
 
@@ -45,13 +48,13 @@ internal static class ToolOverlay
         List<OverlayLabel> labels = [];
         if (preview.Inference is { } inference && MarkerOf(inference.Kind) is { } marker)
         {
-            // The edge snapped to, in place of the face under it that the view may tint.
-            if (inference.Edge is { } edge)
+            // The edges snapped to, all those that meet at a corner, over the face under them that the view may tint.
+            foreach (IReadOnlyList<Point3d> edge in inference.Edges ?? [])
             {
-                lines.Add(new OverlayLine([edge.Start, edge.End], marker.Color, 3));
+                lines.Add(new OverlayLine(edge, Snapped, 3));
             }
             markers.Add(new OverlayMarker(inference.Point, marker.Color, marker.Shape));
-            labels.Add(new OverlayLabel(inference.Point, $"  {NameOf(inference.Kind)}", Color.FromRgb(0x1C, 0x1F, 0x24),
+            labels.Add(new OverlayLabel(inference.Point, $"  {NameOf(inference.Kind)}{(inference.OfObject ? " of the object" : string.Empty)}", Color.FromRgb(0x1C, 0x1F, 0x24),
                 Color.FromRgb(0xFF, 0xFF, 0xFF)));
         }
         return new ViewOverlay(lines, markers, labels);

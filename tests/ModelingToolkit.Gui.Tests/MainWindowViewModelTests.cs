@@ -588,6 +588,23 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(taken, Assert.IsType<MoveTool>(viewModel.ActiveTool).TakenAt);
     }
 
+    [Fact]
+    public async Task TheMoveToolShowsNoPointsOfABoxThatALooseMeshIsNotFramedBy()
+    {
+        MainWindowViewModel viewModel = CreateWithKernel();
+        await viewModel.LoadAsync(Paths.Asset("gltf", "Box.glb"));
+        var loose = new MeshEntity([new(0, 0, 0), new(1000, 0, 0), new(0, 1000, 0)], [new Triangle(0, 1, 2)]);
+        viewModel.Document!.Root.Entities.Add(loose);
+        viewModel.ViewInputCommand.Execute(
+            new ViewportPick([loose], null, default, new System.Numerics.Vector3(0, 0, 1), KeyModifiers.None));
+        Assert.Equal([loose], viewModel.EmphasizedPath);
+
+        viewModel.ActivateToolCommand.Execute(viewModel.Tools.First(item => item.Tool is MoveTool));
+
+        Assert.True(viewModel.SelectedInView);
+        Assert.DoesNotContain(viewModel.Overlay.Markers, marker => marker.Shape == MarkerShape.Square);
+    }
+
     private static MainWindowViewModel CreateWithKernel()
     {
         var kernel = new OcctKernel();
