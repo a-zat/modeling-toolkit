@@ -4,11 +4,11 @@ A versatile toolkit for importing, processing, modifying, and exporting 3D model
 It handles meshes as well as exact geometry (B-rep solids, NURBS, analytic primitives), with a C# core and
 [OpenCASCADE](https://github.com/Open-Cascade-SAS/OCCT) as geometry kernel.
 
-> **Status:** version 0.2.0, a viewer and an editor: see the [changelog](CHANGELOG.md). The `mtk` command line tool reads glTF models (`.gltf`, `.glb`, with meshes
+> **Status:** version 0.3.0, a viewer and an editor: see the [changelog](CHANGELOG.md). The `mtk` command line tool reads glTF models (`.gltf`, `.glb`, with meshes
 > compressed by Draco and textures in WebP too) and writes them in the native `.mtk` format, keeping shared geometry,
 > hierarchy, materials and textures. It also builds, edits and simplifies models, and shapes of exact geometry, with their boolean combinations. The
 > desktop application opens and saves models, shows them in its 3D view, drawn by OpenCASCADE, walks through them,
-> and draws and edits them.
+> and draws and edits them, with components that follow each other and layers.
 
 ## Download
 

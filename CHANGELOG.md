@@ -3,6 +3,81 @@
 The changes of each release of the Modeling Toolkit. Versions follow [semantic versioning](https://semver.org); before
 1.0, a minor version may change anything, the native format included, which newer versions keep reading.
 
+## 0.3.0 — 2026-11-23
+
+Components that follow each other, layers, and a walk mode with gravity and places to sit.
+
+### Components, anchors and points of view
+
+- **Anchors:** named places in a component, such as the end of a table where a leaf goes or the seat of a chair,
+  listed in its properties, added by a click in the 3D view, moved and removed there.
+- **Attachments:** a component follows an anchor of another at a fixed offset, so chairs go with the leaf of a table
+  that extends and a lamp stays on its shelf; the properties choose the anchor it follows.
+- **Points of view:** an anchor marked as a place to look from, with the height and direction of the eyes; the
+  properties look from it.
+- Several entities selected in the outline are made one component; loose meshes and shapes are made a component from
+  the outline. Deleting a component that holds other things asks for confirmation.
+
+### Layers
+
+- An entity is on one layer at most, or on that of the nearest component above it. A hidden layer leaves out of the 3D
+  view what is on it with what it places; materials keep their colours.
+- The outline shows the structure or the layers, each layer with its entities and the model space on none last, with
+  an eye to show or hide each layer, renaming, a new layer and deleting.
+- The properties put the selection on a layer, or on a new one; `mtk edit layer=` does it from the command line and
+  `mtk tree` shows the layer of each entity.
+
+### Editing
+
+- With the select tool, a drag on the selection moves it from the point pressed, snapped, to where it is let go,
+  snapped to what is there; a press without a drag is still a click.
+- What a tool moves with the pointer is looked through, so that the point to move to snaps to the vertices and edges
+  behind it. A corner snapped to on a mesh shows all the edges that meet there, a point on an edge the whole edge.
+- A component turned moves along its own axes too, besides those of the block being edited, and the handles of its box
+  slide it along its own axes.
+- The handles of the face pointed at stay shown while the pointer is near its sides, so that a corner can be taken.
+- A model imported or pasted follows the pointer by its origin when it stands on it, else by the middle of the bottom
+  of its box.
+- Editing a block shows only that block, in its place; a click outside it does nothing and a double click leaves it.
+- The outline selects several nodes to move out, move into a block or delete together, and the model is renamed from
+  the outline or its properties.
+
+### Walk mode and interaction
+
+- Gravity follows the ground and climbs steps up to 400 mm.
+- A click on a chair takes its point of view: seated, Q and E turn, and Escape or a click on nothing stands up where the
+  walk was.
+- A click opens a hidden part, such as a leaf of a table, or takes a point of view only inside the component that holds
+  it. Optional dots mark what can be used, in every display mode; the interaction is called Interact.
+- The **Movement** section of the properties belongs to components; the switch for all the movements of a component,
+  in its header, covers only those within the selection.
+
+### The 3D view
+
+- Edges behind a face are no longer drawn through it at mid distances: the faces are drawn deeper by their slope rather
+  than the edges closer to the camera.
+
+### Files and command line
+
+- A glTF file saved again keeps its structure and names: the scene names the model, its nodes are the entities of the
+  model space, the names of nodes that hold only geometry are kept, a mesh used in several places is one node, and a
+  component of a single mesh stays a component.
+- Anchors, attachments, points of view and layers are saved in the native format, now at version 7, which still reads
+  the files of 0.2.0, and in the extras of glTF files.
+- `mtk edit` adds anchors and points of view, attaches and detaches components, puts entities on layers, names
+  entities of the same name with #2, #3... and places imports at points of the model; `mtk tree` shows anchors and what
+  each component follows.
+
+### Fixes
+
+- A right click on the project in the outline no longer leaves the window unresponsive.
+- The wheel no longer steps in the walk mode.
+
+### Known issues
+
+- The application is not signed by a developer identity: once downloaded, macOS refuses to open it until the
+  quarantine mark is removed (see the README of the package), and Windows SmartScreen asks for a confirmation.
+
 ## 0.2.0 — 2026-11-19
 
 From a viewer to an editor: models can now be drawn, edited and walked through.
