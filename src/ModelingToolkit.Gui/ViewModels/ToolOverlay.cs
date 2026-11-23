@@ -54,10 +54,24 @@ internal static class ToolOverlay
                 lines.Add(new OverlayLine(edge, Snapped, 3));
             }
             markers.Add(new OverlayMarker(inference.Point, marker.Color, marker.Shape));
-            labels.Add(new OverlayLabel(inference.Point, $"  {NameOf(inference.Kind)}{(inference.OfObject ? " of the object" : string.Empty)}", Color.FromRgb(0x1C, 0x1F, 0x24),
+            labels.Add(new OverlayLabel(inference.Point, $"  {NameOf(inference)}", Color.FromRgb(0x1C, 0x1F, 0x24),
                 Color.FromRgb(0xFF, 0xFF, 0xFF)));
         }
         return new ViewOverlay(lines, markers, labels);
+    }
+
+    /// <summary>The name of a point inferred, as the 3D view shows it next to the point.</summary>
+    public static string NameOf(Inference inference)
+    {
+        ArgumentNullException.ThrowIfNull(inference);
+        return inference is { OfObject: true, Kind: InferenceKind.AxisX or InferenceKind.AxisY or InferenceKind.AxisZ }
+            ? inference.Kind switch
+            {
+                InferenceKind.AxisX => "On local red axis",
+                InferenceKind.AxisY => "On local green axis",
+                _ => "On local blue axis",
+            }
+            : NameOf(inference.Kind);
     }
 
     /// <summary>The name of a kind of point, as the 3D view shows it next to the point.</summary>

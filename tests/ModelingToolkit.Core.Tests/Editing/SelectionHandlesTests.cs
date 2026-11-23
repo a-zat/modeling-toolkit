@@ -245,6 +245,14 @@ public sealed class SelectionHandlesTests
         int corner = handles.OnFace(1).First(i => handles.Handles[i].Point == new Point3d(1100, 100, 100));
         _tool.Hover(At(Down(1102, 102, 100), corner));
         Assert.Equal(1, _tool.Face);
+        // A little off its side, by less than the margin: the face stays, to take its handles; further, it goes.
+        _tool.Hover(At(Down(1115, 50, 100), -1) with { Handle = null });
+        Assert.Equal(1, _tool.Face);
+        _tool.Hover(At(Down(1130, 50, 100), -1) with { Handle = null });
+        Assert.Null(_tool.Face);
+        // Coming from off the box, the margin does not show a face.
+        _tool.Hover(At(Down(1115, 50, 100), -1) with { Handle = null });
+        Assert.Null(_tool.Face);
         _tool.Hover(At(Down(1300, 300, 100), -1) with { Handle = null });
         Assert.Null(_tool.Face);
     }

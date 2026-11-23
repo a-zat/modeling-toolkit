@@ -277,16 +277,20 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
 
     /// <summary>
     /// The face of the box of the selection under the pointer, whose handles show; it stays while the pointer is on one
-    /// of them, as on a corner, which is half off the face. Null when the pointer is off the box.
+    /// of them, as on a corner, which is half off the face, or within <see cref="FaceMargin"/> of its sides. Null when
+    /// the pointer is off the box.
     /// </summary>
     public int? Face { get; private set; }
+
+    /// <summary>How far beyond the sides of the face pointed at, in units of the screen, its handles stay shown.</summary>
+    public const double FaceMargin = 24;
 
     private void PointFace(ToolInput input)
     {
         int? face = null;
         if (_grab is null && Handles is { IsFlat: false } handles && input.Pick.Ray is { } ray)
         {
-            face = handles.FaceUnder(ray);
+            face = handles.FaceUnder(ray, Face, FaceMargin);
             if (face is null && Face is { } current && input.Handle is { } handle && handles.OnFace(current).Contains(handle))
             {
                 face = current;

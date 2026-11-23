@@ -170,23 +170,44 @@ public sealed class SelectionHandles
     /// The face of the box the ray meets first, turned to it; null when it misses the box, starts inside it, or the box
     /// is flat.
     /// </summary>
-    public int? FaceUnder(PointerRay ray)
+    public int? FaceUnder(PointerRay ray) => FaceUnder(ray, null, 0);
+
+    /// <summary>
+    /// The face of the box the ray meets first, turned to it, or else a face that the ray passes beside, within a margin
+    /// in units of the screen beyond its sides, so that the handles of a face pointed at stay as the pointer goes a
+    /// little off it to take one; null for none.
+    /// </summary>
+    /// <param name="beside">The face that the ray may pass beside; null for none.</param>
+    public int? FaceUnder(PointerRay ray, int? beside, double margin)
     {
         ArgumentNullException.ThrowIfNull(ray);
+        if (Within(ray, null, 0) is { } under)
+        {
+            return under;
+        }
+        return beside is { } face && margin > 0 ? Within(ray, face, margin) : null;
+    }
+
+    // The nearest face the ray meets within its sides, widened by a margin in units of the screen: of all, or of one.
+    private int? Within(PointerRay ray, int? only, double margin)
+    {
         int? nearest = null;
         double nearestDistance = double.MaxValue;
         for (int f = 0; f < _faces.Length; f++)
         {
-            if (_faces[f] is not ({ } middle, { } normal) || normal.Dot(ray.Direction) >= 0 ||
+            if (only is { } one && f != one || _faces[f] is not ({ } middle, { } normal) ||
+                normal.Dot(ray.Direction) >= 0 ||
                 InferenceEngine.Intersect(ray, new Plane(normal, normal.Dot(middle - Point3d.Origin))) is not { } hit)
             {
                 continue;
             }
-            // Within the face: along each of its sides, no further from its middle than half of it.
+            // Within the face: along each of its sides, no further from its middle than half of it, and the margin.
             int[] corners = Faces[f];
             Vector3d u = (_corners[corners[1]] - _corners[corners[0]]) / 2, v = (_corners[corners[2]] - _corners[corners[0]]) / 2;
             Vector3d offset = hit - middle;
-            if (Math.Abs(offset.Dot(u)) > u.Dot(u) * (1 + 1e-9) || Math.Abs(offset.Dot(v)) > v.Dot(v) * (1 + 1e-9))
+            double extra = margin * ray.UnitSizeAt(hit);
+            if (Math.Abs(offset.Dot(u)) > u.Dot(u) * (1 + 1e-9) + extra * u.Length ||
+                Math.Abs(offset.Dot(v)) > v.Dot(v) * (1 + 1e-9) + extra * v.Length)
             {
                 continue;
             }
