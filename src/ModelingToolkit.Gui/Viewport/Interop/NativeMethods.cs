@@ -52,6 +52,9 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_selection")]
     public static unsafe partial NativeStatus SetSelection(ViewerHandle viewer, int* instances, int count);
 
+    [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_set_unpickable")]
+    public static unsafe partial NativeStatus SetUnpickable(ViewerHandle viewer, int* instances, int count);
+
     [LibraryImport(LibraryName, EntryPoint = "mtk_viewer_clear")]
     public static partial NativeStatus Clear(ViewerHandle viewer);
 

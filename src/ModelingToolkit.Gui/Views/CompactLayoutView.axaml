@@ -156,6 +156,8 @@
                              HighlightsHover="{Binding HighlightsHover}"
                              Eye="{Binding ViewEye, Mode=OneWayToSource}"
                              Pose="{Binding Pose}"
+                             MovingReference="{Binding MovingReference}"
+                             GrabbablePath="{Binding GrabbablePath}"
                              Handles="{Binding Handles}"
                              IsWalking="{Binding IsWalking}" IsPlacingWalk="{Binding IsPlacingWalk}" WalkStart="{Binding WalkStart}"
                              Seat="{Binding Seat}" Beacons="{Binding Beacons}"

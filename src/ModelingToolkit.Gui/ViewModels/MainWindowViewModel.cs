@@ -761,7 +761,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new ToolPick(input.Path, input.Element, input.Point, new Vector3d(input.Normal.X, input.Normal.Y, input.Normal.Z),
                 input.Ray),
             ToToolModifiers(input.Modifiers), input.ClickCount,
-            input.Handle is { } point && point >= 0 && point < _handleIndices.Length ? _handleIndices[point] : null);
+            input.Handle is SelectTool.SelectionBody ? SelectTool.SelectionBody
+                : input.Handle is { } point && point >= 0 && point < _handleIndices.Length ? _handleIndices[point] : null);
         switch (input.Kind)
         {
             case ViewportInputKind.Hover:
@@ -891,8 +892,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     public partial IReadOnlyDictionary<BlockReference, Transform>? Pose { get; private set; }
 
+    /// <summary>The reference a tool moves with the pointer, which the pointer looks through; null for none.</summary>
+    [ObservableProperty]
+    public partial BlockReference? MovingReference { get; private set; }
+
     private void UpdatePose()
     {
+        MovingReference = _toolPose?.Reference;
         if (_toolPose is not { } moved)
         {
             Pose = Animations.Pose;
@@ -1030,8 +1036,32 @@ public sealed partial class MainWindowViewModel : ObservableObject
             : "Pasted.";
     }
 
-    // An entity just added by a command, selected as in the 3D view, follows the pointer by its origin, or the corner of
-    // its box, until a click places it; Escape undoes the command. False when it cannot be placed so.
+    // An entity just added by a command, selected as in the 3D view, follows the pointer by a point of its bottom until a
+    // click places it, snapped to what is there; Escape undoes the command. False when it cannot be placed so.
+    /// <summary>
+    /// The point an entity added follows the pointer by, in the coordinates of its block: the origin of a component when
+    /// it is at the bottom of its box, within its outline, as for a piece of furniture made standing on its origin;
+    /// otherwise the middle of the bottom of its box, as for a model whose origin is far from it.
+    /// </summary>
+    internal static Point3d PlacingPoint(Entity added)
+    {
+        ArgumentNullException.ThrowIfNull(added);
+        BoundingBox box = added.GetBoundingBox();
+        if (box.IsEmpty)
+        {
+            return added is BlockReference empty ? empty.Transform.Apply(Point3d.Origin) : Point3d.Origin;
+        }
+        double tolerance = Math.Max(1, 0.01 * (box.Max - box.Min).Length);
+        if (added is BlockReference reference && reference.Transform.Apply(Point3d.Origin) is var origin &&
+            origin.X >= box.Min.X - tolerance && origin.X <= box.Max.X + tolerance &&
+            origin.Y >= box.Min.Y - tolerance && origin.Y <= box.Max.Y + tolerance &&
+            Math.Abs(origin.Z - box.Min.Z) <= tolerance)
+        {
+            return origin;
+        }
+        return new Point3d((box.Min.X + box.Max.X) / 2, (box.Min.Y + box.Max.Y) / 2, box.Min.Z);
+    }
+
     private bool PlaceAdded(Entity added, IEditCommand command)
     {
         _toolHost.SelectEntity([.. Context!.Path, added]);
@@ -1040,9 +1070,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return false;
         }
         ActivateTool(select);
-        Point3d anchor = added is BlockReference reference
-            ? reference.Transform.Apply(Point3d.Origin)
-            : added.GetBoundingBox().Min;
+        Point3d anchor = PlacingPoint(added);
         return ((SelectTool)select.Tool).Place(Context.Placement.Apply(anchor), () =>
         {
             if (Session is { CanUndo: true } session && session.UndoName == command.Name && added.Owner is not null)
@@ -2182,6 +2210,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         Handles = points;
         _handleIndices = [.. indices];
+        // A drag on the selection, with the select tool, moves it from the point pressed.
+        GrabbablePath = IsEditable && ActiveTool is SelectTool { IsActive: true, IsPlacing: false, IsDraggingHandle: false } &&
+            SelectedHandles() is not null ? ModelTree.SelectedNode?.Path : null;
         _seenHandles = SeenKey();
     }
 
@@ -2270,6 +2301,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>The points of the handles of the selection, which the 3D view lets drag.</summary>
     [ObservableProperty]
     public partial IReadOnlyList<Point3d> Handles { get; private set; } = [];
+
+    /// <summary>The selection that a drag on it in the 3D view moves; null for none.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<Entity>? GrabbablePath { get; private set; }
 
     // The handles of the entity selected in the 3D view, when the select tool can drag them.
     private SelectionHandles? ShownHandles() =>

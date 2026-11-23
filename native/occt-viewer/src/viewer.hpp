@@ -84,6 +84,8 @@ public:
     void remove_instance(int instance);
     void remove_mesh(int mesh);
     void set_selection(const int32_t* instances, int count);
+    // The instances the pointer does not find, in place of those before.
+    void set_unpickable(const int32_t* instances, int count);
     void clear();
     void fit_all();
 
@@ -198,6 +200,7 @@ private:
     std::map<std::pair<int, int>, occ::handle<MeshObject>> shared_meshes_; // by mesh and material
     // The removed meshes have no triangles, the removed instances are null: indices are never given again.
     std::vector<occ::handle<AIS_InteractiveObject>> instances_;
+    std::vector<bool> unpickable_; // by instance; shorter when the last ones are pickable
     std::vector<int> instance_meshes_; // the mesh of each instance
     Graphic3d_ZLayerId faded_layer_ = Graphic3d_ZLayerId_UNKNOWN;
     std::optional<mtk_viewer_pick> pick_; // what was clicked, not yet taken

@@ -28,6 +28,12 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
 
     public override string Name => "Select";
 
+    /// <summary>
+    /// The handle of a press on the selection itself, away from its handles: a drag moves it from the point pressed,
+    /// snapped as the move tool snaps, to where it is let go, snapped to what is there.
+    /// </summary>
+    public const int SelectionBody = -1;
+
     /// <summary>The handles of the entity selected, when it is in the block being edited; null for none.</summary>
     public SelectionHandles? Handles
     {
@@ -103,6 +109,20 @@ public sealed class SelectTool(IGeometryKernel? kernel = null) : Tool
         _grab = null;
         if (_placing is not null)
         {
+            return;
+        }
+        if (input.Handle == SelectionBody && Handles is { } held && _mover is not null)
+        {
+            // Taken by the point pressed, as the move tool takes it by a click.
+            _mover.Activate(Host);
+            _mover.Click(input);
+            if (_mover.TakenAt is not { } taken)
+            {
+                _mover.Deactivate();
+                return;
+            }
+            _grab = new Grab(held, new SelectionHandle(HandleKind.Move, taken, new Inference(InferenceKind.Endpoint, taken)));
+            Hint = "Drag where it goes · Esc stops";
             return;
         }
         if (input.Handle is not { } index || Handles is not { } handles || index < 0 || index >= handles.Handles.Count)

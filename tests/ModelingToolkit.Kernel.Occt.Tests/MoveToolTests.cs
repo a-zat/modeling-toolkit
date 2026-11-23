@@ -49,6 +49,36 @@ public sealed class MoveToolTests
     }
 
     [Fact]
+    public void A_selection_dragged_by_a_corner_with_the_select_tool_lands_that_corner_on_a_corner_elsewhere()
+    {
+        var plate = new MeshEntity([new(0, 0, 0), new(100, 0, 0), new(100, 100, 0), new(0, 100, 0)],
+            [new Triangle(0, 1, 2), new Triangle(0, 2, 3)]);
+        var block = new Block("Plate") { Entities = { plate } };
+        _document.Blocks.Add(block);
+        var reference = new BlockReference(block, Transform.Identity);
+        _document.Root.Entities.Add(reference);
+        var floor = new MeshEntity([new(500, 300, 0), new(1000, 300, 0), new(1000, 500, 0), new(500, 500, 0)],
+            [new Triangle(0, 1, 2), new Triangle(0, 2, 3)]);
+        _document.Root.Entities.Add(floor);
+        _host.SelectedPath = [reference];
+        var select = new SelectTool(_kernel);
+        _tool.Deactivate();
+        select.Activate(_host);
+
+        // Pressed near a corner of the plate, let go near a corner of the floor: both are snapped to.
+        select.Press(At([reference, plate], new Point3d(97, 98, 0), SelectTool.SelectionBody));
+        select.Drag(At([floor], new Point3d(800, 400, 0), SelectTool.SelectionBody));
+        select.Release(At([floor], new Point3d(997, 497, 0), SelectTool.SelectionBody));
+
+        Assert.Equal(new Point3d(1000, 500, 0), Round(reference.Transform.Apply(new Point3d(100, 100, 0))));
+        Assert.Equal(1, _host.Session.UndoCount());
+    }
+
+    private static ToolInput At(IReadOnlyList<Entity> path, Point3d point, int? handle) =>
+        new(new ToolPick(path, null, point, Vector3d.UnitZ,
+            new PointerRay(point + new Vector3d(0, 0, 1000), new Vector3d(0, 0, -1), 1, 0)), Handle: handle);
+
+    [Fact]
     public void A_move_nearly_along_an_axis_snaps_to_it()
     {
         var block = new Block("Part");

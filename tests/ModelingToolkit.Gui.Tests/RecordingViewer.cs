@@ -81,6 +81,18 @@ internal sealed class RecordingViewer : IViewerScene
         Changes.Add($"remove instance {instance}");
     }
 
+    /// <summary>The instances last made not found under the pointer.</summary>
+    public int[] Unpickable { get; private set; } = [];
+
+    public void SetUnpickable(ReadOnlySpan<int> instances)
+    {
+        foreach (int instance in instances)
+        {
+            Assert.True(Instances.ContainsKey(instance));
+        }
+        Unpickable = instances.ToArray();
+    }
+
     public void SetSelection(ReadOnlySpan<int> instances)
     {
         foreach (int instance in instances)

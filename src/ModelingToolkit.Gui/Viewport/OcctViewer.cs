@@ -249,6 +249,18 @@ internal sealed class OcctViewer : IViewerScene, IDisposable
         }
     }
 
+    /// <summary>
+    /// Makes instances not found under the pointer, in place of those made so before, so that it finds what is behind
+    /// them; still drawn. None makes all found again.
+    /// </summary>
+    public unsafe void SetUnpickable(ReadOnlySpan<int> instances)
+    {
+        fixed (int* values = instances)
+        {
+            NativeMethods.SetUnpickable(_handle, values, instances.Length).ThrowIfFailed();
+        }
+    }
+
     /// <summary>Removes the meshes, textures, materials and instances.</summary>
     public void Clear() => NativeMethods.Clear(_handle).ThrowIfFailed();
 

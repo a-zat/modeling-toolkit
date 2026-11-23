@@ -36,6 +36,9 @@ internal interface IViewerScene
 
     void SetSelection(ReadOnlySpan<int> instances);
 
+    /// <summary>Makes instances not found under the pointer, in place of those before: what is behind them is.</summary>
+    void SetUnpickable(ReadOnlySpan<int> instances);
+
     /// <summary>Highlights elements of the shapes of instances as selected, in place of those highlighted before.</summary>
     /// <exception cref="ArgumentException">An element is not one that an instance shows.</exception>
     void SetHighlightedElements(ReadOnlySpan<ViewerElement> elements);

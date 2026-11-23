@@ -20,6 +20,7 @@ using Document = ModelingToolkit.Core.Model.Document;
 using DocumentChange = ModelingToolkit.Core.Model.DocumentChange;
 using ElementReference = ModelingToolkit.Core.Model.ElementReference;
 using Entity = ModelingToolkit.Core.Model.Entity;
+using SelectTool = ModelingToolkit.Core.Editing.Tools.SelectTool;
 
 namespace ModelingToolkit.Gui.Viewport;
 
@@ -64,6 +65,34 @@ public sealed class ViewportView : Border, IViewCamera
 
     public static readonly StyledProperty<bool> HighlightsHoverProperty =
         AvaloniaProperty.Register<ViewportView, bool>(nameof(HighlightsHover));
+
+    /// <summary>
+    /// The reference that a tool moves with the pointer: what it places is not found under the pointer, which finds the
+    /// points behind it to move it to; null for none.
+    /// </summary>
+    public static readonly StyledProperty<BlockReference?> MovingReferenceProperty =
+        AvaloniaProperty.Register<ViewportView, BlockReference?>(nameof(MovingReference));
+
+    public BlockReference? MovingReference
+    {
+        get => GetValue(MovingReferenceProperty);
+        set => SetValue(MovingReferenceProperty, value);
+    }
+
+    /// <summary>
+    /// The selection that a drag on it moves, from the point pressed, rather than turning the view; null for none. A
+    /// press on it without a drag is a click.
+    /// </summary>
+    public static readonly StyledProperty<IReadOnlyList<Entity>?> GrabbablePathProperty =
+        AvaloniaProperty.Register<ViewportView, IReadOnlyList<Entity>?>(nameof(GrabbablePath));
+
+    public IReadOnlyList<Entity>? GrabbablePath
+    {
+        get => GetValue(GrabbablePathProperty);
+        set => SetValue(GrabbablePathProperty, value);
+    }
+
+    private (Point At, ViewportPick Input)? _bodyPress; // a press on the grabbable selection, not dragged yet
 
     /// <summary>The block references placed otherwise than by their transformation, as by animations.</summary>
     public static readonly StyledProperty<IReadOnlyDictionary<BlockReference, Transform>?> PoseProperty =
@@ -539,6 +568,14 @@ public sealed class ViewportView : Border, IViewCamera
         {
             UpdateScene();
         }
+        else if (change.Property == MovingReferenceProperty && _shownScene is { } moved)
+        {
+            Send(viewer =>
+            {
+                moved.ShowUnpickableIn(viewer, MovingReference);
+                return false;
+            });
+        }
         else if (change.Property == OverlayProperty || change.Property == BeaconsProperty)
         {
             if (change.Property == BeaconsProperty)
@@ -605,6 +642,15 @@ public sealed class ViewportView : Border, IViewCamera
             Raise(_hovered with { Modifiers = e.KeyModifiers, ClickCount = 1, Kind = ViewportInputKind.Press, Handle = handle });
             return;
         }
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && e.KeyModifiers == KeyModifiers.None &&
+            GrabbablePath is { Count: > 0 } grabbable && _hovered.Path is { } under && under.Count >= grabbable.Count &&
+            grabbable.Select((entity, i) => ReferenceEquals(entity, under[i])).All(same => same))
+        {
+            // Not to the viewer yet: a drag moves the selection, a release without one clicks.
+            _bodyPress = (e.GetPosition(_host), _hovered with { Modifiers = e.KeyModifiers });
+            e.Pointer.Capture(this);
+            return;
+        }
         SendButtons(e);
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -638,6 +684,21 @@ public sealed class ViewportView : Border, IViewCamera
             Raise(_hovered with { Modifiers = e.KeyModifiers, Kind = ViewportInputKind.Release, Handle = grabbed });
             return;
         }
+        if (_bodyPress is { } press)
+        {
+            // Pressed and let go on the selection: a click, which the viewer picks.
+            _bodyPress = null;
+            e.Pointer.Capture(null);
+            _clickModifiers = e.KeyModifiers;
+            Send(viewer =>
+            {
+                NativeModifierKeys modifiers = OcctViewer.ToNative(e.KeyModifiers);
+                viewer.MouseButtons(press.At, NativeMouseButtons.Left, modifiers);
+                return viewer.MouseButtons(press.At, NativeMouseButtons.None, modifiers);
+            });
+            Raise(_hovered with { Modifiers = e.KeyModifiers, ClickCount = _clickCount, Kind = ViewportInputKind.Release });
+            return;
+        }
         _clickModifiers = e.KeyModifiers;
         SendButtons(e);
         if (e.InitialPressMouseButton == MouseButton.Right && _rightFrom is { } from)
@@ -669,6 +730,18 @@ public sealed class ViewportView : Border, IViewCamera
                 PlaceWalkCamera();
             }
             return;
+        }
+        if (_bodyPress is { } press)
+        {
+            Point now = e.GetPosition(_host);
+            if (Math.Abs(now.X - press.At.X) + Math.Abs(now.Y - press.At.Y) < 4)
+            {
+                return;
+            }
+            // Dragged: the selection is taken by the point pressed, as by a handle.
+            _bodyPress = null;
+            _grabbed = SelectTool.SelectionBody;
+            Raise(press.Input with { ClickCount = 1, Kind = ViewportInputKind.Press, Handle = SelectTool.SelectionBody });
         }
         if (_walk is not null || _grabbed is not null)
         {
@@ -1215,6 +1288,7 @@ public sealed class ViewportView : Border, IViewCamera
         {
             scene.Update();
             scene.ShowSelectionIn(viewer, Selection);
+            scene.ShowUnpickableIn(viewer, MovingReference); // the instances may be new
             // The instances changed or removed lost their highlighted elements.
             scene.ShowElementsIn(viewer, HighlightedElements);
             return true;

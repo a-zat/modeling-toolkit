@@ -619,6 +619,28 @@ TEST(Viewer, SelectsAnyOfItsInstances) {
     EXPECT_EQ(mtk_viewer_set_selection(viewer.get(), nullptr, 0), MTK_STATUS_OK);
 }
 
+TEST(Viewer, LeavesInstancesOutOfThePickAndBackIn) {
+    Parent parent;
+    ViewerPtr viewer = create_viewer(parent);
+    const int32_t mesh = add_mesh(viewer.get(), Square().mesh());
+    const int32_t material = add_material(viewer.get(), grey());
+    const int32_t first = add_instance(viewer.get(), mesh, material, identity);
+    const int32_t second = add_instance(viewer.get(), mesh, material, identity);
+    const double moved[12] = {1, 0, 0, 5, 0, 1, 0, 0, 0, 0, 1, 0};
+
+    const std::vector<int32_t> both = {first, second};
+    EXPECT_EQ(mtk_viewer_set_unpickable(viewer.get(), both.data(), 2), MTK_STATUS_OK) << mtk_viewer_last_error_message();
+    // Placed again while it follows the pointer, and put back.
+    EXPECT_EQ(mtk_viewer_set_instance(viewer.get(), first, mesh, material, moved), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_unpickable(viewer.get(), &second, 1), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_unpickable(viewer.get(), nullptr, 0), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_remove_instance(viewer.get(), second), MTK_STATUS_OK);
+    EXPECT_EQ(mtk_viewer_set_unpickable(viewer.get(), &second, 1), MTK_STATUS_INVALID_ARGUMENT) << "removed";
+    EXPECT_EQ(mtk_viewer_set_unpickable(viewer.get(), &first, -1), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_unpickable(viewer.get(), nullptr, 1), MTK_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(mtk_viewer_set_unpickable(nullptr, nullptr, 0), MTK_STATUS_INVALID_ARGUMENT);
+}
+
 TEST(Viewer, ChangesAndRemovesInstancesKeepingTheIndicesOfTheOthers) {
     Parent parent;
     ViewerPtr viewer = create_viewer(parent);

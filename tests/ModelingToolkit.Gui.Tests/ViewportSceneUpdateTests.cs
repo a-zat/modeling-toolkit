@@ -306,6 +306,41 @@ public sealed class ViewportSceneUpdateTests(HeadlessSession headless)
         Assert.Empty(viewer.HighlightedElements);
     }
 
+    [Fact]
+    public void WhatAReferenceMovedPlacesIsLookedThroughByThePointerAndFoundAgainOnceItIsPlaced()
+    {
+        var wheel = new Block("Wheel") { Entities = { Square() } };
+        var moved = new BlockReference(wheel, Transform.Identity);
+        var document = new Document();
+        document.Blocks.Add(wheel);
+        document.Root.Entities.Add(Square());
+        document.Root.Entities.Add(moved);
+        document.Root.Entities.Add(new BlockReference(wheel, Transform.Translation(500, 0, 0)));
+        (ViewportScene scene, RecordingViewer viewer) = Show(document);
+
+        scene.ShowUnpickableIn(viewer, moved);
+        Assert.Equal([1], viewer.Unpickable); // its own instance, not the other placement of its block
+
+        scene.ShowUnpickableIn(viewer, null);
+        Assert.Empty(viewer.Unpickable);
+    }
+
+    [Fact]
+    public void AModelAddedFollowsThePointerByItsOriginOnlyWhenItStandsOnIt()
+    {
+        var standing = new Block("Chair") { Entities = { Box(-200, 200, 0, 800) } };
+        var away = new Block("Far") { Entities = { Box(3000, 3400, 100, 900) } };
+
+        Assert.Equal(new Point3d(10, 20, 0),
+            ViewModels.MainWindowViewModel.PlacingPoint(new BlockReference(standing, Transform.Translation(10, 20, 0))));
+        Assert.Equal(new Point3d(3200, 3200, 100),
+            ViewModels.MainWindowViewModel.PlacingPoint(new BlockReference(away, Transform.Identity)));
+    }
+
+    // A box from (a, a, bottom) to (b, b, top), as a mesh of its corners.
+    private static MeshEntity Box(double a, double b, double bottom, double top) =>
+        new([new(a, a, bottom), new(b, a, bottom), new(b, b, bottom), new(a, b, top)], [new(0, 1, 2), new(0, 2, 3)]);
+
     private static (ViewportScene Scene, RecordingViewer Viewer) Show(Document document)
     {
         var scene = ViewportScene.Of(document);

@@ -381,6 +381,9 @@ void mtk::Viewer::set_instance(int index, int mesh, int material, const double* 
     if (faded) {
         context_->SetZLayer(instance, faded_layer_);
     }
+    if (index < static_cast<int>(unpickable_.size()) && unpickable_[index]) {
+        context_->Deactivate(instance); // placed again as it is moved, still not under the pointer
+    }
     instances_[index] = instance;
     instance_meshes_[index] = mesh;
     view_->Invalidate();
@@ -426,6 +429,25 @@ void mtk::Viewer::set_selection(const int32_t* instances, int count) {
     view_->Invalidate();
 }
 
+void mtk::Viewer::set_unpickable(const int32_t* instances, int count) {
+    std::vector<bool> unpickable(instances_.size(), false);
+    for (int i = 0; i < count; ++i) {
+        unpickable[instances[i]] = true;
+    }
+    for (size_t index = 0; index < instances_.size(); ++index) {
+        const bool was = index < unpickable_.size() && unpickable_[index];
+        if (instances_[index].IsNull() || was == unpickable[index]) {
+            continue;
+        }
+        if (unpickable[index]) {
+            context_->Deactivate(instances_[index]);
+        } else {
+            context_->Activate(instances_[index], 0); // picked as a whole, as when displayed
+        }
+    }
+    unpickable_ = std::move(unpickable);
+}
+
 void mtk::Viewer::clear() {
     set_highlighted_elements(nullptr, 0);
     set_overlay({});
@@ -436,6 +458,7 @@ void mtk::Viewer::clear() {
     }
     instances_.clear();
     instance_meshes_.clear();
+    unpickable_.clear();
     pick_.reset();
     shared_meshes_.clear();
     materials_.clear();
@@ -1400,6 +1423,24 @@ mtk_status mtk_viewer_set_selection(mtk_viewer* viewer, const int32_t* instances
             }
         }
         viewer->set_selection(instances, count);
+        return MTK_STATUS_OK;
+    });
+}
+
+mtk_status mtk_viewer_set_unpickable(mtk_viewer* viewer, const int32_t* instances, int32_t count) {
+    return mtk::guarded([&] {
+        if (viewer == nullptr || (instances == nullptr && count != 0)) {
+            return mtk::invalid_argument("viewer must not be null, nor instances unless count is 0.");
+        }
+        if (count < 0) {
+            return mtk::invalid_argument("count must not be negative.");
+        }
+        for (int32_t i = 0; i < count; ++i) {
+            if (!viewer->has_instance(instances[i])) {
+                return mtk::invalid_argument("The instances include one that the viewer does not have.");
+            }
+        }
+        viewer->set_unpickable(instances, count);
         return MTK_STATUS_OK;
     });
 }

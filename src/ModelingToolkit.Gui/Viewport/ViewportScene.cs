@@ -389,6 +389,21 @@ internal sealed class ViewportScene
         viewer.SetSelection(selected);
     }
 
+    /// <summary>
+    /// Makes the instances of what a reference places not found under the pointer, in the viewer that shows the scene,
+    /// as while it follows the pointer to be moved; null makes all found.
+    /// </summary>
+    public void ShowUnpickableIn(IViewerScene viewer, BlockReference? moving)
+    {
+        ArgumentNullException.ThrowIfNull(viewer);
+        int[] unpickable = moving is null
+            ? []
+            : [.. Enumerable.Range(0, _instances.Count)
+                .Where(i => _shownInstances[i] >= 0 && _instances[i].Path.Contains(moving))
+                .Select(i => _shownInstances[i])];
+        viewer.SetUnpickable(unpickable);
+    }
+
     // The instances of the model as it is now, with the meshes and the materials they need.
     private List<ViewportInstance> Build()
     {

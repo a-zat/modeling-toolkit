@@ -29,8 +29,8 @@ public enum ViewportInputKind
 /// <param name="Kind">The input.</param>
 /// <param name="Ray">The ray of the pointer, in the model space; null when the view has none.</param>
 /// <param name="Handle">
-/// For a press, a drag and a release, the index of the handle pressed in <see cref="ViewportView.Handles"/>; null for
-/// none.
+/// For a press, a drag and a release, the index of the handle pressed in <see cref="ViewportView.Handles"/>, or
+/// <see cref="Core.Editing.Tools.SelectTool.SelectionBody"/> for the selection taken elsewhere; null for none.
 /// </param>
 public sealed record ViewportPick(
     IReadOnlyList<Entity>? Path, ElementReference? Element, Point3d Point, Vector3 Normal, KeyModifiers Modifiers,

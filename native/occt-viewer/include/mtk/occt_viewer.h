@@ -193,6 +193,13 @@ MTK_VIEWER_API mtk_status mtk_viewer_remove_mesh(mtk_viewer* viewer, int32_t mes
  */
 MTK_VIEWER_API mtk_status mtk_viewer_set_selection(mtk_viewer* viewer, const int32_t* instances, int32_t count);
 
+/*
+ * Makes count instances not found under the pointer, by the hover and by clicks, in place of those made so before: the
+ * pointer finds what is behind them, as when they follow it while moved. They are still drawn. With count 0, all are
+ * found again. instances may be null when count is 0.
+ */
+MTK_VIEWER_API mtk_status mtk_viewer_set_unpickable(mtk_viewer* viewer, const int32_t* instances, int32_t count);
+
 /* Removes the meshes, textures, materials and instances. */
 MTK_VIEWER_API mtk_status mtk_viewer_clear(mtk_viewer* viewer);
 
