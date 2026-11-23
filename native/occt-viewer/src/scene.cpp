@@ -203,13 +203,15 @@ void mtk::apply_display_mode(MaterialAspects& aspects, mtk_viewer_display_mode m
     apply_display_mode_to(*aspects.faded, mode, faded, edges.triangle_edges);
     apply_display_mode_to(*aspects.shaded_faces, mode, shaded, false);
     apply_display_mode_to(*aspects.faded_faces, mode, faded, false);
-    // The faces are drawn deeper than they are by a pixel of their slope and two steps of the depth, so that the
-    // edges they bound, drawn where they are, are not covered along them. A face turned to the camera is hardly moved,
-    // and what is behind it stays hidden; a face seen aslant is moved by a pixel of its slope, so that edges behind it
-    // by less than that can show through it, and lines beside it at inner corners are narrowed: a pixel balances the two.
+    // The faces are drawn deeper than they are by as much as their depth changes over the pixels that the edges they
+    // bound cover beside them, half their width across and as much beyond their ends, so that they do not hide half
+    // of those edges; and by two steps of the depth more, for the edges on faces turned to the camera. A face turned
+    // to the camera is thus hardly moved, and what is behind it, however close, stays hidden; a face seen edge-on is
+    // moved by a few pixels of its slope, as little as the edges need.
+    const float width = edges.outlines ? edges.outline_width : 1.0f;
     for (const occ::handle<Graphic3d_AspectFillArea3d>& aspect :
          {aspects.shaded, aspects.faded, aspects.shaded_faces, aspects.faded_faces}) {
-        aspect->SetPolygonOffsets(Aspect_POM_Fill, 1.0f, 2.0f);
+        aspect->SetPolygonOffsets(Aspect_POM_Fill, 0.75f * width + 1.0f, 2.0f);
     }
 }
 
