@@ -274,7 +274,7 @@ public sealed class GltfWriter : IDocumentWriter
         {
             // A placement of a mesh alone, as the reading makes of a mesh used in several places, is one node holding
             // the mesh: a node of its block, holding a node of the mesh, would be read back as one more level each time.
-            bool meshOnly = reference is { Name: null, IsGroup: false } &&
+            bool meshOnly = reference is { Name: null } &&
                 reference.Block.Entities is [MeshEntity { Triangles.Length: > 0, IsHidden: false }];
             var node = meshOnly
                 ? new JsonObject { ["mesh"] = MeshOf((MeshEntity)reference.Block.Entities[0]) }
@@ -301,14 +301,6 @@ public sealed class GltfWriter : IDocumentWriter
                     transform.M03, transform.M13, transform.M23, 1);
             }
             MarkHidden(node, reference);
-            if (reference.IsGroup)
-            {
-                if (node["extras"] is not JsonObject extras)
-                {
-                    node["extras"] = extras = [];
-                }
-                extras["group"] = true;
-            }
             int index = AddNode(node);
             if (!_referenceNodes.TryGetValue(reference, out List<int>? nodes))
             {

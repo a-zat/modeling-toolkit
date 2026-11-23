@@ -90,8 +90,7 @@ public sealed class GltfWriterTests : IDisposable
         document.Root.Entities.Add(chairReference);
         document.Attach(new Attachment(chairReference, [tableReference, leafReference], end,
             Attachment.OffsetOf(chairReference, [tableReference, leafReference], end)));
-        tableReference.IsGroup = true;
-        tableReference.IsHidden = true; // both in the extras
+        tableReference.IsHidden = true; // in the extras
 
         Document copy = RoundTrip(document);
 
@@ -103,9 +102,7 @@ public sealed class GltfWriterTests : IDisposable
         Assert.Equal(760, copiedEnd.Point.Z, 1e-6);
         Assert.Equal(1, copiedEnd.Placement.ApplyVector(Vector3d.UnitX).Y, 1e-6); // still turned a quarter
         Assert.Equal(AnchorKind.PointOfView, Assert.Single(Named("Chair").Block.Entities.OfType<AnchorEntity>()).Kind);
-        Assert.True(Named("Table").IsGroup);
         Assert.True(Named("Table").IsHidden);
-        Assert.False(Named("Chair").IsGroup);
         Attachment attachment = Assert.Single(copy.Attachments);
         Assert.Same(Named("Chair"), attachment.Follower);
         Assert.Equal([Named("Table"), Named("Leaf")], attachment.Chain);
@@ -176,26 +173,6 @@ public sealed class GltfWriterTests : IDisposable
         Assert.Equal(Depth(once.Root), Depth(twice.Root));
         Assert.Equal(Depth(once.Root), Depth(thrice.Root));
         Assert.Equal(once.Blocks.Count, thrice.Blocks.Count);
-    }
-
-    [Fact]
-    public void A_group_with_geometry_of_its_own_is_read_as_a_component_with_a_warning()
-    {
-        var document = new Document();
-        var room = new Block("Room")
-        {
-            Entities = { new MeshEntity([new(0, 0, 0), new(100, 0, 0), new(0, 100, 0)], [new(0, 1, 2)]) },
-        };
-        document.Blocks.Add(room);
-        document.Root.Entities.Add(new BlockReference(room, Transform.Identity) { Name = "Room", IsGroup = true });
-        string path = Path.Combine(_folder, "room.glb");
-        _writer.Write(document, path);
-        var warnings = new List<string>();
-
-        Document copy = _reader.Read(path, warnings);
-
-        Assert.False(copy.Root.Entities.OfType<BlockReference>().Single(reference => reference.Name == "Room").IsGroup);
-        Assert.Contains(warnings, warning => warning.Contains("group", StringComparison.Ordinal));
     }
 
     private Document RoundTrip(Document document)

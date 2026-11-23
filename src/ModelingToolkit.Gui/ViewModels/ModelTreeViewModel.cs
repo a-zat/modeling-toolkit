@@ -31,9 +31,6 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     /// </summary>
     public System.Collections.ObjectModel.ObservableCollection<object> SelectedNodes { get; } = [];
 
-    public ModelTreeViewModel() =>
-        SelectedNodes.CollectionChanged += (_, _) => GroupChanged();
-
     // The nodes a command on a node works on: all those selected, when it is one of several, without those inside
     // another one; else the node alone.
     private List<ModelNodeViewModel> TargetsOf(ModelNodeViewModel node)
@@ -60,7 +57,7 @@ public sealed partial class ModelTreeViewModel : ObservableObject
 
     /// <summary>
     /// Deletes the entity of a node, or of all the nodes selected with it, as one command; after asking, when a
-    /// component or a group that is not empty is among them.
+    /// component that is not empty is among them.
     /// </summary>
     [RelayCommand]
     private async Task Delete(ModelNodeViewModel? node)
@@ -190,102 +187,13 @@ public sealed partial class ModelTreeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Puts the references of a node, or of the nodes selected with it in the same block, into a new group there, where
-    /// they stay in the project; the group is selected.
+    /// Puts the entity of a node, and those of the nodes selected with it in the same block, into a new component placed
+    /// there at the origin, where they stay in the project; it is selected.
     /// </summary>
     [RelayCommand]
-    private void Group(ModelNodeViewModel? node)
+    private void MakeComponent(ModelNodeViewModel? node)
     {
-        if (node is not { Entity: BlockReference { Owner: { } owner } } || Model?.Document is not { } document)
-        {
-            return;
-        }
-        List<ModelNodeViewModel> grouped = [.. TargetsOf(node)
-            .Where(n => n.Entity is BlockReference && ReferenceEquals(n.Entity.Owner, owner))];
-        IReadOnlyList<Entity> into = [.. node.Path.Take(node.Path.Count - 1)];
-        var made = new NewBlockCommand(document, owner, "Group");
-        made.Reference.IsGroup = true;
-        Core.Geometry.Transform placement = Placement(into);
-        List<IEditCommand> commands = [made, .. InBlockOrder(grouped).Select(n => (IEditCommand)new MoveToBlockCommand(
-            (BlockReference)n.Entity!, placement, made.Reference.Block, placement, 0))];
-        if (Edit?.Invoke(new CompositeCommand("Group", commands)) == true)
-        {
-            Select([.. into, made.Reference]);
-        }
-    }
-
-    /// <summary>
-    /// The one command of the menu about groups: with several nodes selected, "Group" puts them in a new group; with
-    /// one, it makes it a group, or a component again.
-    /// </summary>
-    public string GroupLabel
-    {
-        get
-        {
-            ModelNodeViewModel? first = SelectedNode ?? SelectedNodes.OfType<ModelNodeViewModel>().FirstOrDefault();
-            List<ModelNodeViewModel> targets = first is null ? [] : TargetsOf(first);
-            return targets.Any(n => n.IsLoose) ? "Make component"
-                : targets.Count > 1 ? "Group"
-                : first?.IsGroup == true ? "Convert to component" : "Make group";
-        }
-    }
-
-    // Why the command of the menu about groups cannot be used now; null when it can.
-    private string? GroupRefusal
-    {
-        get
-        {
-            ModelNodeViewModel? first = SelectedNode ?? SelectedNodes.OfType<ModelNodeViewModel>().FirstOrDefault();
-            return first is { Entity: BlockReference { IsGroup: false } reference } && TargetsOf(first).Count == 1 &&
-                !Groups.HoldsOnlyComponents(reference.Block)
-                ? "A group can only contain blocks: this one has geometry of its own."
-                : null;
-        }
-    }
-
-    /// <summary>Whether the command of the menu about groups can be used on the selection.</summary>
-    public bool CanChangeGroup => GroupRefusal is null;
-
-    /// <summary>Why it cannot, to show on the disabled item; null when it can.</summary>
-    public string? GroupHint => GroupRefusal;
-
-    private void GroupChanged()
-    {
-        OnPropertyChanged(nameof(GroupLabel));
-        OnPropertyChanged(nameof(CanChangeGroup));
-        OnPropertyChanged(nameof(GroupHint));
-    }
-
-    [RelayCommand]
-    private void GroupOrToggle(ModelNodeViewModel? node)
-    {
-        if (node is null)
-        {
-            return;
-        }
-        List<ModelNodeViewModel> targets = TargetsOf(node);
-        if (targets.Any(n => n.IsLoose))
-        {
-            MakeComponent(node);
-        }
-        else if (targets.Count > 1)
-        {
-            Group(node);
-        }
-        else
-        {
-            ToggleGroup(node);
-        }
-        GroupChanged();
-    }
-
-    /// <summary>
-    /// Puts the meshes and shapes of a node, and of the nodes selected with it in the same block, with any references
-    /// among them, into a new component placed there at the origin, where they stay in the project; it is selected.
-    /// </summary>
-    private void MakeComponent(ModelNodeViewModel node)
-    {
-        if (node.Entity is not { Owner: { } owner } || Model?.Document is not { } document)
+        if (node?.Entity is not { Owner: { } owner } || Model?.Document is not { } document)
         {
             return;
         }
@@ -310,21 +218,6 @@ public sealed partial class ModelTreeViewModel : ObservableObject
         {
             Select([.. into, component.Reference]);
         }
-    }
-
-    partial void OnSelectedNodeChanged(ModelNodeViewModel? value) => GroupChanged();
-
-    /// <summary>Makes the reference of a node, and those selected with it, groups, or components if it is a group.</summary>
-    [RelayCommand]
-    private void ToggleGroup(ModelNodeViewModel? node)
-    {
-        if (node?.Entity is not BlockReference reference)
-        {
-            return;
-        }
-        List<IEditCommand> commands = [.. TargetsOf(node).Select(n => n.Entity).OfType<BlockReference>()
-            .Select(target => (IEditCommand)new SetGroupCommand(target, !reference.IsGroup))];
-        Edit?.Invoke(commands.Count == 1 ? commands[0] : new CompositeCommand(reference.IsGroup ? "Convert to component" : "Make group", commands));
     }
 
     /// <summary>Whether a node is a reference in the block of another reference, which it can be moved out of.</summary>

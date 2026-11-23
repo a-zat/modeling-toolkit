@@ -71,11 +71,7 @@ internal sealed record AnchorEntry(string? Name, double[] Placement, string Kind
 /// <param name="Offset">The 12 values of the offset from the anchor, by rows.</param>
 internal sealed record AttachmentEntry(int? Block, int Follower, int[] Chain, int Anchor, double[] Offset);
 
-internal sealed record BlockReferenceEntry(string? Name, int Block, double[] Transform) : EntityEntry(Name)
-{
-    /// <summary>True for a group; absent for a component.</summary>
-    public bool? Group { get; init; }
-}
+internal sealed record BlockReferenceEntry(string? Name, int Block, double[] Transform) : EntityEntry(Name);
 
 internal sealed record AnimationEntry(string Name, List<ChannelEntry> Channels);
 

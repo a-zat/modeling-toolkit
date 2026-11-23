@@ -98,7 +98,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void StartRename() => IsRenaming = IsEditable;
 
-    /// <summary>Whether the selection has a Movement section: components and groups, not the project or a mesh.</summary>
+    /// <summary>Whether the selection has a Movement section: a component, not the project or a mesh.</summary>
     [ObservableProperty]
     public partial bool ShowsMovement { get; private set; }
 
@@ -142,7 +142,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
     public Action<AnchorRowViewModel>? LookFrom { get; set; }
 
     /// <summary>
-    /// Whether the selection is a component, not a group, which has anchors and points of view, and can follow an anchor.
+    /// Whether the selection is a component, which has anchors and points of view, and can follow an anchor.
     /// </summary>
     [ObservableProperty]
     public partial bool HasAnchors { get; private set; }
@@ -195,8 +195,7 @@ public sealed partial class PropertiesViewModel : ObservableObject
     private void ShowAnchors(ModelNodeViewModel? node)
     {
         Anchors.Clear();
-        // A group gathers components, as a room its furniture: what it holds has anchors, not the group.
-        if (node is not { Entity: BlockReference { IsGroup: false } component, Path: { } path } || Edit is not { } edit)
+        if (node is not { Entity: BlockReference component, Path: { } path } || Edit is not { } edit)
         {
             HasAnchors = false;
             CanAttach = false;
@@ -373,7 +372,6 @@ public sealed partial class PropertiesViewModel : ObservableObject
             null => string.Empty,
             { IsModel: true } => "Project",
             { IsGeometry: true, Block: { } geometryBlock } => $"of {geometryBlock.Name}",
-            { IsGroup: true } => "Group",
             { IsReference: true } => "Component",
             { IsMesh: true } => "Mesh",
             { IsBrep: true } => "B-rep shape",

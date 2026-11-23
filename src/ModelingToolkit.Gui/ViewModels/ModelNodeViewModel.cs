@@ -89,11 +89,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
 
     public bool IsReference => Entity is BlockReference;
 
-    /// <summary>Whether it is a group, as a room: see <see cref="BlockReference.IsGroup"/>.</summary>
-    public bool IsGroup => Entity is BlockReference { IsGroup: true };
-
-    /// <summary>A reference that is a component, not a group.</summary>
-    public bool IsComponent => Entity is BlockReference { IsGroup: false };
+    /// <summary>A reference, which places a component.</summary>
+    public bool IsComponent => Entity is BlockReference;
 
     /// <summary>Whether the node is a reference inside the block of another one, which it can be moved out of.</summary>
     public bool CanMoveOut => ModelTreeViewModel.CanMoveOut(this);
@@ -112,8 +109,8 @@ public sealed partial class ModelNodeViewModel : ObservableObject
     /// <summary>Whether the node is a mesh or a shape, which can be made a component with others.</summary>
     public bool IsLoose => Entity is MeshEntity or BrepEntity;
 
-    /// <summary>Whether the menu offers to group it or make it a component: a reference, a mesh or a shape.</summary>
-    public bool CanGroup => IsReference || IsLoose;
+    /// <summary>Whether the menu offers to make it a component, with the others selected: a reference, a mesh or a shape.</summary>
+    public bool CanMakeComponent => IsReference || IsLoose;
 
     public bool IsMesh => Entity is MeshEntity;
 
@@ -164,8 +161,6 @@ public sealed partial class ModelNodeViewModel : ObservableObject
         {
             (Name, Detail) = Label(Entity);
             OnPropertyChanged(nameof(IsVisible));
-            OnPropertyChanged(nameof(IsGroup));
-            OnPropertyChanged(nameof(IsComponent));
         }
         else if (IsModel && change is Core.Model.PropertyChanged { Target: Block block } && ReferenceEquals(block, _block))
         {

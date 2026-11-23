@@ -192,7 +192,7 @@ public sealed class NativeDocumentWriter : IDocumentWriter
                         reference.Transform.M00, reference.Transform.M01, reference.Transform.M02, reference.Transform.M03,
                         reference.Transform.M10, reference.Transform.M11, reference.Transform.M12, reference.Transform.M13,
                         reference.Transform.M20, reference.Transform.M21, reference.Transform.M22, reference.Transform.M23,
-                    ]) { Group = reference.IsGroup ? true : null },
+                    ]),
                 GuideEntity guide => new GuideEntry(guide.Name, [guide.Point.X, guide.Point.Y, guide.Point.Z],
                     [guide.Direction.X, guide.Direction.Y, guide.Direction.Z]),
                 AnchorEntity anchor => new AnchorEntry(anchor.Name, Values(anchor.Placement),

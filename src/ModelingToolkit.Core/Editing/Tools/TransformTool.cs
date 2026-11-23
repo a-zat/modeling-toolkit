@@ -116,10 +116,10 @@ public abstract class TransformTool : DrawingTool
     protected bool TakeTarget(ToolPick pick)
     {
         ArgumentNullException.ThrowIfNull(pick);
-        // What is clicked is taken as a click selects it: past the groups, to the component inside them.
+        // What is clicked is taken as a click selects it: the entity of the block being edited that holds it.
         IReadOnlyList<Entity>? path = Host.SelectedEntity ??
             (pick.Path is { } picked && Host.Context.Within(picked) is { Count: > 0 } within
-                ? [.. picked.Take(Groups.Through(picked, picked.Count - within.Count) + 1)]
+                ? [.. picked.Take(picked.Count - within.Count + 1)]
                 : null);
         (Target, TargetPlacement) = path is not null && Host.Context.Reach(path) is var (entity, placement)
             ? (entity, placement)

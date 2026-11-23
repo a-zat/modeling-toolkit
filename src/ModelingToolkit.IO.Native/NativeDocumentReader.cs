@@ -91,7 +91,6 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
             {
                 document.Attach(ToAttachment(entry, document));
             }
-            Core.Editing.Groups.Repair(document); // a group holds components only
             return document;
         }
 
@@ -318,7 +317,7 @@ public sealed class NativeDocumentReader(IGeometryKernel kernel) : IDocumentRead
                 throw new InvalidDataException("A block reference has an invalid transformation.");
             }
             var transform = new Transform(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11]);
-            return new BlockReference(At(blocks, entry.Block, "block"), transform) { IsGroup = entry.Group == true };
+            return new BlockReference(At(blocks, entry.Block, "block"), transform);
         }
 
         private static Animation ToAnimation(AnimationEntry entry, Document document)

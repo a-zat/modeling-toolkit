@@ -87,7 +87,7 @@ public sealed class ModelTreeUpdateTests
     }
 
     [Fact]
-    public void References_selected_go_into_a_new_group_where_they_stay_and_one_reference_is_made_a_group_or_a_component()
+    public void References_selected_go_into_a_new_component_where_they_stay()
     {
         var chair = new Block("Chair") { Entities = { Square() } };
         var document = new Document();
@@ -104,26 +104,18 @@ public sealed class ModelTreeUpdateTests
         tree.SelectedNodes.Add(tree.Model!.Children[0]);
         tree.SelectedNodes.Add(tree.Model.Children[2]);
 
-        Assert.Equal("Group", tree.GroupLabel);
-        tree.GroupOrToggleCommand.Execute(tree.Model.Children[0]);
-        var group = (BlockReference)document.Root.Entities.Single(entity => entity is BlockReference { IsGroup: true });
-        Assert.Equal([chairs[0], chairs[2]], group.Block.Entities);
+        tree.MakeComponentCommand.Execute(tree.Model.Children[0]);
+        var made = (BlockReference)document.Root.Entities.Single(entity => entity is BlockReference { Block.Name: "Component" });
+        Assert.Equal([chairs[0], chairs[2]], made.Block.Entities);
         Assert.Equal(Transform.Translation(200, 0, 0), chairs[2].Transform); // where it was
-        Assert.Same(group, tree.SelectedNode?.Entity);
-        Assert.True(tree.SelectedNode!.IsGroup);
+        Assert.Same(made, tree.SelectedNode?.Entity);
 
-        tree.SelectedNodes.Clear(); // as the outline leaves the group alone selected
-        // One menu item: "Group" with several selected, else making the one a group or a component.
-        Assert.Equal("Convert to component", tree.GroupLabel);
-        tree.GroupOrToggleCommand.Execute(tree.SelectedNode);
-        Assert.False(group.IsGroup);
-        session.Undo(); // a group again
-        session.Undo(); // the grouping
+        session.Undo();
         Assert.Equal(chairs, document.Root.Entities);
     }
 
     [Fact]
-    public void Loose_meshes_selected_are_made_a_component_where_they_were_and_a_component_with_geometry_is_not_made_a_group()
+    public void Loose_meshes_selected_are_made_a_component_where_they_were()
     {
         var document = new Document();
         MeshEntity a = Square(), b = Square(), c = Square();
@@ -142,18 +134,12 @@ public sealed class ModelTreeUpdateTests
         tree.SelectedNodes.Add(meshes[2]);
         tree.SelectedNode = meshes[0];
 
-        Assert.Equal("Make component", tree.GroupLabel);
-        tree.GroupOrToggleCommand.Execute(meshes[0]);
+        tree.MakeComponentCommand.Execute(meshes[0]);
 
         Assert.Equal([b], document.Root.Entities.OfType<MeshEntity>());
         var made = document.Root.Entities.OfType<BlockReference>().Single();
-        Assert.False(made.IsGroup);
         Assert.Equal([a, c], made.Block.Entities);
         Assert.Same(made, tree.SelectedNode?.Entity);
-
-        // It holds geometry of its own, so it cannot be a group.
-        Assert.Throws<ModelingToolkit.Core.Editing.EditRefusedException>(() =>
-            new ModelingToolkit.Core.Editing.SetGroupCommand(made, group: true).Apply());
 
         session.Undo();
         Assert.Equal([a, b, c], document.Root.Entities);
@@ -193,28 +179,6 @@ public sealed class ModelTreeUpdateTests
         answer = true;
         await tree.DeleteCommand.ExecuteAsync(tree.Model.Children[0]);
         Assert.Empty(document.Root.Entities);
-    }
-
-    [Fact]
-    public void A_component_with_geometry_cannot_be_made_a_group_and_the_menu_says_why()
-    {
-        var solid = new Block("Solid") { Entities = { Square() } };
-        var holder = new Block("Holder");
-        var document = new Document();
-        document.Blocks.AddRange([solid, holder]);
-        holder.Entities.Add(new BlockReference(solid, Transform.Identity));
-        document.Root.Entities.Add(new BlockReference(solid, Transform.Identity) { Name = "Solid" });
-        document.Root.Entities.Add(new BlockReference(holder, Transform.Identity) { Name = "Holder" });
-        var tree = new ModelTreeViewModel { Edit = _ => true };
-        tree.Show(document);
-
-        tree.SelectedNode = tree.Model!.Children[0];
-        Assert.False(tree.CanChangeGroup);
-        Assert.Contains("only contain blocks", tree.GroupHint, StringComparison.Ordinal);
-
-        tree.SelectedNode = tree.Model.Children[1];
-        Assert.True(tree.CanChangeGroup);
-        Assert.Null(tree.GroupHint);
     }
 
     [Fact]

@@ -53,12 +53,8 @@
                 <MenuItem Header="{Binding MoveOutLabel}" IsVisible="{Binding CanMoveOut}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).MoveOutCommand}"
                           CommandParameter="{Binding}" />
-                <MenuItem Header="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupLabel}"
-                          IsVisible="{Binding CanGroup}"
-                          IsEnabled="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).CanChangeGroup}"
-                          ToolTip.Tip="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupHint}"
-                          ToolTip.ShowOnDisabled="True"
-                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).GroupOrToggleCommand}"
+                <MenuItem Header="Make component" IsVisible="{Binding CanMakeComponent}"
+                          Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).MakeComponentCommand}"
                           CommandParameter="{Binding}" />
                 <MenuItem Header="Edit block" IsVisible="{Binding IsComponent}"
                           Command="{Binding $parent[TreeView].((vm:ModelTreeViewModel)DataContext).EnterCommand}"
@@ -72,7 +68,6 @@
             <Panel Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="{Binding IsVisible, Converter={x:Static vm:VisibilityLabel.Opacity}}">
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Document}" IsVisible="{Binding IsModel}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.CubeLink}" IsVisible="{Binding IsComponent}" />
-              <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Group}" IsVisible="{Binding IsGroup}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsMesh}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Cube}" IsVisible="{Binding IsBrep}" />
               <PathIcon Width="16" Height="16" Data="{StaticResource Icon.Triangle}" IsVisible="{Binding IsGeometry}" />

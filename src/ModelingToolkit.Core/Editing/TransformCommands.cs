@@ -51,10 +51,7 @@ public static class TransformCommands
 
     private static Entity Transformed(Entity entity, Transform transform) => entity switch
     {
-        BlockReference reference => new BlockReference(reference.Block, transform * reference.Transform)
-        {
-            IsGroup = reference.IsGroup,
-        },
+        BlockReference reference => new BlockReference(reference.Block, transform * reference.Transform),
         BrepEntity brep => new BrepEntity(brep.Kernel, Placed(brep, transform), brep.FaceMaterials),
         MeshEntity mesh => new MeshEntity(
             [.. mesh.Vertices.Select(transform.Apply)],

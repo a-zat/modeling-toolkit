@@ -49,27 +49,6 @@ public sealed class MoveToolTests
     }
 
     [Fact]
-    public void A_component_in_a_group_clicked_is_moved_and_not_the_group()
-    {
-        var part = new Block("Table");
-        part.Entities.Add(new BrepEntity(_kernel, _kernel.MakeBox(10, 10, 10)));
-        var room = new Block("Room");
-        var table = new BlockReference(part, Transform.Translation(0, 100, 0));
-        room.Entities.Add(table);
-        _document.Blocks.Add(part);
-        _document.Blocks.Add(room);
-        var group = new BlockReference(room, Transform.Translation(1000, 0, 0)) { IsGroup = true };
-        _document.Root.Entities.Add(group);
-
-        _tool.Click(new(new ToolPick([group, table, part.Entities[0]], null, new Point3d(1000, 100, 10), Vector3d.UnitZ,
-            new PointerRay(new Point3d(1000, 100, 1010), new Vector3d(0, 0, -1), 1, 0))));
-        _tool.Click(Ground(1500, 100));
-
-        Assert.Equal(Transform.Translation(1000, 0, 0), group.Transform);
-        Assert.Equal(new Point3d(500, 100, 0), Round(table.Transform.Apply(Point3d.Origin)));
-    }
-
-    [Fact]
     public void A_move_nearly_along_an_axis_snaps_to_it()
     {
         var block = new Block("Part");
